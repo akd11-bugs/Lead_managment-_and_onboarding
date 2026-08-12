@@ -6,6 +6,9 @@ import type { NextAuthConfig } from 'next-auth'
 export const authConfig: NextAuthConfig = {
   pages: { signIn: '/login' },
   session: { strategy: 'jwt' },
+  // Render (and most non-Vercel hosts) sit behind a reverse proxy, so the
+  // Host header isn't the one NextAuth would otherwise verify against.
+  trustHost: true,
   providers: [],
   callbacks: {
     jwt({ token, user }) {
