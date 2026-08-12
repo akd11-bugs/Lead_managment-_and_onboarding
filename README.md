@@ -1,289 +1,102 @@
-# Fullstack Next.js Example with Prisma Postgres
+# LRM_blu — Lead Management System
 
-This example shows how to implement a fullstack app using [Next.js 15](https://nextjs.org/) with App Router, Prisma ORM and a [Prisma Postgres](https://www.prisma.io/postgres) database.
+A web-based CRM that **productizes your B2B lead-generation skills** as features inside the UI. Instead of running skill diagnostics by hand, the LMS surfaces them as buttons, alerts, and reports tied to live CRM data.
 
-## Getting started
+## What it does
 
-### 1. Download example and navigate into the project directory
+- **Kanban pipeline** — drag leads across 7 stages (New → Contacted → Follow Up → Qualified → Proposal → Won / Lost)
+- **Lead detail** — activities, notes, source, value, owner
+- **Skills launcher** — all 30 of your B2B lead-gen skills live as buttons
+- **Hybrid runner** — 2 script-backed skills run instantly via Python (free), 28 use Claude (judgment)
+- **Skill-driven dashboard** — auto-suggests which skills to run based on lead data
+- **Skill history** — every run is logged, per-lead
 
-Download this example:
+## Stack
 
-```
-npx try-prisma@latest --template orm/nextjs --install npm --name nextjs
-```
+- **Next.js 16** + TypeScript + App Router
+- **Tailwind CSS** + **shadcn/ui** (Radix primitives)
+- **Prisma** + **SQLite** (file-based, zero setup)
+- **@dnd-kit** for the kanban
+- **Recharts** for skill report visualizations
+- **Anthropic SDK** for the 28 LLM-driven skills
 
-Then, navigate into the project directory:
+## Setup (local)
 
-```
-cd nextjs
-```
-
-<details><summary><strong>Alternative:</strong> Clone the entire repo</summary>
-
-Clone this repository:
-
-```
-git clone git@github.com:prisma/prisma-examples.git --depth=1
-```
-
-Install npm dependencies:
-
-```
-cd prisma-examples/orm/nextjs
+```bash
+# Install deps
 npm install
-```
 
-</details>
+# Copy env template and edit
+cp .env.example .env
+# Add your ANTHROPIC_API_KEY (only needed for the 28 LLM-driven skills)
+# Pipeline Hygiene Audit and Spam Folder Check work without a key
 
-### 2. Create and seed the database
+# Initialize database
+npx prisma db push
+npm run db:seed
 
-Create a new [Prisma Postgres](https://www.prisma.io/docs/postgres/overview) database by executing:
-
-```terminal
-npx prisma init --db
-```
-
-If you don't have a [Prisma Data Platform](https://console.prisma.io/) account yet, or if you are not logged in, the command will prompt you to log in using one of the available authentication providers. A browser window will open so you can log in or create an account. Return to the CLI after you have completed this step.
-
-Once logged in (or if you were already logged in), the CLI will prompt you to:
-1. Select a **region** (e.g. `us-east-1`)
-1. Enter a **project name**
-
-After successful creation, you will see output similar to the following:
-
-<details>
-
-<summary>CLI output</summary>
-
-```terminal
-Let's set up your Prisma Postgres database!
-? Select your region: ap-northeast-1 - Asia Pacific (Tokyo)
-? Enter a project name: testing-migration
-✔ Success! Your Prisma Postgres database is ready ✅
-
-We found an existing schema.prisma file in your current project directory.
-
---- Database URL ---
-
-Connect Prisma ORM to your Prisma Postgres database with the provided URL and add it to your `.env` as `DATABASE_URL`.
-
---- Next steps ---
-
-Go to https://pris.ly/ppg-init for detailed instructions.
-
-1. Install the `@prisma/adapter-pg` driver adapter and configure your Prisma Client instance
-```bash
-npm install @prisma/adapter-pg
-```
-```ts
-import { PrismaPg } from '@prisma/adapter-pg'
-const pool = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
-const prisma = new PrismaClient({ adapter: pool })
-```
-
-2. Apply migrations
-Run the following command to create and apply a migration:
-npx prisma migrate dev
-
-3. Manage your data
-View and edit your data locally by running this command:
-npx prisma studio
-
-...or online in Console:
-https://console.prisma.io/{workspaceId}/{projectId}/studio
-
-4. Send queries from your app
-If you already have an existing app with Prisma ORM, you can now run it and it will send queries against your newly created Prisma Postgres instance.
-
-5. Learn more
-For more info, visit the Prisma Postgres docs: https://pris.ly/ppg-docs
-```
-
-</details>
-
-Locate and copy the database URL provided in the CLI output. Then, create a `.env` file in the project root:
-
-```bash
-touch .env
-```
-
-Now, paste the URL into it as a value for the `DATABASE_URL` environment variable. For example:
-
-```bash
-# .env
-DATABASE_URL=postgres://<username>:<password>@<host>:<port>/<database>
-```
-
-Run the following command to create tables in your database. This creates the `User` and `Post` tables that are defined in [`prisma/schema.prisma`](./prisma/schema.prisma):
-
-```terminal
-npx prisma migrate dev --name init
-```
-
-Execute the seed file in [`prisma/seed.ts`](./prisma/seed.ts) to populate your database with some sample data, by running:
-
-```terminal
-npx prisma db seed
-```
-
-### 3. Start the Next.js server
-
-```
+# Dev
 npm run dev
 ```
 
-The server is now running on `http://localhost:3000`. You can now view all different pages:
+App runs at **http://localhost:3000**.
 
-- Home: [`http://localhost:3000/`](http://localhost:3000/)
-- All posts: [`http://localhost:3000/posts`](http://localhost:3000/posts)
-- New post: [`http://localhost:3000/posts/new`](http://localhost:3000/posts/new)
-- Post details: [`http://localhost:3000/posts/1`](http://localhost:3000/posts/1)
+## Deploy to Vercel (demo mode)
 
-## Evolving the app
+The fastest path to a public URL. **Demo mode = SQLite reseeds on every cold start**, so data does not persist between deploys but the app is always populated with 25 leads.
 
-Evolving the application typically requires two steps:
+### Step 1 — Import on Vercel
+1. Go to **https://vercel.com/new**
+2. Sign in with GitHub (`akshat1234e`)
+3. Click **"Import"** next to `akshat1234e/LRM_blu`
+4. Click **Deploy** — Vercel will detect Next.js automatically
 
-1. Migrate your database using Prisma Migrate
-1. Update your application code
+That's it. The first deploy will take ~2 minutes. The `postbuild` script runs `prisma db push` and `tsx prisma/seed.ts` so the DB is always ready.
 
-For the following example scenario, assume you want to add a "profile" feature to the app where users can create a profile and write a short bio about themselves.
+### Step 2 — Set environment variables
 
-### 1. Migrate your database using Prisma Migrate
+After the first deploy, go to **Settings → Environment Variables** and add:
 
-The first step is to add a new table, e.g. called `Profile`, to the database. You can do this by adding a new model to your [Prisma schema file](./prisma/schema.prisma) file and then running a migration afterwards:
+| Name | Value | Required for |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | `sk-ant-...` | 28 LLM-driven skills (Pipeline Hygiene and Spam Folder Check work without it) |
+| `SKILL_LIBRARY_PATH` | absolute path | Optional — only needed to override the bundled `skills-library/`. **See note below.** |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-5` | Optional, defaults to Sonnet 4.5 |
 
-```diff
-// ./prisma/schema.prisma
+#### SKILL_LIBRARY_PATH on Vercel
+The 30 skills are bundled directly into the repo at `skills-library/` (committed, not gitignored — Vercel deploys from git, so a gitignored copy would never reach production). `SKILL_LIBRARY_PATH` is no longer required: `lib/skills/runner.ts` defaults to `skills-library/` at the repo root and only needs the env var if you want to point at a different location.
 
-model User {
-  id      Int      @default(autoincrement()) @id
-  name    String?
-  email   String   @unique
-  posts   Post[]
-+ profile Profile?
-}
+### Step 3 — Custom domain (optional)
 
-model Post {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  viewCount Int      @default(0)
-  author    User?    @relation(fields: [authorId], references: [id])
-  authorId  Int?
-}
+Settings → Domains → add `lrm-blu.com` (or whatever you own). Free on Vercel.
 
-+model Profile {
-+  id     Int     @default(autoincrement()) @id
-+  bio    String?
-+  user   User    @relation(fields: [userId], references: [id])
-+  userId Int     @unique
-+}
-```
+## Demo-mode limitations
 
-Once you've updated your data model, you can execute the changes against your database with the following command:
+| Thing | Behavior on Vercel |
+|---|---|
+| Leads you create | Persist in Postgres — no longer reset on cold start |
+| Skill runs (LLM) | Work if `ANTHROPIC_API_KEY` is set |
+| Spam Folder Check | Works — it's a guided checklist, no shell-out required |
+| Pipeline Hygiene Audit | May not work on Vercel — spawns `python3` via `child_process`, which serverless functions don't reliably support |
+| Cookies / sessions | Stateless for now — auth is on the roadmap, not yet built |
 
-```
-npx prisma migrate dev --name add-profile
-```
+## Path to production
 
-This adds another migration to the `prisma/migrations` directory and creates the new `Profile` table in the database.
+See `ROADMAP.md` for current status. Postgres and the bundled skill library are done; auth/roles and background jobs for LLM skills are still open.
 
-### 2. Update your application code
+See `.claude/CLAUDE.md` for the architecture overview.
 
-You can now use your `PrismaClient` instance to perform operations against the new `Profile` table. Those operations can be used to implement new pages in the app.
+## Scripts
 
-## Switch to another database (e.g. SQLite, MySQL, SQL Server, MongoDB)
+- `npm run dev` — start dev server
+- `npm run build` — production build (auto-runs db push + seed via postbuild)
+- `npm run db:seed` — reseed the database manually
+- `npm run db:studio` — open Prisma Studio
 
-If you want to try this example with another database than Postgres, you can adjust the the database connection in [`prisma/schema.prisma`](./prisma/schema.prisma) by reconfiguring the `datasource` block.
+## Architecture
 
-Learn more about the different connection configurations in the [docs](https://www.prisma.io/docs/reference/database-reference/connection-urls).
+See `.claude/CLAUDE.md` for the full architecture and conventions.
 
-<details><summary>Expand for an overview of example configurations with different databases</summary>
+## Skills
 
-### Your own PostgreSQL database
-
-To use your own PostgreSQL database, set `DATABASE_URL` to your connection string (e.g. `postgres://<username>:<password>@<host>:<port>/<database>`). Ensure your app initializes `PrismaClient` with the `@prisma/adapter-pg` driver adapter as shown above.
-
-### SQLite
-
-Modify the `provider` value in the `datasource` block in the [`prisma.schema`](./prisma/schema.prisma) file:
-
-```prisma
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-```
-
-Create an `.env` file and add the SQLite database connection string in it. For example:
-
-```terminal
-DATABASE_URL="file:./dev.db""
-```
-
-### MySQL
-
-Modify the `provider` value in the `datasource` block in the [`prisma.schema`](./prisma/schema.prisma) file:
-
-```prisma
-datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
-}
-```
-
-Create an `.env` file and add a MySQL database connection string in it. For example:
-
-```terminal
-## This is a placeholder url
-DATABASE_URL="mysql://janedoe:mypassword@localhost:3306/notesapi"
-```
-
-### Microsoft SQL Server
-
-Modify the `provider` value in the `datasource` block in the [`prisma.schema`](./prisma/schema.prisma) file:
-
-```prisma
-datasource db {
-  provider = "sqlserver"
-  url      = env("DATABASE_URL")
-}
-```
-
-Create an `.env` file and add a Microsoft SQL Server database connection string in it. For example:
-
-```terminal
-## This is a placeholder url
-DATABASE_URL="sqlserver://localhost:1433;initial catalog=sample;user=sa;password=mypassword;"
-```
-
-### MongoDB
-
-Modify the `provider` value in the `datasource` block in the [`prisma.schema`](./prisma/schema.prisma) file:
-
-```prisma
-datasource db {
-  provider = "mongodb"
-  url      = env("DATABASE_URL")
-}
-```
-
-Create an `.env` file and add a local MongoDB database connection string in it. For example:
-
-```terminal
-## This is a placeholder url
-DATABASE_URL="mongodb://USERNAME:PASSWORD@HOST/DATABASE?authSource=admin&retryWrites=true&w=majority"
-```
-
-</details>
-
-## Next steps
-
-- Check out the [Prisma docs](https://www.prisma.io/docs)
-- [Join our community on Discord](https://pris.ly/discord?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) to share feedback and interact with other users.
-- [Subscribe to our YouTube channel](https://pris.ly/youtube?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) for live demos and video tutorials.
-- [Follow us on X](https://pris.ly/x?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) for the latest updates.
-- Report issues or ask [questions on GitHub](https://pris.ly/github?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section).
+The 30 skills from `~/Desktop/b2b-lead-generation-claude-skills-main/` are referenced directly (no copy). Three new LMS-specific skills live in `.claude/skills/`.

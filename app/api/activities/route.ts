@@ -1,0 +1,57 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
+import { requireApiUser, leadScope } from '@/lib/session'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(req: Request) {
+  const user = await requireApiUser()
+  if (user instanceof NextResponse) return user
+  const url = new URL(req.url)
+  const limit = Number(url.searchParams.get('limit') ?? 20)
+  const leadId = url.searchParams.get('leadId')
+  const activities = await prisma.activity.findMany({
+    where: { lead: leadScope(user), ...(leadId ? { leadId } : {}) },
+    orderBy: { date: 'desc' },
+    take: limit,
+    include: { lead: { select: { company: true, id: true } } },
+  })
+  const items = activities.map((a) => ({
+    id: a.id,
+    type: a.type,
+    description: a.description,
+    date: a.date,
+    authorName: a.authorName,
+    leadId: a.leadId,
+    leadName: a.lead.company,
+  }))
+  return NextResponse.json({ activities: items })
+}
+
+export async function POST(req: Request) {
+  const user = await requireApiUser()
+  if (user instanceof NextResponse) return user
+  const body = await req.json()
+  if (!body.leadId) return NextResponse.json({ error: 'leadId required' }, { status: 400 })
+
+  const lead = await prisma.lead.findFirst({ where: { id: body.leadId, ...leadScope(user) }, select: { id: true } })
+  if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const activity = await prisma.activity.create({
+    data: {
+      leadId: body.leadId,
+      type: body.type ?? 'note',
+      description: body.description ?? '',
+      authorName: body.authorName ?? 'You',
+      date: body.date ? new Date(body.date) : new Date(),
+    },
+  })
+
+  // Update lead's lastActivityAt
+  await prisma.lead.update({
+    where: { id: body.leadId },
+    data: { lastActivityAt: activity.date },
+  })
+
+  return NextResponse.json({ activity })
+}

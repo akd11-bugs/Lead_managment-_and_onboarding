@@ -1,29 +1,111 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Prisma schema for LRM_blu
+// Stage is a string (not enum) so the LMS can stay flexible if stages change.
 
 generator client {
-  provider   = "prisma-client"
-  output     = "./generated"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id              String       @id @default(cuid())
+  poc             String?      // point of contact at the company — optional, not the primary identifier
+  company         String
+  email           String
+  phone           String?
+  website         String?
+  industry        String?      // free text vertical, e.g. "Fashion", "Apparel" — filled by sales
+  businessType    String?      // b2b | b2c
+  source          String       // website | referral | linkedin | cold_outreach | event | other
+  stage           String       // new | contacted | follow_up | qualified | proposal | won | lost
+  estimatedVolume Float        @default(0)
+  ownerId         String       @default("self")
+  ownerName       String       @default("You")
+  effort          String       @default("medium") // low | medium | high
+  quality         String       @default("medium") // low | medium | high
+  type            String       @default("merchant") // partner | merchant — a partner brings multiple merchants (e.g. Shopify)
+  onboardedAt     DateTime?    // set automatically once onboardingSubStage reaches "final_onboarded"
+  expectedCloseDate DateTime?  // forecast date for BD reporting (leads not yet onboarded)
+  proposalSubStage String?     // commercial_agreed | agreement_shared | agreement_done — only meaningful when stage == "proposal"
+  onboardingSubStage String?   // document_submission | document_verification | psp_verification | final_onboarded — only meaningful when stage == "onboarding"
+  painPoints      String       @default("") // discovery: what's hurting them today
+  whatTheyWant    String       @default("") // discovery: what they're actually asking for
+  notes           String       @default("")
+  position        Int          @default(0)  // ordering within a kanban column
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  lastActivityAt  DateTime?
+  activities      Activity[]
+  skillRuns       SkillRun[]
+  tasks           Task[]
+
+  @@index([stage, position])
+  @@index([ownerId])
+  @@index([source])
+  @@index([lastActivityAt])
+  @@index([quality])
+  @@index([type])
+  @@index([onboardedAt])
+  @@index([expectedCloseDate])
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
-  posts Post[]
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("sales") // admin | sales | operations
+  createdAt    DateTime @default(now())
+
+  // No hard FK from Lead.ownerId — kept a plain string (like stage/source) so
+  // imported/legacy leads with an unrecognized owner never fail to save.
 }
 
-model Post {
-  id        Int     @id @default(autoincrement())
+model Task {
+  id        String    @id @default(cuid())
+  leadId    String?
+  lead      Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   title     String
-  content   String?
-  published Boolean @default(false)
-  authorId  Int
-  author    User    @relation(fields: [authorId], references: [id])
+  dueDate   DateTime?
+  done      Boolean   @default(false)
+  source    String    @default("manual") // manual | alert | sequence
+  ownerId   String?   // scopes visibility for the Sales role, same convention as Lead.ownerId
+  createdAt DateTime  @default(now())
+
+  @@index([leadId])
+  @@index([done, dueDate])
+  @@index([ownerId])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type        String   // call | email | meeting | note
+  description String
+  authorName  String   @default("You")
+  date        DateTime @default(now())
+
+  @@index([leadId, date])
+}
+
+model SkillRun {
+  id               String   @id @default(cuid())
+  skillId          String   // e.g. 'pipeline-hygiene-audit'
+  skillName        String   // display name
+  scope            String   // 'portfolio' | 'lead:<id>'
+  runnerType       String   // 'script' | 'llm'
+  inputJson        String   // serialized snapshot sent to the skill
+  outputMarkdown   String   // raw markdown output
+  outputStructured String?  // serialized JSON for rendering (optional)
+  leadId           String?
+  lead             Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+
+  @@index([skillId])
+  @@index([leadId])
+  @@index([createdAt])
 }

@@ -1,0 +1,89 @@
+// Builds the prompt sent to Claude for an LLM-driven skill run.
+// Composes the SKILL.md text + relevant CRM data + user's optional question.
+
+import type { Lead } from '@/lib/types'
+
+export interface PromptInput {
+  skillText: string         // full SKILL.md content
+  skillId: string
+  scope: 'portfolio' | 'lead' | 'email' | 'sequence' | 'account'
+  leads: Lead[]
+  leadContext?: Lead        // when scope === 'lead'
+  userQuestion?: string     // optional extra focus from the user
+}
+
+export function buildSkillPrompt(input: PromptInput): string {
+  const { skillText, scope, leads, leadContext, userQuestion } = input
+
+  const dataBlock = formatLeadsForPrompt(leads, leadContext, scope)
+
+  const focusLine = userQuestion?.trim()
+    ? `\n## User's specific question\n\n${userQuestion}\n`
+    : ''
+
+  return `${skillText}
+
+---
+
+# Live CRM data
+
+You are running inside LRM_blu, a Lead Management System. The user's CRM data is below.
+
+${dataBlock}
+${focusLine}
+
+## How to behave
+
+- Follow the skill's required input, analysis workflow, decision rules, output format, and guardrails.
+- The data above is real. If something is missing, say so explicitly rather than inventing numbers.
+- Output only the skill's defined output format. No preamble, no "I have analyzed the data".
+- Confidence levels: high, medium, low, unknown. Mark missing data clearly.
+- End with a clear \`Decision:\` line and \`Approval needed:\` line.
+- Do not invent customer quotes, trigger events, or case-study numbers.`
+}
+
+function formatLeadsForPrompt(leads: Lead[], leadContext: Lead | undefined, scope: string): string {
+  if (scope === 'lead' && leadContext) {
+    return `## Target lead
+
+\`\`\`json
+${JSON.stringify(serializeLead(leadContext), null, 2)}
+\`\`\`
+
+## Other leads in same stage (for context)
+
+\`\`\`json
+${JSON.stringify(
+  leads.filter((l) => l.id !== leadContext.id && l.stage === leadContext.stage).slice(0, 5).map(serializeLead),
+  null,
+  2
+)}
+\`\`\``
+  }
+
+  // Portfolio view — most data, condensed
+  return `## All open leads (${leads.length} total)
+
+\`\`\`json
+${JSON.stringify(leads.map(serializeLead), null, 2)}
+\`\`\``
+}
+
+function serializeLead(l: Lead) {
+  return {
+    id: l.id,
+    poc: l.poc,
+    company: l.company,
+    industry: l.industry,
+    source: l.source,
+    stage: l.stage,
+    estimatedVolume: l.estimatedVolume,
+    ownerName: l.ownerName,
+    lastActivityAt: l.lastActivityAt,
+    activitiesCount: l.activities?.length ?? 0,
+    recentActivities: (l.activities ?? [])
+      .slice(0, 3)
+      .map((a) => ({ type: a.type, date: a.date, description: a.description.slice(0, 200) })),
+    notes: l.notes?.slice(0, 400),
+  }
+}
