@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button'
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; error?: string }>
+  searchParams: Promise<{ from?: string; error?: string; redeemed?: string }>
 }) {
-  const { from, error } = await searchParams
+  const { from, error, redeemed } = await searchParams
 
   async function login(formData: FormData) {
     'use server'
@@ -46,6 +46,9 @@ export default async function LoginPage({
               <Label htmlFor="password">Password</Label>
               <Input id="password" name="password" type="password" required />
             </div>
+            {redeemed && !error && (
+              <p className="text-sm text-emerald-600">Account created — log in with your new password.</p>
+            )}
             {error && <p className="text-sm text-rose-600">Invalid email or password.</p>}
             <Button type="submit" className="w-full">
               Sign in

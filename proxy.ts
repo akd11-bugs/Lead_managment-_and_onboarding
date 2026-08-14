@@ -6,11 +6,16 @@ const { auth } = NextAuth(authConfig)
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth
-  const isLoginPage = req.nextUrl.pathname === '/login'
+  const pathname = req.nextUrl.pathname
+  const isLoginPage = pathname === '/login'
+  // Where an invited person redeems their one-time code and sets their own
+  // password — must be reachable while logged out, like /login.
+  const isInviteRedeemPage = pathname === '/invite/redeem'
+  const isPublicPage = isLoginPage || isInviteRedeemPage
 
-  if (!isLoggedIn && !isLoginPage) {
+  if (!isLoggedIn && !isPublicPage) {
     const url = new URL('/login', req.nextUrl.origin)
-    url.searchParams.set('from', req.nextUrl.pathname)
+    url.searchParams.set('from', pathname)
     return NextResponse.redirect(url)
   }
   if (isLoggedIn && isLoginPage) {
@@ -20,7 +25,8 @@ export default auth((req) => {
 })
 
 export const config = {
-  // Skip static assets and the NextAuth API routes themselves; everything
-  // else (pages + our own /api/* routes) requires a session.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth).*)'],
+  // Skip static assets, the NextAuth API routes, and the invite-redemption
+  // API (must be callable while logged out) — everything else (pages and
+  // our own /api/* routes) requires a session.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem).*)'],
 }

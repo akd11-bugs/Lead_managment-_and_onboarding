@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, isAdmin, type SessionUser } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const existing = await findOwned(id, user)
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const body = await req.json()
+  const body = await readJsonBody(req)
+  if (body instanceof NextResponse) return body
   const task = await prisma.task.update({
     where: { id },
     data: {

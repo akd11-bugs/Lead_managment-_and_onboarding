@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import { requireApiUser, leadScope } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
-  const body = await req.json()
+  const body = await readJsonBody(req)
+  if (body instanceof NextResponse) return body
   const { leadId, to, subject, body: emailBody } = body
 
   if (!subject || !emailBody) {

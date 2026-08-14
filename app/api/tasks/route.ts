@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, isAdmin } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
-  const body = await req.json()
+  const body = await readJsonBody(req)
+  if (body instanceof NextResponse) return body
   const title = String(body.title ?? '').trim()
   if (!title) return NextResponse.json({ error: 'title is required' }, { status: 400 })
 

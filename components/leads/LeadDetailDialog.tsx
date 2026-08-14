@@ -32,6 +32,7 @@ import {
   Loader2,
   ExternalLink,
   CheckCircle2,
+  ClipboardCheck,
 } from 'lucide-react'
 import { formatCurrency, formatDate, formatDateTime, formatRelative } from '@/lib/utils'
 import {
@@ -78,6 +79,7 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   email: <Mail className="h-3.5 w-3.5" />,
   meeting: <Calendar className="h-3.5 w-3.5" />,
   note: <StickyNote className="h-3.5 w-3.5" />,
+  onboarding_step: <ClipboardCheck className="h-3.5 w-3.5" />,
 }
 
 export function LeadDetailDialog({

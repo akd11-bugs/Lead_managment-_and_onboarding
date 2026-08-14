@@ -13,6 +13,7 @@ import {
   Handshake,
   LineChart,
   ClipboardCheck,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SERVICES } from '@/lib/services/catalog'
@@ -66,6 +67,11 @@ export function Sidebar({ user }: { user: SessionUser }) {
               {admin && (
                 <NavItem href="/onboarding" icon={<ClipboardCheck className="h-4 w-4" />}>
                   Onboarding queue
+                </NavItem>
+              )}
+              {admin && (
+                <NavItem href="/reports" icon={<BarChart3 className="h-4 w-4" />}>
+                  Reports
                 </NavItem>
               )}
             </NavSection>

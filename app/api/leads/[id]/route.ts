@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
-import { validateLeadFields } from '@/lib/types'
+import { validateLeadFields, ONBOARDING_SUB_STAGE_LABELS, type OnboardingSubStage } from '@/lib/types'
+import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +25,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
   const { id } = await params
-  const body = await req.json()
+  const body = await readJsonBody(req)
+  if (body instanceof NextResponse) return body
 
   const validationError = validateLeadFields(body)
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
@@ -57,6 +59,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         ? null
         : undefined
 
+  if (nextSubStage !== undefined && nextSubStage !== existing.onboardingSubStage) {
+    const fromLabel = existing.onboardingSubStage
+      ? ONBOARDING_SUB_STAGE_LABELS[existing.onboardingSubStage as OnboardingSubStage]
+      : 'Started'
+    const toLabel = nextSubStage ? ONBOARDING_SUB_STAGE_LABELS[nextSubStage as OnboardingSubStage] : 'Removed from onboarding'
+    // description always ends with `(<subStageValue>)` — the Reports page's
+    // "Onboarded" metric depends on this exact suffix, see lib/types.ts.
+    await prisma.activity.create({
+      data: {
+        leadId: id,
+        type: 'onboarding_step',
+        description: `Onboarding step: ${fromLabel} → ${toLabel} (${nextSubStage ?? 'none'})`,
+        authorName: user.name,
+      },
+    })
+  }
+
   const lead = await prisma.lead.update({
     where: { id },
     data: {
@@ -85,6 +104,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.proposalSubStage !== undefined && { proposalSubStage: body.proposalSubStage }),
       ...(body.notes !== undefined && { notes: body.notes }),
       ...(body.position !== undefined && { position: Number(body.position) }),
+      ...(nextSubStage !== undefined && nextSubStage !== existing.onboardingSubStage && { lastActivityAt: new Date() }),
     },
   })
   return NextResponse.json({ lead })

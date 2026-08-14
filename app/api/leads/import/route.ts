@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { SOURCES, LEAD_TYPES, BUSINESS_TYPES, type LeadSource, type LeadType, type BusinessType } from '@/lib/types'
 import { requireApiUser } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,8 +38,9 @@ function normalizeBusinessType(value: string | undefined): BusinessType | null {
 export async function POST(req: Request) {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
-  const body = await req.json()
-  const rows: ImportRow[] = Array.isArray(body?.rows) ? body.rows : []
+  const body = await readJsonBody(req)
+  if (body instanceof NextResponse) return body
+  const rows: unknown[] = Array.isArray(body?.rows) ? body.rows : []
 
   if (rows.length === 0) {
     return NextResponse.json({ error: 'rows must be a non-empty array' }, { status: 400 })
@@ -62,7 +64,15 @@ export async function POST(req: Request) {
     notes: string
   }[] = []
 
-  rows.forEach((row, i) => {
+  rows.forEach((rawRow, i) => {
+    // A stray string/number/null entry (malformed client payload) would
+    // otherwise throw when we read `row.company` etc. below — skip it
+    // like any other invalid row instead.
+    if (typeof rawRow !== 'object' || rawRow === null) {
+      skipped.push({ row: i + 1, reason: 'Row is not a valid object' })
+      return
+    }
+    const row = rawRow as ImportRow
     const poc = String(row.poc ?? '').trim()
     const company = String(row.company ?? '').trim()
     const email = String(row.email ?? '').trim()

@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search } from 'lucide-react'
+import { Search, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -26,6 +28,11 @@ import {
   type QualityLevel,
 } from '@/lib/types'
 
+interface OwnerOption {
+  id: string
+  name: string
+}
+
 type SortKey = 'date' | 'quality' | 'stage'
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -40,11 +47,27 @@ const QUALITY_BADGE_CLASS: Record<QualityLevel, string> = {
   low: 'border-slate-300 text-slate-600 bg-slate-50',
 }
 
-export function LeadsTable({ initialLeads, initialQuery }: { initialLeads: Lead[]; initialQuery?: string }) {
+export function LeadsTable({
+  initialLeads,
+  initialQuery,
+  canReassign = false,
+  ownerOptions = [],
+}: {
+  initialLeads: Lead[]
+  initialQuery?: string
+  canReassign?: boolean
+  ownerOptions?: OwnerOption[]
+}) {
+  const router = useRouter()
   const [search, setSearch] = useState(initialQuery ?? '')
   const [stageFilter, setStageFilter] = useState<Stage | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<LeadSource | 'all'>('all')
   const [sortKey, setSortKey] = useState<SortKey>('date')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkStage, setBulkStage] = useState<Stage | ''>('')
+  const [bulkOwnerId, setBulkOwnerId] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -65,6 +88,63 @@ export function LeadsTable({ initialLeads, initialQuery }: { initialLeads: Lead[
     }
     return sorted
   }, [initialLeads, search, stageFilter, sourceFilter, sortKey])
+
+  const allVisibleSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id))
+
+  function toggleAllVisible() {
+    setSelected((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev)
+        for (const l of filtered) next.delete(l.id)
+        return next
+      }
+      const next = new Set(prev)
+      for (const l of filtered) next.add(l.id)
+      return next
+    })
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function runBulkAction(action: 'stage' | 'reassign') {
+    if (selected.size === 0) return
+    setBulkBusy(true)
+    setBulkMessage(null)
+    try {
+      const owner = ownerOptions.find((o) => o.id === bulkOwnerId)
+      const res = await fetch('/api/leads/bulk', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          leadIds: Array.from(selected),
+          action,
+          ...(action === 'stage' && { stage: bulkStage }),
+          ...(action === 'reassign' && { ownerId: owner?.id }),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setBulkMessage(data.error ?? 'Bulk update failed')
+        return
+      }
+      setBulkMessage(
+        data.skipped > 0
+          ? `Updated ${data.updated} of ${data.requested} (${data.skipped} out of scope)`
+          : `Updated ${data.updated} lead${data.updated === 1 ? '' : 's'}`
+      )
+      setSelected(new Set())
+      router.refresh()
+    } finally {
+      setBulkBusy(false)
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -121,10 +201,59 @@ export function LeadsTable({ initialLeads, initialQuery }: { initialLeads: Lead[
         </span>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-accent/40 px-3 py-2">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <Select value={bulkStage} onValueChange={(v) => setBulkStage(v as Stage)}>
+            <SelectTrigger className="h-8 w-40">
+              <SelectValue placeholder="Move to stage…" />
+            </SelectTrigger>
+            <SelectContent>
+              {STAGES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STAGE_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" disabled={!bulkStage || bulkBusy} onClick={() => runBulkAction('stage')}>
+            {bulkBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Apply stage
+          </Button>
+          {canReassign && (
+            <>
+              <Select value={bulkOwnerId} onValueChange={setBulkOwnerId}>
+                <SelectTrigger className="h-8 w-44">
+                  <SelectValue placeholder="Reassign to…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ownerOptions.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" disabled={!bulkOwnerId || bulkBusy} onClick={() => runBulkAction('reassign')}>
+                {bulkBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Reassign
+              </Button>
+            </>
+          )}
+          {bulkMessage && <span className="text-xs text-muted-foreground">{bulkMessage}</span>}
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-md border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide">
             <tr className="text-left">
+              <th className="px-3 py-2 font-medium w-8">
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible leads" />
+              </th>
               <th className="px-3 py-2 font-medium">Company / POC</th>
               <th className="px-3 py-2 font-medium hidden md:table-cell">Stage</th>
               <th className="px-3 py-2 font-medium hidden md:table-cell">Source</th>
@@ -137,13 +266,21 @@ export function LeadsTable({ initialLeads, initialQuery }: { initialLeads: Lead[
           <tbody className="divide-y">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-12 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
                   No leads match the current filters.
                 </td>
               </tr>
             )}
             {filtered.map((l) => (
               <tr key={l.id} className="hover:bg-muted/40">
+                <td className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(l.id)}
+                    onChange={() => toggleOne(l.id)}
+                    aria-label={`Select ${l.company}`}
+                  />
+                </td>
                 <td className="px-3 py-2">
                   <Link href={`/leads/${l.id}`} className="block">
                     <p className="font-medium">{l.company}</p>

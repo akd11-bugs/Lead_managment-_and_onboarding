@@ -4,9 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, AlertCircle } from 'lucide-react'
 import { STAGES, STAGE_LABELS, STAGE_DESCRIPTIONS, SOURCES, SOURCE_LABELS, type Stage } from '@/lib/types'
+import Link from 'next/link'
+import { ScrollText } from 'lucide-react'
 import { requireUser, isAdmin } from '@/lib/session'
 import { prisma } from '@/lib/db'
-import { UserManagement } from '@/components/settings/UserManagement'
+import { OrganisationPanel } from '@/components/settings/OrganisationPanel'
+import { Button } from '@/components/ui/button'
 
 async function checkSkillLibrary() {
   const libPath = process.env.SKILL_LIBRARY_PATH || path.join(process.cwd(), 'skills-library')
@@ -23,17 +26,30 @@ export default async function SettingsPage() {
   const users = isAdmin(user)
     ? await prisma.user.findMany({
         orderBy: { createdAt: 'asc' },
-        select: { id: true, name: true, email: true, role: true, createdAt: true },
+        select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
       })
+    : []
+  const invites = isAdmin(user)
+    ? await prisma.invite.findMany({ orderBy: { createdAt: 'desc' } })
     : []
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Pipeline stages, sources, and skill library status.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground">Pipeline stages, sources, and skill library status.</p>
+        </div>
+        {isAdmin(user) && (
+          <Link href="/settings/audit-log">
+            <Button variant="outline" size="sm">
+              <ScrollText className="h-4 w-4" />
+              Audit log
+            </Button>
+          </Link>
+        )}
       </div>
 
-      {isAdmin(user) && <UserManagement initialUsers={users as never} />}
+      {isAdmin(user) && <OrganisationPanel initialUsers={users as never} initialInvites={invites as never} />}
 
       <Card>
         <CardHeader className="pb-2">

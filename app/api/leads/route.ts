@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
 import { validateLeadFields } from '@/lib/types'
+import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
-  const body = await req.json()
+  const body = await readJsonBody(req)
+  if (body instanceof NextResponse) return body
   if (!body.company || !body.email) {
     return NextResponse.json({ error: 'company and email are required' }, { status: 400 })
   }

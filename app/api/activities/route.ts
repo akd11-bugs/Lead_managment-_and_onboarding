@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +9,8 @@ export async function GET(req: Request) {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
   const url = new URL(req.url)
-  const limit = Number(url.searchParams.get('limit') ?? 20)
+  const requestedLimit = Number(url.searchParams.get('limit'))
+  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 200) : 20
   const leadId = url.searchParams.get('leadId')
   const activities = await prisma.activity.findMany({
     where: { lead: leadScope(user), ...(leadId ? { leadId } : {}) },
@@ -31,7 +33,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
-  const body = await req.json()
+  const body = await readJsonBody(req)
+  if (body instanceof NextResponse) return body
   if (!body.leadId) return NextResponse.json({ error: 'leadId required' }, { status: 400 })
 
   const lead = await prisma.lead.findFirst({ where: { id: body.leadId, ...leadScope(user) }, select: { id: true } })

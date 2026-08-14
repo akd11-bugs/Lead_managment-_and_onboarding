@@ -5,7 +5,12 @@ export type Stage = 'new' | 'contacted' | 'follow_up' | 'qualified' | 'proposal'
 
 export type LeadSource = 'website' | 'referral' | 'linkedin' | 'cold_outreach' | 'event' | 'other'
 
-export type ActivityType = 'call' | 'email' | 'meeting' | 'note'
+// 'onboarding_step' is written server-side only (app/api/leads/[id]/route.ts,
+// on every onboardingSubStage change) — never user-selectable in the manual
+// activity form. Its description always ends with `(<subStageValue>)`, e.g.
+// "(final_onboarded)" — the Reports page's "Onboarded" metric filters on
+// that exact suffix, so keep both in sync if this format ever changes.
+export type ActivityType = 'call' | 'email' | 'meeting' | 'note' | 'onboarding_step'
 
 export type QualityLevel = 'low' | 'medium' | 'high'
 
@@ -187,6 +192,9 @@ export function validateLeadFields(body: Record<string, unknown>): string | null
   if (body.businessType != null && !BUSINESS_TYPES.includes(body.businessType as BusinessType)) return `Invalid businessType: ${body.businessType}`
   if (body.proposalSubStage != null && !PROPOSAL_SUB_STAGES.includes(body.proposalSubStage as ProposalSubStage)) return `Invalid proposalSubStage: ${body.proposalSubStage}`
   if (body.onboardingSubStage != null && !ONBOARDING_SUB_STAGES.includes(body.onboardingSubStage as OnboardingSubStage)) return `Invalid onboardingSubStage: ${body.onboardingSubStage}`
+  if (body.estimatedVolume !== undefined && !Number.isFinite(Number(body.estimatedVolume))) {
+    return `Invalid estimatedVolume: ${body.estimatedVolume}`
+  }
   return null
 }
 

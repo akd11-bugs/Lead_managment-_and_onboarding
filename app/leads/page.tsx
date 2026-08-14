@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { X } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { LeadsTable } from '@/components/leads/LeadsTable'
-import { requireUser, leadScope } from '@/lib/session'
+import { requireUser, leadScope, isAdmin } from '@/lib/session'
 import { STAGE_LABELS, SOURCE_LABELS, type Stage, type LeadSource } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -65,6 +65,11 @@ export default async function LeadsPage({
     orderBy: { updatedAt: 'desc' },
   })
 
+  const admin = isAdmin(user)
+  const owners = admin
+    ? await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+    : []
+
   return (
     <div className="space-y-4">
       <div>
@@ -82,7 +87,7 @@ export default async function LeadsPage({
           </Link>
         </div>
       )}
-      <LeadsTable initialLeads={leads as any} initialQuery={q} />
+      <LeadsTable initialLeads={leads as any} initialQuery={q} canReassign={admin} ownerOptions={owners} />
     </div>
   )
 }
