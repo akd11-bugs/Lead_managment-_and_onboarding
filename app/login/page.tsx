@@ -12,6 +12,7 @@ export default async function LoginPage({
   searchParams: Promise<{ from?: string; error?: string; redeemed?: string }>
 }) {
   const { from, error, redeemed } = await searchParams
+  const googleEnabled = !!process.env.GOOGLE_CLIENT_ID
 
   async function login(formData: FormData) {
     'use server'
@@ -27,6 +28,11 @@ export default async function LoginPage({
       }
       throw err
     }
+  }
+
+  async function loginWithGoogle() {
+    'use server'
+    await signIn('google', { redirectTo: from && from !== '/login' ? from : '/' })
   }
 
   return (
@@ -54,6 +60,20 @@ export default async function LoginPage({
               Sign in
             </Button>
           </form>
+          {googleEnabled && (
+            <>
+              <div className="my-3 flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="h-px flex-1 bg-border" />
+                or
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <form action={loginWithGoogle}>
+                <Button type="submit" variant="outline" className="w-full">
+                  Sign in with Google
+                </Button>
+              </form>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

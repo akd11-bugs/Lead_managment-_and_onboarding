@@ -33,6 +33,12 @@ export function isOperations(user: SessionUser) {
   return user.role === 'operations'
 }
 
+// True for a first-time Google sign-in with no role assigned yet — blocked
+// from the app entirely (see proxy.ts) until an admin approves them.
+export function isPending(user: SessionUser) {
+  return user.role === 'pending'
+}
+
 // Admin sees the whole portfolio; Sales sees only leads they own; Operations
 // sees every lead too (they manage onboarding across all reps' merchants).
 // Spread this into any `prisma.lead.findMany`/`findUnique` where clause.

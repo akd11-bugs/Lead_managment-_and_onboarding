@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { UserPlus, Loader2, Copy, Ban, Trash2, Check } from 'lucide-react'
+import { UserPlus, Loader2, Copy, Ban, Trash2, Check, UserCheck } from 'lucide-react'
 
 interface UserRow {
   id: string
@@ -56,6 +56,7 @@ export function OrganisationPanel({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [approveRole, setApproveRole] = useState<Record<string, Role>>({})
 
   async function generateInvite() {
     setSaving(true)
@@ -119,6 +120,8 @@ export function OrganisationPanel({
 
   const pendingInvites = invites.filter((i) => i.status === 'pending')
   const otherInvites = invites.filter((i) => i.status !== 'pending')
+  const pendingApprovals = users.filter((u) => u.role === 'pending')
+  const activeUsers = users.filter((u) => u.role !== 'pending')
 
   return (
     <Card>
@@ -126,8 +129,47 @@ export function OrganisationPanel({
         <CardTitle className="text-base">Organisation</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {pendingApprovals.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-amber-700">Awaiting approval — signed in with Google</p>
+            {pendingApprovals.map((u) => (
+              <div key={u.id} className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{u.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Select value={approveRole[u.id] ?? 'sales'} onValueChange={(v) => setApproveRole({ ...approveRole, [u.id]: v as Role })}>
+                    <SelectTrigger className="h-7 w-[7.5rem] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sales">Sales</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="operations">Operations</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-7" onClick={() => changeRole(u.id, approveRole[u.id] ?? 'sales')}>
+                    <UserCheck className="h-3.5 w-3.5" />
+                    Approve
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-rose-600 hover:text-rose-700"
+                    title="Reject"
+                    onClick={() => deleteUser(u.id, u.name)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="space-y-1.5">
-          {users.map((u) => (
+          {activeUsers.map((u) => (
             <div key={u.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
               <div className="min-w-0">
                 <p className="font-medium truncate">{u.name}</p>
@@ -168,7 +210,7 @@ export function OrganisationPanel({
               </div>
             </div>
           ))}
-          {users.length === 0 && <p className="text-sm text-muted-foreground">No team members yet.</p>}
+          {activeUsers.length === 0 && <p className="text-sm text-muted-foreground">No team members yet.</p>}
         </div>
 
         {pendingInvites.length > 0 && (

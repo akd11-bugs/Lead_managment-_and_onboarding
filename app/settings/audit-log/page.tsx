@@ -14,6 +14,7 @@ const ACTION_LABELS: Record<string, string> = {
   login_success: 'Login succeeded',
   login_failed: 'Login failed',
   login_locked: 'Account locked',
+  oauth_signup_pending: 'Google sign-in (awaiting approval)',
   invite_created: 'Invite created',
   invite_revoked: 'Invite revoked',
   invite_redeemed: 'Invite redeemed',

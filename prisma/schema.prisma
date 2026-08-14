@@ -56,8 +56,8 @@ model User {
   id                  String    @id @default(cuid())
   name                String
   email               String    @unique
-  passwordHash        String
-  role                String    @default("sales") // admin | sales | operations
+  passwordHash        String?   // null for Google-only accounts — no password was ever set
+  role                String    @default("sales") // admin | sales | operations | pending
   isActive            Boolean   @default(true)
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?

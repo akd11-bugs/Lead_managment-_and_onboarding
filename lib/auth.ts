@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
+import Google from 'next-auth/providers/google'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { authConfig } from '@/lib/auth.config'
@@ -8,8 +9,22 @@ import { logAudit } from '@/lib/audit'
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MS = 15 * 60 * 1000
 
+const googleEnabled = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    // Credentials already fully validates isActive/lockout inside authorize()
+    // below. Google's profile() (also below) always resolves to a real user
+    // row, but doesn't itself deny sign-in — do that check here instead,
+    // since `signIn` returning false is the documented way to deny.
+    async signIn({ user, account }) {
+      if (account?.provider !== 'google') return true
+      const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { isActive: true } })
+      return dbUser?.isActive !== false
+    },
+  },
   providers: [
     Credentials({
       credentials: {
@@ -30,6 +45,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         if (user.lockedUntil && user.lockedUntil > new Date()) {
           await logAudit({ action: 'login_locked', targetUserId: user.id, metadata: { email } })
+          return null
+        }
+        if (!user.passwordHash) {
+          // Google-only account — no password was ever set.
+          await logAudit({ action: 'login_failed', targetUserId: user.id, metadata: { email, reason: 'no_password_set' } })
           return null
         }
 
@@ -61,5 +81,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return { id: user.id, name: user.name, email: user.email, role: user.role }
       },
     }),
+    ...(googleEnabled
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            // Maps the Google profile to our own User row instead of NextAuth's
+            // default shape — finds-or-creates by email so a first-time Google
+            // sign-in lands as a `pending` account (see app/pending/page.tsx
+            // and proxy.ts) instead of silently getting default access.
+            async profile(profile) {
+              const email = String(profile.email ?? '').trim().toLowerCase()
+              const existing = await prisma.user.findUnique({ where: { email } })
+              if (existing) {
+                await logAudit({
+                  action: 'login_success',
+                  actorUserId: existing.id,
+                  targetUserId: existing.id,
+                  metadata: { email, provider: 'google' },
+                })
+                return { id: existing.id, name: existing.name, email: existing.email, role: existing.role }
+              }
+              const created = await prisma.user.create({
+                data: { name: profile.name ?? email, email, passwordHash: null, role: 'pending' },
+              })
+              await logAudit({ action: 'oauth_signup_pending', targetUserId: created.id, metadata: { email } })
+              return { id: created.id, name: created.name, email: created.email, role: created.role }
+            },
+          }),
+        ]
+      : []),
   ],
 })

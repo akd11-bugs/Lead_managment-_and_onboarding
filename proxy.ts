@@ -12,6 +12,10 @@ export default auth((req) => {
   // password — must be reachable while logged out, like /login.
   const isInviteRedeemPage = pathname === '/invite/redeem'
   const isPublicPage = isLoginPage || isInviteRedeemPage
+  const isPendingPage = pathname === '/pending'
+  // First-time Google sign-in with no role assigned yet — blocked from
+  // everything except this one page until an admin approves them.
+  const isPending = req.auth?.user?.role === 'pending'
 
   if (!isLoggedIn && !isPublicPage) {
     const url = new URL('/login', req.nextUrl.origin)
@@ -19,6 +23,12 @@ export default auth((req) => {
     return NextResponse.redirect(url)
   }
   if (isLoggedIn && isLoginPage) {
+    return NextResponse.redirect(new URL('/', req.nextUrl.origin))
+  }
+  if (isLoggedIn && isPending && !isPendingPage) {
+    return NextResponse.redirect(new URL('/pending', req.nextUrl.origin))
+  }
+  if (isLoggedIn && !isPending && isPendingPage) {
     return NextResponse.redirect(new URL('/', req.nextUrl.origin))
   }
   return NextResponse.next()
