@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { format, formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -23,12 +23,25 @@ export function formatCurrencyCompact(amount: number): string {
   return formatCurrency(amount)
 }
 
+// Fixed to IST regardless of the server's own timezone (Render runs in UTC) —
+// the whole team is India-based, so timestamps should read in their local time.
+const IST = 'Asia/Kolkata'
+
 export function formatDate(date: Date | string): string {
-  return format(new Date(date), 'MMM d, yyyy')
+  return new Intl.DateTimeFormat('en-US', { timeZone: IST, month: 'short', day: 'numeric', year: 'numeric' }).format(
+    new Date(date)
+  )
 }
 
 export function formatDateTime(date: Date | string): string {
-  return format(new Date(date), 'MMM d, h:mm a')
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: IST,
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(date))
 }
 
 export function formatRelative(date: Date | string | null): string {
