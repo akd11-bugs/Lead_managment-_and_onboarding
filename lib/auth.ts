@@ -9,7 +9,12 @@ import { logAudit } from '@/lib/audit'
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MS = 15 * 60 * 1000
 
-const googleEnabled = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET
+// .trim() guards against a trailing newline/whitespace sneaking into the env
+// var value (e.g. via a copy-paste into a hosting dashboard) — Google rejects
+// the client_id outright (invalid_client) if it doesn't match byte-for-byte.
+const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim()
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
+const googleEnabled = !!googleClientId && !!googleClientSecret
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -84,8 +89,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...(googleEnabled
       ? [
           Google({
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
             // Maps the Google profile to our own User row instead of NextAuth's
             // default shape — finds-or-creates by email so a first-time Google
             // sign-in lands as a `pending` account (see app/pending/page.tsx
