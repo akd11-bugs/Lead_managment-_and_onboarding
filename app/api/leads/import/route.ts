@@ -76,11 +76,12 @@ export async function POST(req: Request) {
     const poc = String(row.poc ?? '').trim()
     const company = String(row.company ?? '').trim()
     const email = String(row.email ?? '').trim()
-    if (!company || !email) {
-      skipped.push({ row: i + 1, reason: 'Missing required company or email' })
+    if (!company) {
+      skipped.push({ row: i + 1, reason: 'Missing required company' })
       return
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    // Email is optional at import time — can be filled in later on the lead.
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       skipped.push({ row: i + 1, reason: `Invalid email: ${email}` })
       return
     }

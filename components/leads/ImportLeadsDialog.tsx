@@ -165,7 +165,7 @@ export function ImportLeadsDialog() {
   }
 
   const missingRequired = parsed && mapping
-    ? mappedRows().filter((r) => !r.company || !r.email).length
+    ? mappedRows().filter((r) => !r.company).length
     : 0
 
   async function handleImport() {
@@ -246,15 +246,13 @@ export function ImportLeadsDialog() {
             {parseError && <p className="text-xs text-rose-600">{parseError}</p>}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {FIELDS.map((field) => (
-                <div key={field} className="space-y-1">
+                <div key={field} className="space-y-1 min-w-0">
                   <label className="text-xs font-medium text-muted-foreground">
                     {FIELD_LABELS[field]}
-                    {(field === 'company' || field === 'email') && (
-                      <span className="text-rose-500"> *</span>
-                    )}
+                    {field === 'company' && <span className="text-rose-500"> *</span>}
                   </label>
                   <Select
                     value={mapping?.[field] ?? NONE}
@@ -280,10 +278,10 @@ export function ImportLeadsDialog() {
               <p className="text-xs font-medium">
                 Preview — {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'} parsed
                 {missingRequired > 0 && (
-                  <span className="text-amber-600"> · {missingRequired} missing company/email will be skipped</span>
+                  <span className="text-amber-600"> · {missingRequired} missing company will be skipped</span>
                 )}
               </p>
-              <div className="max-h-52 overflow-auto rounded-md border">
+              <div className="max-h-52 min-w-0 overflow-auto rounded-md border">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/50">
                     <tr>
@@ -321,7 +319,7 @@ export function ImportLeadsDialog() {
                 Cancel
               </Button>
               {parsed && (
-                <Button onClick={handleImport} disabled={importing || !mapping?.company || !mapping?.email}>
+                <Button onClick={handleImport} disabled={importing || !mapping?.company}>
                   {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                   Import {parsed.rows.length} lead{parsed.rows.length === 1 ? '' : 's'}
                 </Button>
