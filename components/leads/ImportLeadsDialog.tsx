@@ -61,8 +61,8 @@ const FIELD_SYNONYMS: Record<Field, string[]> = {
   poc: ['poc', 'name', 'full name', 'contact name', 'lead name', 'contact', 'point of contact'],
   phone: ['phone', 'mobile', 'phone number', 'contact number', 'mobile number'],
   website: ['website', 'url', 'web site', 'domain'],
-  industry: ['industry', 'vertical', 'category', 'business type', 'type of business'],
-  businessType: ['business model', 'b2b b2c', 'lead type', 'customer type'],
+  industry: ['industry', 'vertical', 'category'],
+  businessType: ['business type', 'type of business', 'business model', 'b2b b2c', 'lead type', 'customer type'],
   source: ['source', 'lead source', 'channel'],
   type: ['type', 'partner merchant'],
   estimatedVolume: ['estimated volume', 'value', 'volume', 'amount', 'deal value', 'expected volume'],
@@ -77,13 +77,33 @@ function normalizeHeader(h: string) {
 
 function autoMapHeaders(headers: string[]): Record<Field, string | null> {
   const normalized = headers.map(normalizeHeader)
+  const claimed = new Set<number>()
   const map = {} as Record<Field, string | null>
+
+  // Exact matches first, across all fields, so a field with an exact synonym hit
+  // never loses its column to another field's fuzzy "includes" match later.
   for (const field of FIELDS) {
     const synonyms = FIELD_SYNONYMS[field].map(normalizeHeader)
-    let idx = normalized.findIndex((h) => synonyms.includes(h))
-    if (idx === -1) idx = normalized.findIndex((h) => synonyms.some((s) => h.includes(s)))
-    map[field] = idx !== -1 ? headers[idx] : null
+    const idx = normalized.findIndex((h, i) => !claimed.has(i) && synonyms.includes(h))
+    if (idx !== -1) {
+      claimed.add(idx)
+      map[field] = headers[idx]
+    } else {
+      map[field] = null
+    }
   }
+
+  // Then fuzzy "includes" matches for whatever's left unmapped.
+  for (const field of FIELDS) {
+    if (map[field] !== null) continue
+    const synonyms = FIELD_SYNONYMS[field].map(normalizeHeader)
+    const idx = normalized.findIndex((h, i) => !claimed.has(i) && synonyms.some((s) => h.includes(s)))
+    if (idx !== -1) {
+      claimed.add(idx)
+      map[field] = headers[idx]
+    }
+  }
+
   return map
 }
 
