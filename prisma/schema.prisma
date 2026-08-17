@@ -109,6 +109,17 @@ model Invite {
   @@index([status])
 }
 
+model SignupToken {
+  id        String    @id @default(cuid())
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
 model AuditLog {
   id             String   @id @default(cuid())
   action         String   // login_success | login_failed | login_locked | invite_created | invite_redeemed | invite_revoked | user_role_changed | user_deactivated | user_activated | user_deleted

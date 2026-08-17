@@ -5,6 +5,7 @@ export type AuditAction =
   | 'login_failed'
   | 'login_locked'
   | 'oauth_signup_pending'
+  | 'signup_pending'
   | 'invite_created'
   | 'invite_revoked'
   | 'invite_redeemed'

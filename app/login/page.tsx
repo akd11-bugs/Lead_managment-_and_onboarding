@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { AuthError } from 'next-auth'
 import { signIn } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -74,6 +75,12 @@ export default async function LoginPage({
               </form>
             </>
           )}
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            New here?{' '}
+            <Link href="/signup" className="underline underline-offset-2">
+              Create an account
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

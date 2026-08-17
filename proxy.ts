@@ -11,7 +11,11 @@ export default auth((req) => {
   // Where an invited person redeems their one-time code and sets their own
   // password — must be reachable while logged out, like /login.
   const isInviteRedeemPage = pathname === '/invite/redeem'
-  const isPublicPage = isLoginPage || isInviteRedeemPage
+  // Self-serve email+password signup — request a link, then set name/password.
+  // Lands as 'pending' just like the invite/Google flows; must be reachable
+  // while logged out, like /login.
+  const isSignupPage = pathname === '/signup' || pathname === '/signup/complete'
+  const isPublicPage = isLoginPage || isInviteRedeemPage || isSignupPage
   const isPendingPage = pathname === '/pending'
   // First-time Google sign-in with no role assigned yet — blocked from
   // everything except this one page until an admin approves them.
@@ -36,7 +40,7 @@ export default auth((req) => {
 
 export const config = {
   // Skip static assets, the NextAuth API routes, and the invite-redemption
-  // API (must be callable while logged out) — everything else (pages and
-  // our own /api/* routes) requires a session.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem).*)'],
+  // and signup APIs (must be callable while logged out) — everything else
+  // (pages and our own /api/* routes) requires a session.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem|api/signup).*)'],
 }
