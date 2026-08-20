@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { LeadsTable } from '@/components/leads/LeadsTable'
 import { requireUser, leadScope, isAdmin } from '@/lib/session'
 import { STAGE_LABELS, SOURCE_LABELS, type Stage, type LeadSource } from '@/lib/types'
+import { getRange, parseRangeKey, RANGE_LABELS, type RangeKey } from '@/lib/reportRange'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,20 +37,46 @@ const FILTERS: Record<string, { where: Record<string, unknown>; label: string }>
       where: { stage: { in: ['onboarding', 'lost'] } },
       label: 'Closed (won or lost)',
     },
+    onboarded: {
+      where: { onboardedAt: { not: null } },
+      label: 'Onboarded',
+    },
   }
 })()
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; owner?: string; source?: string; stage?: string; q?: string }>
+  searchParams: Promise<{
+    filter?: string
+    owner?: string
+    source?: string
+    stage?: string
+    q?: string
+    metric?: string
+    range?: string
+  }>
 }) {
   const user = await requireUser()
-  const { filter, owner, source, stage, q } = await searchParams
+  const { filter, owner, source, stage, q, metric, range: rawRange } = await searchParams
   const matched = filter ? FILTERS[filter] : undefined
+
+  // Period-scoped drill-down from Reports — e.g. "leads created this week" —
+  // distinct from the static, always-current-month FILTERS above.
+  const range: RangeKey | null = metric ? parseRangeKey(rawRange) : null
+  const periodBounds = range ? getRange(range) : null
+  const periodWhere =
+    metric === 'created' && periodBounds
+      ? { createdAt: { gte: periodBounds.start, lte: periodBounds.end } }
+      : metric === 'onboarded' && periodBounds
+        ? { onboardedAt: { gte: periodBounds.start, lte: periodBounds.end } }
+        : {}
 
   const labels: string[] = []
   if (matched) labels.push(matched.label)
+  if (metric && range) {
+    labels.push(`${metric === 'created' ? 'Leads created' : 'Onboarded'} · ${RANGE_LABELS[range]}`)
+  }
   if (owner) labels.push(`Owner: ${owner}`)
   if (source) labels.push(`Source: ${SOURCE_LABELS[source as LeadSource] ?? source}`)
   if (stage) labels.push(`Stage: ${STAGE_LABELS[stage as Stage] ?? stage}`)
@@ -58,6 +85,7 @@ export default async function LeadsPage({
     where: {
       ...leadScope(user),
       ...(matched?.where as object),
+      ...periodWhere,
       ...(owner ? { ownerName: owner } : {}),
       ...(source ? { source } : {}),
       ...(stage ? { stage } : {}),

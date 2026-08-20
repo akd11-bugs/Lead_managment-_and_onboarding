@@ -2,35 +2,13 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { cn, formatDate } from '@/lib/utils'
+import { StatTile } from '@/components/dashboard/StatTile'
+import { cn } from '@/lib/utils'
 import { requireUser, isAdmin } from '@/lib/session'
 import { prisma } from '@/lib/db'
+import { getRange, parseRangeKey, RANGE_LABELS, type RangeKey } from '@/lib/reportRange'
 
 export const dynamic = 'force-dynamic'
-
-type RangeKey = 'today' | 'week' | 'month'
-
-function getRange(range: RangeKey): { start: Date; end: Date; label: string } {
-  const now = new Date()
-  if (range === 'today') {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
-    return { start, end, label: formatDate(start) }
-  }
-  if (range === 'month') {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1)
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
-    return { start, end, label: `${formatDate(start)} – ${formatDate(end)}` }
-  }
-  // week: Monday-start calendar week containing today
-  const day = now.getDay() // 0 = Sunday
-  const diffToMonday = day === 0 ? -6 : 1 - day
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday)
-  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999)
-  return { start, end, label: `${formatDate(start)} – ${formatDate(end)}` }
-}
-
-const RANGE_LABELS: Record<RangeKey, string> = { today: 'Today', week: 'This week', month: 'This month' }
 
 const ACTOR_ACTIVITY_TYPES = ['call', 'email', 'meeting', 'note']
 
@@ -43,7 +21,7 @@ export default async function ReportsPage({
   if (!isAdmin(user)) redirect('/')
 
   const { range: rawRange } = await searchParams
-  const range: RangeKey = rawRange === 'today' || rawRange === 'month' ? rawRange : 'week'
+  const range: RangeKey = parseRangeKey(rawRange)
   const { start, end, label } = getRange(range)
 
   const [createdLeads, wonLeads, activities] = await Promise.all([
@@ -120,10 +98,20 @@ export default async function ReportsPage({
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Leads created" value={createdLeads.length} />
-        <StatTile label="Won & onboarded" value={wonLeads.length} />
-        <StatTile label="Activities logged" value={actorActivities.length} sub="calls, emails, meetings, notes" />
-        <StatTile label="Onboarded" value={onboardedActivities.length} sub="leads finalized by ops" />
+        <StatTile label="Leads created" value={createdLeads.length} href={`/leads?metric=created&range=${range}`} />
+        <StatTile label="Won & onboarded" value={wonLeads.length} href={`/leads?metric=onboarded&range=${range}`} />
+        <StatTile
+          label="Activities logged"
+          value={actorActivities.length}
+          hint="calls, emails, meetings, notes"
+          href={`/reports/activities?kind=actor&range=${range}`}
+        />
+        <StatTile
+          label="Onboarded"
+          value={onboardedActivities.length}
+          hint="leads finalized by ops"
+          href={`/reports/activities?kind=onboarded&range=${range}`}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 items-start">
@@ -155,9 +143,30 @@ export default async function ReportsPage({
                   {repRows.map((r) => (
                     <tr key={r.name}>
                       <td className="px-4 py-2 font-medium">{r.name}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{r.created}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{r.won}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{r.activities}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        <Link
+                          href={`/leads?metric=created&range=${range}&owner=${encodeURIComponent(r.name)}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {r.created}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        <Link
+                          href={`/leads?metric=onboarded&range=${range}&owner=${encodeURIComponent(r.name)}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {r.won}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        <Link
+                          href={`/reports/activities?kind=actor&range=${range}&owner=${encodeURIComponent(r.name)}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {r.activities}
+                        </Link>
+                      </td>
                       <td className="px-4 py-2">
                         <BarTrack value={r.created} max={maxCreated} />
                       </td>
@@ -195,7 +204,14 @@ export default async function ReportsPage({
                   {opsRows.map((r) => (
                     <tr key={r.name}>
                       <td className="px-4 py-2 font-medium">{r.name}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{r.count}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        <Link
+                          href={`/reports/activities?kind=onboarded&range=${range}&owner=${encodeURIComponent(r.name)}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {r.count}
+                        </Link>
+                      </td>
                       <td className="px-4 py-2">
                         <BarTrack value={r.count} max={maxOnboarded} />
                       </td>
@@ -207,16 +223,6 @@ export default async function ReportsPage({
           </CardContent>
         </Card>
       </div>
-    </div>
-  )
-}
-
-function StatTile({ label, value, sub }: { label: string; value: number; sub?: string }) {
-  return (
-    <div className="rounded-md border bg-card px-4 py-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold tabular-nums">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { SOURCES, LEAD_TYPES, BUSINESS_TYPES, type LeadSource, type LeadType, type BusinessType } from '@/lib/types'
+import { SOURCES, LEAD_TYPES, BUSINESS_TYPES, isValidWebsite, type LeadSource, type LeadType, type BusinessType } from '@/lib/types'
 import { requireApiUser } from '@/lib/session'
 import { readJsonBody } from '@/lib/http'
 
@@ -90,7 +90,9 @@ export async function POST(req: Request) {
       company,
       email,
       phone: row.phone ? String(row.phone).trim() : null,
-      website: row.website ? String(row.website).trim() : null,
+      // A mismapped column (e.g. a page title instead of a URL) shouldn't
+      // fail the whole row — just drop it, same as a missing email.
+      website: row.website && isValidWebsite(String(row.website)) ? String(row.website).trim() : null,
       industry: row.industry ? String(row.industry).trim() : null,
       businessType: normalizeBusinessType(row.businessType),
       source: normalizeSource(row.source),

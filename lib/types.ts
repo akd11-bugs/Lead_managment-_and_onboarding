@@ -180,6 +180,15 @@ export const ONBOARDING_SUB_STAGE_LABELS: Record<OnboardingSubStage, string> = {
   final_onboarded: 'Final onboarded',
 }
 
+// Permissive domain/URL shape check — rejects whitespace-containing strings
+// (e.g. a page title mistakenly landing in this field) while accepting bare
+// domains and full URLs.
+const WEBSITE_PATTERN = /^(https?:\/\/)?[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+([/?#]\S*)?$/
+
+export function isValidWebsite(value: string): boolean {
+  return WEBSITE_PATTERN.test(value.trim())
+}
+
 // Validates enum-like Lead fields present in a request body against the
 // arrays above. Returns an error message, or null if everything present is
 // valid. Fields absent from the body are left untouched (PATCH semantics).
@@ -194,6 +203,9 @@ export function validateLeadFields(body: Record<string, unknown>): string | null
   if (body.onboardingSubStage != null && !ONBOARDING_SUB_STAGES.includes(body.onboardingSubStage as OnboardingSubStage)) return `Invalid onboardingSubStage: ${body.onboardingSubStage}`
   if (body.estimatedVolume !== undefined && !Number.isFinite(Number(body.estimatedVolume))) {
     return `Invalid estimatedVolume: ${body.estimatedVolume}`
+  }
+  if (body.website != null && body.website !== '' && !isValidWebsite(String(body.website))) {
+    return `Invalid website: ${body.website}`
   }
   return null
 }

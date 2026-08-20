@@ -45,7 +45,10 @@ export async function POST(req: Request) {
       leadId: body.leadId,
       type: body.type ?? 'note',
       description: body.description ?? '',
-      authorName: body.authorName ?? 'You',
+      // Always the real session user — never trust a client-supplied name
+      // (closes the gap that let Kanban drag-and-drop log activity as
+      // authorName: 'System' instead of whoever actually moved the card).
+      authorName: user.name,
       date: body.date ? new Date(body.date) : new Date(),
     },
   })

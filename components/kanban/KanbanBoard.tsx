@@ -89,7 +89,8 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error ?? 'Failed to move lead')
       }
-      // Update lastActivityAt indirectly by adding a "system" activity
+      // Update lastActivityAt indirectly by adding an activity — the server
+      // attributes it to the real logged-in user.
       await fetch('/api/activities', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -97,7 +98,6 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
           leadId,
           type: 'note',
           description: `Stage changed: ${STAGE_LABELS[sourceStage]} → ${STAGE_LABELS[targetStage]}`,
-          authorName: 'System',
         }),
       })
       router.refresh()

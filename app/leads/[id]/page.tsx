@@ -25,6 +25,7 @@ import {
   type BusinessType,
 } from '@/lib/types'
 import { LeadSkillActions } from '@/components/leads/LeadSkillActions'
+import { LeadDiscoveryEditor } from '@/components/leads/LeadDiscoveryEditor'
 import { requireUser, isAdmin, isOperations } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
@@ -139,37 +140,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </CardContent>
           </Card>
 
-          {/* Discovery */}
-          {(lead.painPoints || lead.whatTheyWant) && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Discovery</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Pain points</p>
-                  <p className="text-sm whitespace-pre-line">{lead.painPoints || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">What they want</p>
-                  <p className="text-sm whitespace-pre-line">{lead.whatTheyWant || '—'}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Notes */}
-          {lead.notes && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Notes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm whitespace-pre-line">{lead.notes}</p>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Activity timeline */}
           <Card>
             <CardHeader className="pb-2">
@@ -197,6 +167,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               ))}
             </CardContent>
           </Card>
+
+          <LeadDiscoveryEditor
+            leadId={lead.id}
+            initialPainPoints={lead.painPoints}
+            initialWhatTheyWant={lead.whatTheyWant}
+            initialNotes={lead.notes}
+          />
 
           {/* Skill run history */}
           {lead.skillRuns.length > 0 && (
