@@ -27,3 +27,35 @@ export function getRange(range: RangeKey): { start: Date; end: Date; label: stri
   const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999)
   return { start, end, label: `${formatDate(start)} – ${formatDate(end)}` }
 }
+
+export interface TrendBucket {
+  start: Date
+  end: Date
+  label: string
+}
+
+// Trailing Monday-start weeks, oldest first, ending with the current
+// (in-progress) week.
+export function getWeeklyBuckets(count: number): TrendBucket[] {
+  const { start: currentWeekStart } = getRange('week')
+  const buckets: TrendBucket[] = []
+  for (let i = count - 1; i >= 0; i--) {
+    const start = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() - i * 7)
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999)
+    buckets.push({ start, end, label: formatDate(start) })
+  }
+  return buckets
+}
+
+// Trailing calendar months, oldest first, ending with the current
+// (in-progress) month.
+export function getMonthlyBuckets(count: number): TrendBucket[] {
+  const now = new Date()
+  const buckets: TrendBucket[] = []
+  for (let i = count - 1; i >= 0; i--) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999)
+    buckets.push({ start, end, label: start.toLocaleDateString('en-US', { month: 'short' }) })
+  }
+  return buckets
+}

@@ -6,7 +6,8 @@ import { StatTile } from '@/components/dashboard/StatTile'
 import { cn } from '@/lib/utils'
 import { requireUser, isAdmin } from '@/lib/session'
 import { prisma } from '@/lib/db'
-import { getRange, parseRangeKey, RANGE_LABELS, type RangeKey } from '@/lib/reportRange'
+import { getRange, parseRangeKey, RANGE_LABELS, getWeeklyBuckets, getMonthlyBuckets, type RangeKey } from '@/lib/reportRange'
+import { TrendChart, type TrendPoint } from '@/components/reports/TrendChart'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +25,11 @@ export default async function ReportsPage({
   const range: RangeKey = parseRangeKey(rawRange)
   const { start, end, label } = getRange(range)
 
-  const [createdLeads, wonLeads, activities] = await Promise.all([
+  const weeklyBuckets = getWeeklyBuckets(8)
+  const monthlyBuckets = getMonthlyBuckets(6)
+  const trendStart = monthlyBuckets[0].start // 6 months back always covers the 8-week window too
+
+  const [createdLeads, wonLeads, activities, trendLeads] = await Promise.all([
     prisma.lead.findMany({
       where: { createdAt: { gte: start, lte: end } },
       select: { id: true, ownerName: true },
@@ -43,9 +48,23 @@ export default async function ReportsPage({
       where: { date: { gte: start, lte: end }, authorName: { not: 'System' } },
       select: { type: true, authorName: true, description: true },
     }),
+    prisma.lead.findMany({
+      where: { OR: [{ createdAt: { gte: trendStart } }, { wonAt: { gte: trendStart } }] },
+      select: { createdAt: true, wonAt: true },
+    }),
   ])
 
   const actorActivities = activities.filter((a) => ACTOR_ACTIVITY_TYPES.includes(a.type))
+
+  function bucketTrend(buckets: { start: Date; end: Date; label: string }[]): TrendPoint[] {
+    return buckets.map((b) => ({
+      label: b.label,
+      created: trendLeads.filter((l) => l.createdAt >= b.start && l.createdAt <= b.end).length,
+      won: trendLeads.filter((l) => l.wonAt && l.wonAt >= b.start && l.wonAt <= b.end).length,
+    }))
+  }
+  const weeklyTrend = bucketTrend(weeklyBuckets)
+  const monthlyTrend = bucketTrend(monthlyBuckets)
   const onboardedActivities = activities.filter(
     (a) => a.type === 'onboarding_step' && a.description.endsWith('(final_onboarded)')
   )
@@ -119,6 +138,8 @@ export default async function ReportsPage({
           href={`/reports/activities?kind=onboarded&range=${range}`}
         />
       </div>
+
+      <TrendChart weekly={weeklyTrend} monthly={monthlyTrend} />
 
       <div className="grid gap-4 lg:grid-cols-2 items-start">
         <Card>
