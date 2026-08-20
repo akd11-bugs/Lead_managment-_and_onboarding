@@ -41,6 +41,7 @@ export interface Lead {
   effort: QualityLevel
   quality: QualityLevel
   type: LeadType
+  wonAt: Date | string | null
   onboardedAt: Date | string | null
   expectedCloseDate: Date | string | null
   proposalSubStage: ProposalSubStage | null

@@ -33,12 +33,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    select: { stage: true, onboardedAt: true, onboardingSubStage: true },
+    select: { stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const enteringOnboarding = body.stage === 'onboarding' && existing.stage !== 'onboarding'
   const leavingOnboarding = body.stage !== undefined && body.stage !== 'onboarding' && existing.stage === 'onboarding'
+
+  // wonAt marks the moment sales moves a lead into the onboarding stage —
+  // distinct from onboardedAt (set later, once ops finishes the sub-pipeline).
+  // Reports/dashboard "won" metrics key off this so they don't have to wait
+  // on ops, and don't drift if the lead is edited again afterward.
+  const nextWonAt = enteringOnboarding ? new Date() : leavingOnboarding ? null : undefined
 
   // Winning a deal now means entering the onboarding sub-pipeline, not a
   // resting "Won" state — there's no separate manual "mark onboarded" step;
@@ -93,6 +99,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.stage !== undefined && body.stage !== 'proposal' && { proposalSubStage: null }),
       ...(nextSubStage !== undefined && { onboardingSubStage: nextSubStage }),
       ...(nextOnboardedAt !== undefined && { onboardedAt: nextOnboardedAt }),
+      ...(nextWonAt !== undefined && { wonAt: nextWonAt }),
       ...(body.estimatedVolume !== undefined && { estimatedVolume: Number(body.estimatedVolume) }),
       ...(body.ownerName !== undefined && { ownerName: body.ownerName }),
       ...(body.effort !== undefined && { effort: body.effort }),

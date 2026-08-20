@@ -4,29 +4,12 @@ import { prisma } from '@/lib/db'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  ArrowLeft,
-  Mail,
-  Phone,
-  Sparkles,
-  Building2,
-  Calendar,
-  DollarSign,
-  User as UserIcon,
-  Globe,
-} from 'lucide-react'
-import { formatCurrency, formatDateTime, formatRelative } from '@/lib/utils'
-import {
-  STAGE_LABELS,
-  SOURCE_LABELS,
-  BUSINESS_TYPE_LABELS,
-  type Stage,
-  type LeadSource,
-  type BusinessType,
-} from '@/lib/types'
+import { ArrowLeft, Mail, Sparkles, Building2, Calendar } from 'lucide-react'
+import { formatDateTime, formatRelative } from '@/lib/utils'
+import { STAGE_LABELS, SOURCE_LABELS, type Stage, type LeadSource, type BusinessType } from '@/lib/types'
 import { LeadSkillActions } from '@/components/leads/LeadSkillActions'
 import { LeadDiscoveryEditor } from '@/components/leads/LeadDiscoveryEditor'
-import { WebsiteLink } from '@/components/leads/WebsiteLink'
+import { LeadProfileEditor } from '@/components/leads/LeadProfileEditor'
 import { requireUser, isAdmin, isOperations } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
@@ -89,44 +72,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          {/* Quick facts */}
-          <Card>
-            <CardContent className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Quick icon={<DollarSign className="h-4 w-4" />} label="Est. Volume" value={formatCurrency(lead.estimatedVolume)} />
-              <Quick icon={<UserIcon className="h-4 w-4" />} label="Owner" value={lead.ownerName} />
-              <Quick
-                icon={<Calendar className="h-4 w-4" />}
-                label="Last activity"
-                value={lead.lastActivityAt ? formatRelative(lead.lastActivityAt) : 'Never'}
-              />
-              <Quick
-                icon={<Mail className="h-4 w-4" />}
-                label="Email"
-                value={<a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline truncate">{lead.email}</a>}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Company profile */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Company profile</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Quick icon={<UserIcon className="h-4 w-4" />} label="POC" value={lead.poc || '—'} />
-              <Quick
-                icon={<Globe className="h-4 w-4" />}
-                label="Website"
-                value={<WebsiteLink website={lead.website} className="text-blue-600 hover:underline truncate" />}
-              />
-              <Quick icon={<Building2 className="h-4 w-4" />} label="Industry" value={lead.industry || '—'} />
-              <Quick
-                icon={<Building2 className="h-4 w-4" />}
-                label="Business type"
-                value={lead.businessType ? BUSINESS_TYPE_LABELS[lead.businessType as BusinessType] : '—'}
-              />
-            </CardContent>
-          </Card>
+          <LeadProfileEditor
+            leadId={lead.id}
+            email={lead.email}
+            phone={lead.phone}
+            poc={lead.poc}
+            website={lead.website}
+            industry={lead.industry}
+            businessType={lead.businessType as BusinessType | null}
+            ownerName={lead.ownerName}
+            estimatedVolume={lead.estimatedVolume}
+            lastActivityAt={lead.lastActivityAt}
+          />
 
           {/* Activity timeline */}
           <Card>
@@ -198,17 +155,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <LeadSkillActions leadId={lead.id} />
         </div>
       </div>
-    </div>
-  )
-}
-
-function Quick({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-        {icon} {label}
-      </p>
-      <p className="mt-1 text-sm font-medium truncate">{value}</p>
     </div>
   )
 }

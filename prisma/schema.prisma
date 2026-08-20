@@ -27,6 +27,7 @@ model Lead {
   effort          String       @default("medium") // low | medium | high
   quality         String       @default("medium") // low | medium | high
   type            String       @default("merchant") // partner | merchant — a partner brings multiple merchants (e.g. Shopify)
+  wonAt           DateTime?    // set automatically the moment stage enters "onboarding" — sales-side won, distinct from onboardedAt
   onboardedAt     DateTime?    // set automatically once onboardingSubStage reaches "final_onboarded"
   expectedCloseDate DateTime?  // forecast date for BD reporting (leads not yet onboarded)
   proposalSubStage String?     // commercial_agreed | agreement_shared | agreement_done — only meaningful when stage == "proposal"
@@ -49,6 +50,7 @@ model Lead {
   @@index([quality])
   @@index([type])
   @@index([onboardedAt])
+  @@index([wonAt])
   @@index([expectedCloseDate])
 }
 

@@ -36,7 +36,7 @@ export default async function ReportActivitiesPage({
   const activities = await prisma.activity.findMany({
     where: {
       date: { gte: start, lte: end },
-      ...(owner ? { authorName: owner } : {}),
+      authorName: owner ?? { not: 'System' },
       ...(kind === 'actor' ? { type: { in: ACTOR_ACTIVITY_TYPES } } : { type: 'onboarding_step' }),
     },
     orderBy: { date: 'desc' },

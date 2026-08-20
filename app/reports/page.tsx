@@ -30,11 +30,17 @@ export default async function ReportsPage({
       select: { id: true, ownerName: true },
     }),
     prisma.lead.findMany({
-      where: { onboardedAt: { gte: start, lte: end } },
+      // Counts as soon as sales marks a lead won (wonAt, set when it enters
+      // the 'onboarding' stage) — not onboardedAt, which only lands once ops
+      // finishes the sub-pipeline, possibly much later than this period.
+      where: { wonAt: { gte: start, lte: end } },
       select: { id: true, ownerName: true },
     }),
     prisma.activity.findMany({
-      where: { date: { gte: start, lte: end } },
+      // Excludes legacy rows logged before activities were attributed to
+      // the real session user — those have authorName: 'System' and would
+      // otherwise show up as a phantom rep.
+      where: { date: { gte: start, lte: end }, authorName: { not: 'System' } },
       select: { type: true, authorName: true, description: true },
     }),
   ])

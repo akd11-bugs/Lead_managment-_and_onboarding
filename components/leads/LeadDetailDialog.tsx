@@ -252,18 +252,27 @@ export function LeadDetailDialog({
           <TabsContent value="overview" className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Field label="Email">
-                <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">
-                  {lead.email}
-                </a>
+                <Input
+                  type="email"
+                  defaultValue={lead.email}
+                  className="h-8"
+                  onBlur={(e) => {
+                    if (e.target.value !== lead.email) patchLead({ email: e.target.value })
+                  }}
+                  disabled={saving}
+                />
               </Field>
               <Field label="Phone">
-                {lead.phone ? (
-                  <a href={`tel:${lead.phone}`} className="text-blue-600 hover:underline">
-                    {lead.phone}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
+                <Input
+                  type="tel"
+                  defaultValue={lead.phone ?? ''}
+                  className="h-8"
+                  placeholder="Phone number"
+                  onBlur={(e) => {
+                    if (e.target.value !== (lead.phone ?? '')) patchLead({ phone: e.target.value || null })
+                  }}
+                  disabled={saving}
+                />
               </Field>
               <Field label="POC (optional)">
                 <Input

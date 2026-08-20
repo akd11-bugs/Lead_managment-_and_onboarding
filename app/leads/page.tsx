@@ -30,7 +30,7 @@ const FILTERS: Record<string, { where: Record<string, unknown>; label: string }>
       label: 'Open pipeline',
     },
     'won-this-month': {
-      where: { stage: 'onboarding', updatedAt: { gte: monthStart, lte: monthEnd } },
+      where: { wonAt: { gte: monthStart, lte: monthEnd } },
       label: 'Won this month',
     },
     won: {
@@ -40,10 +40,6 @@ const FILTERS: Record<string, { where: Record<string, unknown>; label: string }>
     closed: {
       where: { stage: { in: ['onboarding', 'lost'] } },
       label: 'Closed (won or lost)',
-    },
-    onboarded: {
-      where: { onboardedAt: { not: null } },
-      label: 'Onboarded',
     },
   }
 })()
@@ -73,7 +69,7 @@ export default async function LeadsPage({
     metric === 'created' && periodBounds
       ? { createdAt: { gte: periodBounds.start, lte: periodBounds.end } }
       : metric === 'onboarded' && periodBounds
-        ? { onboardedAt: { gte: periodBounds.start, lte: periodBounds.end } }
+        ? { wonAt: { gte: periodBounds.start, lte: periodBounds.end } }
         : {}
 
   const labels: string[] = []

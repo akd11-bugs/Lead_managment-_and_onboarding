@@ -28,8 +28,8 @@ export default async function DashboardPage() {
 
   const totalLeads = leads.length
   const wonThisMonth = leads.filter((l) => {
-    if (l.stage !== 'onboarding') return false
-    const d = new Date(l.updatedAt)
+    if (!l.wonAt) return false
+    const d = new Date(l.wonAt)
     const now = new Date()
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
   })
