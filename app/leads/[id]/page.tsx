@@ -26,6 +26,7 @@ import {
 } from '@/lib/types'
 import { LeadSkillActions } from '@/components/leads/LeadSkillActions'
 import { LeadDiscoveryEditor } from '@/components/leads/LeadDiscoveryEditor'
+import { WebsiteLink } from '@/components/leads/WebsiteLink'
 import { requireUser, isAdmin, isOperations } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
@@ -116,20 +117,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <Quick
                 icon={<Globe className="h-4 w-4" />}
                 label="Website"
-                value={
-                  lead.website ? (
-                    <a
-                      href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 hover:underline truncate"
-                    >
-                      {lead.website}
-                    </a>
-                  ) : (
-                    '—'
-                  )
-                }
+                value={<WebsiteLink website={lead.website} className="text-blue-600 hover:underline truncate" />}
               />
               <Quick icon={<Building2 className="h-4 w-4" />} label="Industry" value={lead.industry || '—'} />
               <Quick

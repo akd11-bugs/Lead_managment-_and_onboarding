@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Building2, Globe, Mail } from 'lucide-react'
 import { OnboardingProgressPanel } from '@/components/leads/OnboardingProgressPanel'
+import { WebsiteLink } from '@/components/leads/WebsiteLink'
 import { formatCurrency } from '@/lib/utils'
 import { BUSINESS_TYPE_LABELS, LEAD_TYPE_LABELS, type BusinessType, type LeadType } from '@/lib/types'
 
@@ -68,7 +69,9 @@ export default async function OnboardingDetailPage({ params }: { params: Promise
                 <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Globe className="h-3.5 w-3.5" /> Website
                 </p>
-                <p className="mt-1 text-sm font-medium truncate">{lead.website ?? '—'}</p>
+                <p className="mt-1 text-sm font-medium truncate">
+                  <WebsiteLink website={lead.website} />
+                </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Est. volume</p>
