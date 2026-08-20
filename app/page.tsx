@@ -39,8 +39,9 @@ export default async function DashboardPage() {
   const wonValueThisMonth = wonThisMonth.reduce((sum, l) => sum + l.estimatedVolume, 0)
   const closedWon = leads.filter((l) => l.stage === 'onboarding').length
   const closedLost = leads.filter((l) => l.stage === 'lost').length
-  const onboardedCount = leads.filter((l) => l.onboardedAt).length
-  const conversionRate = totalLeads > 0 ? Math.round((onboardedCount / totalLeads) * 100) : 0
+  // Counts as soon as sales marks a lead won (stage === 'onboarding'), not
+  // only once ops finishes the sub-pipeline and onboardedAt is set.
+  const conversionRate = totalLeads > 0 ? Math.round((closedWon / totalLeads) * 100) : 0
 
   // Pipeline by stage
   const byStage = new Map<string, { count: number; value: number }>()
@@ -165,9 +166,9 @@ export default async function DashboardPage() {
         <StatTile
           label="Conversion rate"
           value={`${conversionRate}%`}
-          hint={`${onboardedCount} / ${totalLeads} onboarded`}
+          hint={`${closedWon} / ${totalLeads} won`}
           icon={<Target className="h-4 w-4" />}
-          href="/leads?filter=onboarded"
+          href="/leads?filter=won"
         />
       </div>
 

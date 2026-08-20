@@ -33,6 +33,10 @@ const FILTERS: Record<string, { where: Record<string, unknown>; label: string }>
       where: { stage: 'onboarding', updatedAt: { gte: monthStart, lte: monthEnd } },
       label: 'Won this month',
     },
+    won: {
+      where: { stage: 'onboarding' },
+      label: 'Won',
+    },
     closed: {
       where: { stage: { in: ['onboarding', 'lost'] } },
       label: 'Closed (won or lost)',
