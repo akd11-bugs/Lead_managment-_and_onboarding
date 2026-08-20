@@ -39,8 +39,10 @@ export default auth((req) => {
 })
 
 export const config = {
-  // Skip static assets, the NextAuth API routes, and the invite-redemption
-  // and signup APIs (must be callable while logged out) — everything else
-  // (pages and our own /api/* routes) requires a session.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem|api/signup).*)'],
+  // Skip static assets, the NextAuth API routes, the invite-redemption and
+  // signup APIs (must be callable while logged out), and the external
+  // reports API (authenticates callers with its own API key, not a browser
+  // session) — everything else (pages and our own /api/* routes) requires a
+  // session.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem|api/signup|api/external).*)'],
 }

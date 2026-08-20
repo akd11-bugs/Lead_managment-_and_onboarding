@@ -5,13 +5,11 @@ import { Button } from '@/components/ui/button'
 import { StatTile } from '@/components/dashboard/StatTile'
 import { cn } from '@/lib/utils'
 import { requireUser, isAdmin } from '@/lib/session'
-import { prisma } from '@/lib/db'
-import { getRange, parseRangeKey, RANGE_LABELS, getWeeklyBuckets, getMonthlyBuckets, type RangeKey } from '@/lib/reportRange'
-import { TrendChart, type TrendPoint } from '@/components/reports/TrendChart'
+import { parseRangeKey, RANGE_LABELS, type RangeKey } from '@/lib/reportRange'
+import { getReportsData } from '@/lib/reportsData'
+import { TrendChart } from '@/components/reports/TrendChart'
 
 export const dynamic = 'force-dynamic'
-
-const ACTOR_ACTIVITY_TYPES = ['call', 'email', 'meeting', 'note']
 
 export default async function ReportsPage({
   searchParams,
@@ -23,82 +21,10 @@ export default async function ReportsPage({
 
   const { range: rawRange } = await searchParams
   const range: RangeKey = parseRangeKey(rawRange)
-  const { start, end, label } = getRange(range)
+  const { summary, salesByRep: repRows, operationsOnboarded: opsRows, trend, range: rangeInfo } = await getReportsData(range)
+  const { label } = rangeInfo
 
-  const weeklyBuckets = getWeeklyBuckets(8)
-  const monthlyBuckets = getMonthlyBuckets(6)
-  const trendStart = monthlyBuckets[0].start // 6 months back always covers the 8-week window too
-
-  const [createdLeads, wonLeads, activities, trendLeads] = await Promise.all([
-    prisma.lead.findMany({
-      where: { createdAt: { gte: start, lte: end } },
-      select: { id: true, ownerName: true },
-    }),
-    prisma.lead.findMany({
-      // Counts as soon as sales marks a lead won (wonAt, set when it enters
-      // the 'onboarding' stage) — not onboardedAt, which only lands once ops
-      // finishes the sub-pipeline, possibly much later than this period.
-      where: { wonAt: { gte: start, lte: end } },
-      select: { id: true, ownerName: true },
-    }),
-    prisma.activity.findMany({
-      // Excludes legacy rows logged before activities were attributed to
-      // the real session user — those have authorName: 'System' and would
-      // otherwise show up as a phantom rep.
-      where: { date: { gte: start, lte: end }, authorName: { not: 'System' } },
-      select: { type: true, authorName: true, description: true },
-    }),
-    prisma.lead.findMany({
-      where: { OR: [{ createdAt: { gte: trendStart } }, { wonAt: { gte: trendStart } }] },
-      select: { createdAt: true, wonAt: true },
-    }),
-  ])
-
-  const actorActivities = activities.filter((a) => ACTOR_ACTIVITY_TYPES.includes(a.type))
-
-  function bucketTrend(buckets: { start: Date; end: Date; label: string }[]): TrendPoint[] {
-    return buckets.map((b) => ({
-      label: b.label,
-      created: trendLeads.filter((l) => l.createdAt >= b.start && l.createdAt <= b.end).length,
-      won: trendLeads.filter((l) => l.wonAt && l.wonAt >= b.start && l.wonAt <= b.end).length,
-    }))
-  }
-  const weeklyTrend = bucketTrend(weeklyBuckets)
-  const monthlyTrend = bucketTrend(monthlyBuckets)
-  const onboardedActivities = activities.filter(
-    (a) => a.type === 'onboarding_step' && a.description.endsWith('(final_onboarded)')
-  )
-
-  // Sales — by rep
-  const repMap = new Map<string, { created: number; won: number; activities: number }>()
-  for (const l of createdLeads) {
-    const row = repMap.get(l.ownerName) ?? { created: 0, won: 0, activities: 0 }
-    row.created++
-    repMap.set(l.ownerName, row)
-  }
-  for (const l of wonLeads) {
-    const row = repMap.get(l.ownerName) ?? { created: 0, won: 0, activities: 0 }
-    row.won++
-    repMap.set(l.ownerName, row)
-  }
-  for (const a of actorActivities) {
-    const row = repMap.get(a.authorName) ?? { created: 0, won: 0, activities: 0 }
-    row.activities++
-    repMap.set(a.authorName, row)
-  }
-  const repRows = Array.from(repMap.entries())
-    .map(([name, d]) => ({ name, ...d }))
-    .sort((a, b) => b.created - a.created)
   const maxCreated = Math.max(1, ...repRows.map((r) => r.created))
-
-  // Operations — onboarded
-  const opsMap = new Map<string, number>()
-  for (const a of onboardedActivities) {
-    opsMap.set(a.authorName, (opsMap.get(a.authorName) ?? 0) + 1)
-  }
-  const opsRows = Array.from(opsMap.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
   const maxOnboarded = Math.max(1, ...opsRows.map((r) => r.count))
 
   return (
@@ -123,23 +49,23 @@ export default async function ReportsPage({
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Leads created" value={createdLeads.length} href={`/leads?metric=created&range=${range}`} />
-        <StatTile label="Won & onboarded" value={wonLeads.length} href={`/leads?metric=onboarded&range=${range}`} />
+        <StatTile label="Leads created" value={summary.leadsCreated} href={`/leads?metric=created&range=${range}`} />
+        <StatTile label="Won & onboarded" value={summary.wonAndOnboarded} href={`/leads?metric=onboarded&range=${range}`} />
         <StatTile
           label="Activities logged"
-          value={actorActivities.length}
+          value={summary.activitiesLogged}
           hint="calls, emails, meetings, notes"
           href={`/reports/activities?kind=actor&range=${range}`}
         />
         <StatTile
           label="Onboarded"
-          value={onboardedActivities.length}
+          value={summary.onboarded}
           hint="leads finalized by ops"
           href={`/reports/activities?kind=onboarded&range=${range}`}
         />
       </div>
 
-      <TrendChart weekly={weeklyTrend} monthly={monthlyTrend} />
+      <TrendChart weekly={trend.weekly} monthly={trend.monthly} />
 
       <div className="grid gap-4 lg:grid-cols-2 items-start">
         <Card>
