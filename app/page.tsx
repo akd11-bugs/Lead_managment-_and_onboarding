@@ -104,9 +104,12 @@ export default async function DashboardPage() {
   const inCurrentMonth = (d: Date | null) => !!d && d >= monthStart && d <= monthEnd
 
   function bdMetricsFor(rows: typeof leads) {
-    const partnersOnboarded = rows.filter((l) => l.type === 'partner' && inCurrentMonth(l.onboardedAt)).length
-    const merchantsOnboarded = rows.filter((l) => l.type === 'merchant' && inCurrentMonth(l.onboardedAt)).length
-    const expected = rows.filter((l) => !l.onboardedAt && inCurrentMonth(l.expectedCloseDate))
+    // wonAt (set the moment sales marks the deal won), not onboardedAt (set
+    // only once ops finishes the sub-pipeline, possibly much later) — a won
+    // merchant/partner should show up here immediately, same as Conversion Rate.
+    const partnersOnboarded = rows.filter((l) => l.type === 'partner' && inCurrentMonth(l.wonAt)).length
+    const merchantsOnboarded = rows.filter((l) => l.type === 'merchant' && inCurrentMonth(l.wonAt)).length
+    const expected = rows.filter((l) => !l.wonAt && inCurrentMonth(l.expectedCloseDate))
     return {
       partnersOnboarded,
       merchantsOnboarded,
