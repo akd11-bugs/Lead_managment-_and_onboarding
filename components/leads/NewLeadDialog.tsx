@@ -44,6 +44,7 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const [form, setForm] = useState({
     poc: '',
     company: '',
@@ -59,9 +60,10 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
     notes: '',
   })
 
-  async function handleSubmit() {
+  async function handleSubmit(force = false) {
     if (!form.company || !form.email) return
     setSaving(true)
+    setDuplicateError(null)
     try {
       const res = await fetch('/api/leads', {
         method: 'POST',
@@ -70,6 +72,7 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
           ...form,
           businessType: form.businessType || null,
           estimatedVolume: Number(form.estimatedVolume),
+          force,
         }),
       })
       if (res.ok) {
@@ -89,6 +92,11 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
           notes: '',
         })
         router.refresh()
+        return
+      }
+      if (res.status === 409) {
+        const data = await res.json()
+        setDuplicateError(data.error)
       }
     } finally {
       setSaving(false)
@@ -96,7 +104,13 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setDuplicateError(null)
+      }}
+    >
       <DialogTrigger asChild>
         {children ?? (
           <Button size="sm">
@@ -225,13 +239,24 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
             <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
         </div>
+        {duplicateError && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            {duplicateError}
+          </div>
+        )}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={saving || !form.company || !form.email}>
-            {saving ? 'Saving…' : 'Create lead'}
-          </Button>
+          {duplicateError ? (
+            <Button variant="outline" onClick={() => handleSubmit(true)} disabled={saving}>
+              {saving ? 'Creating…' : 'Create anyway'}
+            </Button>
+          ) : (
+            <Button onClick={() => handleSubmit(false)} disabled={saving || !form.company || !form.email}>
+              {saving ? 'Saving…' : 'Create lead'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

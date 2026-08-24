@@ -9,6 +9,8 @@ import { ScrollText } from 'lucide-react'
 import { requireUser, isAdmin } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import { OrganisationPanel } from '@/components/settings/OrganisationPanel'
+import { EmailSettingsCard } from '@/components/settings/EmailSettingsCard'
+import { WorkflowRulesCard } from '@/components/settings/WorkflowRulesCard'
 import { Button } from '@/components/ui/button'
 
 async function checkSkillLibrary() {
@@ -48,6 +50,9 @@ export default async function SettingsPage() {
           </Link>
         )}
       </div>
+
+      <EmailSettingsCard />
+      <WorkflowRulesCard />
 
       {isAdmin(user) && <OrganisationPanel initialUsers={users as never} initialInvites={invites as never} />}
 

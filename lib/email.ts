@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer'
+import { prisma } from '@/lib/db'
+import { decrypt, DecryptionError } from '@/lib/crypto'
 
 export interface SendEmailInput {
   to: string
@@ -41,5 +43,43 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     text: input.body,
   })
 
+  return { id: info.messageId }
+}
+
+/**
+ * Sends as the given user's own configured Gmail app password, if they have
+ * one — falls back to the shared app mailbox (sendEmail) if they don't, or
+ * if the stored credential fails to decrypt (e.g. key rotated).
+ */
+export async function sendEmailAs(userId: string, input: SendEmailInput): Promise<SendEmailResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { emailFromAddress: true, emailAppPasswordEnc: true },
+  })
+
+  if (!user?.emailFromAddress || !user.emailAppPasswordEnc) {
+    return sendEmail(input)
+  }
+
+  let appPassword: string
+  try {
+    appPassword = decrypt(user.emailAppPasswordEnc)
+  } catch (err) {
+    if (err instanceof DecryptionError) return sendEmail(input)
+    throw err
+  }
+
+  const personalTransporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user: user.emailFromAddress, pass: appPassword },
+  })
+  const info = await personalTransporter.sendMail({
+    from: user.emailFromAddress,
+    to: input.to,
+    subject: input.subject,
+    text: input.body,
+  })
   return { id: info.messageId }
 }

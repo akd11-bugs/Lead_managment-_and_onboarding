@@ -51,6 +51,7 @@ export async function POST(req: Request) {
 
   const skipped: { row: number; reason: string }[] = []
   const toCreate: {
+    row: number
     poc: string | null
     company: string
     email: string
@@ -86,6 +87,7 @@ export async function POST(req: Request) {
       return
     }
     toCreate.push({
+      row: i + 1,
       poc: poc || null,
       company,
       email,
@@ -102,11 +104,47 @@ export async function POST(req: Request) {
     })
   })
 
-  if (toCreate.length > 0) {
+  // Dedupe against existing leads (case-insensitive email/company match) and
+  // within the batch itself — the import route has no other guard against
+  // the same company/email entering the pipeline twice.
+  const emails = [...new Set(toCreate.filter((r) => r.email).map((r) => r.email.toLowerCase()))]
+  const companies = [...new Set(toCreate.map((r) => r.company.toLowerCase()))]
+  const existing = await prisma.lead.findMany({
+    where: {
+      OR: [
+        ...(emails.length ? [{ email: { in: emails, mode: 'insensitive' as const } }] : []),
+        { company: { in: companies, mode: 'insensitive' as const } },
+      ],
+    },
+    select: { email: true, company: true },
+  })
+  const existingEmails = new Set(existing.filter((e) => e.email).map((e) => e.email.toLowerCase()))
+  const existingCompanies = new Set(existing.map((e) => e.company.toLowerCase()))
+  const seenEmails = new Set<string>()
+  const seenCompanies = new Set<string>()
+
+  const finalRows = toCreate.filter((r) => {
+    const email = r.email.toLowerCase()
+    const company = r.company.toLowerCase()
+    if ((email && existingEmails.has(email)) || existingCompanies.has(company)) {
+      skipped.push({ row: r.row, reason: `Duplicate of an existing lead: ${r.company}` })
+      return false
+    }
+    if ((email && seenEmails.has(email)) || seenCompanies.has(company)) {
+      skipped.push({ row: r.row, reason: `Duplicate within this file: ${r.company}` })
+      return false
+    }
+    if (email) seenEmails.add(email)
+    seenCompanies.add(company)
+    return true
+  })
+
+  if (finalRows.length > 0) {
     await prisma.lead.createMany({
-      data: toCreate.map((r) => ({ ...r, stage: 'new', ownerId: user.id, ownerName: user.name })),
+      data: finalRows.map(({ row: _row, ...r }) => ({ ...r, stage: 'new', ownerId: user.id, ownerName: user.name })),
     })
   }
 
-  return NextResponse.json({ created: toCreate.length, skipped })
+  skipped.sort((a, b) => a.row - b.row)
+  return NextResponse.json({ created: finalRows.length, skipped })
 }

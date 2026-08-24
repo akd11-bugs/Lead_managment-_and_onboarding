@@ -65,8 +65,39 @@ model User {
   lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
 
+  // Personal outbound email — lets a rep send automated/triggered mail from
+  // their own address instead of the shared app mailbox. Write-only from the
+  // API's perspective: emailAppPasswordEnc is never returned to the client.
+  emailFromAddress    String?
+  emailAppPasswordEnc String?   // AES-256-GCM ciphertext: "iv:authTag:ciphertext", base64
+  emailConfiguredAt   DateTime?
+
   // No hard FK from Lead.ownerId — kept a plain string (like stage/source) so
   // imported/legacy leads with an unrecognized owner never fail to save.
+}
+
+model WorkflowRule {
+  id            String   @id @default(cuid())
+  name          String
+  triggerType   String   // "stage_changed"
+  triggerConfig String   // JSON.stringify, e.g. {"toStage":"won"}
+  actionType    String   // "create_task" | "send_email"
+  actionConfig  String   // JSON.stringify, e.g. {"title":"...","dueInDays":2}
+  ownerId       String   // plain string, same convention as Task.ownerId — no hard FK to User
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([ownerId, triggerType, active])
+}
+
+model SavedView {
+  id          String   @id @default(cuid())
+  userId      String   // plain string, same convention as Task.ownerId — no hard FK to User
+  name        String
+  filtersJson String   // JSON.stringify of the leads-table filter/sort state
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Task {
