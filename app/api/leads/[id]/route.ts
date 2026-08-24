@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
 import { validateLeadFields, ONBOARDING_SUB_STAGE_LABELS, type OnboardingSubStage } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
+import { evaluateStageRules } from '@/lib/workflow'
 
 export const dynamic = 'force-dynamic'
 
@@ -114,6 +115,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(nextSubStage !== undefined && nextSubStage !== existing.onboardingSubStage && { lastActivityAt: new Date() }),
     },
   })
+
+  if (body.stage !== undefined && body.stage !== existing.stage) {
+    // Best-effort — a broken workflow rule (e.g. bad email config) shouldn't
+    // fail the lead update that already succeeded.
+    evaluateStageRules(lead, body.stage).catch((err) => console.error('evaluateStageRules failed', err))
+  }
+
   return NextResponse.json({ lead })
 }
 
