@@ -8,6 +8,7 @@ import { requireUser, isAdmin } from '@/lib/session'
 import { parseRangeKey, RANGE_LABELS, type RangeKey } from '@/lib/reportRange'
 import { getReportsData } from '@/lib/reportsData'
 import { TrendChart } from '@/components/reports/TrendChart'
+import { PipelineFunnel } from '@/components/reports/PipelineFunnel'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,7 @@ export default async function ReportsPage({
 
   const { range: rawRange } = await searchParams
   const range: RangeKey = parseRangeKey(rawRange)
-  const { summary, salesByRep: repRows, operationsOnboarded: opsRows, trend, range: rangeInfo } = await getReportsData(range)
+  const { summary, salesByRep: repRows, operationsOnboarded: opsRows, trend, funnel, range: rangeInfo } = await getReportsData(range)
   const { label } = rangeInfo
 
   const maxCreated = Math.max(1, ...repRows.map((r) => r.created))
@@ -66,6 +67,18 @@ export default async function ReportsPage({
       </div>
 
       <TrendChart weekly={trend.weekly} monthly={trend.monthly} />
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Pipeline funnel</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Of leads created {label.toLowerCase()}, how many reached each milestone (as of today)
+          </p>
+        </CardHeader>
+        <CardContent>
+          <PipelineFunnel data={funnel} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2 items-start">
         <Card>
