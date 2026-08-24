@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { SavedViewsMenu, type LeadViewFilters } from '@/components/leads/SavedViewsMenu'
 import { formatCurrency, formatRelative, cn } from '@/lib/utils'
 import {
   STAGES,
@@ -196,6 +197,15 @@ export function LeadsTable({
             ))}
           </SelectContent>
         </Select>
+        <SavedViewsMenu
+          filters={{ search, stageFilter, sourceFilter, sortKey }}
+          onApply={(v: LeadViewFilters) => {
+            setSearch(v.search)
+            setStageFilter((STAGES as string[]).includes(v.stageFilter) ? (v.stageFilter as Stage) : 'all')
+            setSourceFilter((SOURCES as string[]).includes(v.sourceFilter) ? (v.sourceFilter as LeadSource) : 'all')
+            setSortKey((Object.keys(SORT_LABELS) as string[]).includes(v.sortKey) ? (v.sortKey as SortKey) : 'date')
+          }}
+        />
         <span className="ml-auto text-sm text-muted-foreground">
           {filtered.length} of {initialLeads.length} leads
         </span>
