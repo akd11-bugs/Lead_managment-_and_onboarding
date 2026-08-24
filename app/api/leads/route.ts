@@ -27,6 +27,25 @@ export async function POST(req: Request) {
   }
   const validationError = validateLeadFields(body)
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
+
+  if (body.force !== true) {
+    const duplicate = await prisma.lead.findFirst({
+      where: {
+        OR: [
+          { email: { equals: body.email, mode: 'insensitive' } },
+          { company: { equals: body.company, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, company: true, email: true },
+    })
+    if (duplicate) {
+      return NextResponse.json(
+        { error: `Possible duplicate: "${duplicate.company}" (${duplicate.email}) already exists`, duplicate },
+        { status: 409 }
+      )
+    }
+  }
+
   const lead = await prisma.lead.create({
     data: {
       poc: body.poc ?? null,
