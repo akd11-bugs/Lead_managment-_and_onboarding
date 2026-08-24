@@ -15,7 +15,16 @@ async function main() {
 
   let allMatch = true
   for (const table of TABLES) {
-    const oldCount = (await oldClient.query(`SELECT count(*) FROM "${table}"`)).rows[0].count
+    let oldCount: string
+    try {
+      oldCount = (await oldClient.query(`SELECT count(*) FROM "${table}"`)).rows[0].count
+    } catch (err) {
+      if ((err as { code?: string }).code === '42P01') {
+        console.log(`${table}: table does not exist in source, skipping`)
+        continue
+      }
+      throw err
+    }
     const newCount = (await newClient.query(`SELECT count(*) FROM "${table}"`)).rows[0].count
     const match = oldCount === newCount
     if (!match) allMatch = false

@@ -17,19 +17,38 @@ async function main() {
   await newClient.connect()
 
   for (const table of TABLES) {
-    const { rows } = await oldClient.query(`SELECT * FROM "${table}"`)
+    let rows: Record<string, unknown>[]
+    try {
+      rows = (await oldClient.query(`SELECT * FROM "${table}"`)).rows
+    } catch (err) {
+      if ((err as { code?: string }).code === '42P01') {
+        console.log(`${table}: table does not exist in source, skipping`)
+        continue
+      }
+      throw err
+    }
     if (rows.length === 0) {
       console.log(`${table}: 0 rows in source, skipping`)
       continue
     }
     const columns = Object.keys(rows[0])
     const colList = columns.map((c) => `"${c}"`).join(', ')
+    const updateList = columns
+      .filter((c) => c !== 'id')
+      .map((c) => `"${c}" = EXCLUDED."${c}"`)
+      .join(', ')
     for (const row of rows) {
       const values = columns.map((c) => row[c])
       const placeholders = values.map((_, i) => `$${i + 1}`).join(', ')
-      await newClient.query(`INSERT INTO "${table}" (${colList}) VALUES (${placeholders})`, values)
+      // Upsert, not plain insert — safe to re-run (e.g. to catch writes made
+      // to the old DB during the gap before Render's env var was flipped).
+      await newClient.query(
+        `INSERT INTO "${table}" (${colList}) VALUES (${placeholders})
+         ON CONFLICT ("id") DO UPDATE SET ${updateList}`,
+        values
+      )
     }
-    console.log(`${table}: migrated ${rows.length} rows`)
+    console.log(`${table}: upserted ${rows.length} rows`)
   }
 
   await oldClient.end()
