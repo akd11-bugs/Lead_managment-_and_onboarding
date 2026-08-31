@@ -45,14 +45,18 @@ export async function setRepSessionCookie(userId: string) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    path: '/rep',
+    // Must cover both /rep (the page) and /api/rep (the routes it calls) —
+    // cookie path-matching is a literal path-segment prefix, so "/rep" alone
+    // never gets sent back to "/api/rep/*". A distinct httpOnly cookie name
+    // is what actually keeps this separate from NextAuth, not the path.
+    path: '/',
     maxAge: MAX_AGE_SECONDS,
   })
 }
 
 export async function clearRepSessionCookie() {
   const store = await cookies()
-  store.delete({ name: COOKIE_NAME, path: '/rep' })
+  store.delete({ name: COOKIE_NAME, path: '/' })
 }
 
 // Re-reads the User row fresh on every call — a deactivated account or a
