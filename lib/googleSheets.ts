@@ -2,6 +2,19 @@ import { JWT } from 'google-auth-library'
 
 let client: JWT | null = null
 
+// Env vars often mangle a literal newline in a multiline private key into an
+// escaped "\n" sequence, and some hosting dashboards' paste boxes silently
+// convert line endings to CRLF — either one leaves Node's OpenSSL 3 PEM
+// decoder unable to parse an otherwise-correct key
+// (error:1E08010C:DECODER routines::unsupported). Normalize all of it away.
+function normalizePrivateKey(raw: string): string {
+  let key = raw.trim()
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1)
+  }
+  return key.replace(/\\n/g, '\n').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
 function getClient(): JWT {
   if (client) return client
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
@@ -11,9 +24,7 @@ function getClient(): JWT {
       'GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY are not configured — set both in .env to sync from Google Sheets.'
     )
   }
-  // Env vars often mangle a literal newline in a multiline private key into
-  // an escaped "\n" sequence — undo that before handing it to the JWT client.
-  const key = rawKey.replace(/\\n/g, '\n')
+  const key = normalizePrivateKey(rawKey)
   client = new JWT({
     email,
     key,
