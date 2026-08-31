@@ -167,6 +167,16 @@ model AuditLog {
   @@index([targetUserId])
 }
 
+// Small general-purpose key-value cursor store — currently just tracks how
+// many rows of the leads Google Sheet have already been synced, so the cron
+// route doesn't re-scan/re-dedupe the whole sheet on every run.
+model SyncCursor {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 model SkillRun {
   id               String   @id @default(cuid())
   skillId          String   // e.g. 'pipeline-hygiene-audit'

@@ -21,91 +21,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Upload, Loader2, CheckCircle2 } from 'lucide-react'
+import { FIELDS, FIELD_LABELS, autoMapHeaders, type Field } from '@/lib/headerMapping'
 
 // Client-side only: the file is parsed in the browser (via xlsx/SheetJS) and
 // never uploaded raw — only the already-mapped row objects are sent to the
 // server. Keeps this internal upload's blast radius inside the uploader's own tab.
 
-const FIELDS = [
-  'company',
-  'email',
-  'poc',
-  'phone',
-  'website',
-  'industry',
-  'businessType',
-  'source',
-  'type',
-  'estimatedVolume',
-  'notes',
-] as const
-type Field = (typeof FIELDS)[number]
-
-const FIELD_LABELS: Record<Field, string> = {
-  company: 'Company',
-  email: 'Email',
-  poc: 'POC',
-  phone: 'Phone',
-  website: 'Website',
-  industry: 'Industry',
-  businessType: 'Business type',
-  source: 'Source',
-  type: 'Type',
-  estimatedVolume: 'Est. Volume',
-  notes: 'Notes',
-}
-
-const FIELD_SYNONYMS: Record<Field, string[]> = {
-  company: ['company', 'company name', 'organization', 'organisation', 'merchant', 'merchant name', 'business name', 'account'],
-  email: ['email', 'email address', 'work email', 'e mail'],
-  poc: ['poc', 'name', 'full name', 'contact name', 'lead name', 'contact', 'point of contact'],
-  phone: ['phone', 'mobile', 'phone number', 'contact number', 'mobile number'],
-  website: ['website', 'url', 'web site', 'domain'],
-  industry: ['industry', 'vertical', 'category'],
-  businessType: ['business type', 'type of business', 'business model', 'b2b b2c', 'lead type', 'customer type'],
-  source: ['source', 'lead source', 'channel'],
-  type: ['type', 'partner merchant'],
-  estimatedVolume: ['estimated volume', 'value', 'volume', 'amount', 'deal value', 'expected volume'],
-  notes: ['notes', 'note', 'comments', 'comment', 'remarks'],
-}
-
 const NONE = '__none__'
-
-function normalizeHeader(h: string) {
-  return h.toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').trim()
-}
-
-function autoMapHeaders(headers: string[]): Record<Field, string | null> {
-  const normalized = headers.map(normalizeHeader)
-  const claimed = new Set<number>()
-  const map = {} as Record<Field, string | null>
-
-  // Exact matches first, across all fields, so a field with an exact synonym hit
-  // never loses its column to another field's fuzzy "includes" match later.
-  for (const field of FIELDS) {
-    const synonyms = FIELD_SYNONYMS[field].map(normalizeHeader)
-    const idx = normalized.findIndex((h, i) => !claimed.has(i) && synonyms.includes(h))
-    if (idx !== -1) {
-      claimed.add(idx)
-      map[field] = headers[idx]
-    } else {
-      map[field] = null
-    }
-  }
-
-  // Then fuzzy "includes" matches for whatever's left unmapped.
-  for (const field of FIELDS) {
-    if (map[field] !== null) continue
-    const synonyms = FIELD_SYNONYMS[field].map(normalizeHeader)
-    const idx = normalized.findIndex((h, i) => !claimed.has(i) && synonyms.some((s) => h.includes(s)))
-    if (idx !== -1) {
-      claimed.add(idx)
-      map[field] = headers[idx]
-    }
-  }
-
-  return map
-}
 
 interface ParsedFile {
   headers: string[]
