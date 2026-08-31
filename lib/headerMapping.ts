@@ -33,9 +33,9 @@ export const FIELD_LABELS: Record<Field, string> = {
 }
 
 export const FIELD_SYNONYMS: Record<Field, string[]> = {
-  company: ['company', 'company name', 'organization', 'organisation', 'merchant', 'merchant name', 'business name', 'account'],
+  company: ['company', 'company name', 'companies name', 'organization', 'organisation', 'merchant', 'merchant name', 'business name', 'account'],
   email: ['email', 'email address', 'work email', 'e mail'],
-  poc: ['poc', 'name', 'full name', 'contact name', 'lead name', 'contact', 'point of contact'],
+  poc: ['poc', 'name', 'full name', 'contact name', 'lead name', 'contact', 'point of contact', 'company owner name'],
   phone: ['phone', 'mobile', 'phone number', 'contact number', 'mobile number'],
   website: ['website', 'url', 'web site', 'domain'],
   industry: ['industry', 'vertical', 'category'],

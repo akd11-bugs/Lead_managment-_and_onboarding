@@ -49,7 +49,12 @@ export async function POST(req: Request) {
   }
   const [headerRow, ...dataRows] = allRows
   const mapping = autoMapHeaders(headerRow)
-  const ownerColumnIndex = headerRow.findIndex((h) => OWNER_SYNONYMS.includes(normalizeHeader(h)))
+  // Fuzzy (substring) match, same as the field mapper — "Lead Owner Name"
+  // should match "owner" just as readily as an exact "Owner" header would.
+  const ownerColumnIndex = headerRow.findIndex((h) => {
+    const normalized = normalizeHeader(h)
+    return OWNER_SYNONYMS.some((s) => normalized.includes(s))
+  })
 
   const cursorKey = `${CURSOR_KEY_PREFIX}${spreadsheetId}:${range}`
   const cursor = await prisma.syncCursor.findUnique({ where: { key: cursorKey } })
