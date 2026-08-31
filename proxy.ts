@@ -15,7 +15,10 @@ export default auth((req) => {
   // Lands as 'pending' just like the invite/Google flows; must be reachable
   // while logged out, like /login.
   const isSignupPage = pathname === '/signup' || pathname === '/signup/complete'
-  const isPublicPage = isLoginPage || isInviteRedeemPage || isSignupPage
+  // The lightweight rep-facing form — its own PIN-based auth lives entirely
+  // inside app/api/rep/* route handlers (the rep_session cookie), never here.
+  const isRepPage = pathname === '/rep'
+  const isPublicPage = isLoginPage || isInviteRedeemPage || isSignupPage || isRepPage
   const isPendingPage = pathname === '/pending'
   // First-time Google sign-in with no role assigned yet — blocked from
   // everything except this one page until an admin approves them.
@@ -40,9 +43,10 @@ export default auth((req) => {
 
 export const config = {
   // Skip static assets, the NextAuth API routes, the invite-redemption and
-  // signup APIs (must be callable while logged out), and the external
-  // reports API + the leads-sheet sync cron route (both authenticate callers
-  // with their own API key, not a browser session) — everything else (pages
-  // and our own /api/* routes) requires a session.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem|api/signup|api/external|api/cron).*)'],
+  // signup APIs (must be callable while logged out), the external reports
+  // API + the leads-sheet sync cron route (both authenticate callers with
+  // their own API key, not a browser session), and the rep-form API (its own
+  // rep_session cookie) — everything else (pages and our own /api/* routes)
+  // requires a NextAuth session.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/rep).*)'],
 }
