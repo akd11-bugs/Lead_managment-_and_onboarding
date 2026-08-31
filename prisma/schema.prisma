@@ -72,12 +72,6 @@ model User {
   emailAppPasswordEnc String?   // AES-256-GCM ciphertext: "iv:authTag:ciphertext", base64
   emailConfiguredAt   DateTime?
 
-  // Rep-form auth (/rep) — separate identity from the real password above, so
-  // a lockout on one never locks the other. Only set once an admin issues a PIN.
-  pinHash           String?
-  pinFailedAttempts Int       @default(0)
-  pinLockedUntil    DateTime?
-
   // No hard FK from Lead.ownerId — kept a plain string (like stage/source) so
   // imported/legacy leads with an unrecognized owner never fail to save.
 }

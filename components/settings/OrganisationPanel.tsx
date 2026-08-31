@@ -14,15 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { UserPlus, Loader2, Copy, Ban, Trash2, Check, UserCheck, KeyRound } from 'lucide-react'
+import { UserPlus, Loader2, Copy, Ban, Trash2, Check, UserCheck } from 'lucide-react'
 
 interface UserRow {
   id: string
@@ -65,10 +57,6 @@ export function OrganisationPanel({
   const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [approveRole, setApproveRole] = useState<Record<string, Role>>({})
-  const [pinTarget, setPinTarget] = useState<UserRow | null>(null)
-  const [pinValue, setPinValue] = useState('')
-  const [pinError, setPinError] = useState<string | null>(null)
-  const [pinSaving, setPinSaving] = useState(false)
 
   async function generateInvite() {
     setSaving(true)
@@ -122,32 +110,6 @@ export function OrganisationPanel({
       body: JSON.stringify({ isActive }),
     })
     if (res.ok) setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, isActive } : u)))
-  }
-
-  async function submitPin() {
-    if (!pinTarget) return
-    if (!/^\d{6}$/.test(pinValue)) {
-      setPinError('PIN must be exactly 6 digits')
-      return
-    }
-    setPinSaving(true)
-    setPinError(null)
-    try {
-      const res = await fetch(`/api/users/${pinTarget.id}/pin`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pin: pinValue }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setPinError(data.error ?? 'Failed to set PIN')
-        return
-      }
-      setPinTarget(null)
-      setPinValue('')
-    } finally {
-      setPinSaving(false)
-    }
   }
 
   async function deleteUser(id: string, name: string) {
@@ -227,19 +189,6 @@ export function OrganisationPanel({
                 <Badge variant={u.isActive ? 'outline' : 'secondary'} className="text-[10px]">
                   {u.isActive ? 'Active' : 'Inactive'}
                 </Badge>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  title="Set/reset rep-form PIN"
-                  onClick={() => {
-                    setPinTarget(u)
-                    setPinValue('')
-                    setPinError(null)
-                  }}
-                >
-                  <KeyRound className="h-3.5 w-3.5" />
-                </Button>
                 <Button
                   size="icon"
                   variant="ghost"
@@ -332,36 +281,6 @@ export function OrganisationPanel({
           </p>
         )}
       </CardContent>
-
-      <Dialog open={!!pinTarget} onOpenChange={(o) => !o && setPinTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Set PIN for {pinTarget?.name}</DialogTitle>
-            <DialogDescription>
-              Used to sign in at <code className="text-xs">/rep</code> — the lightweight lead-update form. Reps
-              enter their email and this 6-digit PIN, nothing else.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            className="h-9 tracking-widest"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="6-digit PIN"
-            value={pinValue}
-            onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          />
-          {pinError && <p className="text-xs text-rose-600">{pinError}</p>}
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPinTarget(null)}>
-              Cancel
-            </Button>
-            <Button onClick={submitPin} disabled={pinSaving || pinValue.length !== 6}>
-              {pinSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Save PIN
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   )
 }
