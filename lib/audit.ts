@@ -13,6 +13,10 @@ export type AuditAction =
   | 'user_deactivated'
   | 'user_activated'
   | 'user_deleted'
+  | 'user_pin_reset'
+  | 'rep_login_success'
+  | 'rep_login_failed'
+  | 'rep_login_locked'
 
 export async function logAudit(entry: {
   action: AuditAction
