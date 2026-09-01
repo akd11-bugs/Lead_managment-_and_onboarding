@@ -16,8 +16,9 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { KanbanColumn } from './KanbanColumn'
 import { LeadCard } from './LeadCard'
 import { LeadDetailDialog } from '@/components/leads/LeadDetailDialog'
+import { StageChangeDialog, type StageChangeTarget } from '@/components/leads/StageChangeDialog'
 import type { Lead, Stage } from '@/lib/types'
-import { STAGES, STAGE_LABELS } from '@/lib/types'
+import { STAGES } from '@/lib/types'
 
 interface KanbanBoardProps {
   initialLeads: Lead[]
@@ -28,6 +29,15 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads)
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
   const [detailLead, setDetailLead] = useState<Lead | null>(null)
+  const [stageChange, setStageChange] = useState<{ leadId: string; target: StageChangeTarget } | null>(null)
+
+  function applyUpdatedLead(updated: Lead) {
+    setLeads((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)))
+    // Keeps other pages (Dashboard, Leads table) from serving a stale cached
+    // view the next time they're navigated to — the board itself already
+    // reflects the change via local state above, no reload needed here.
+    router.refresh()
+  }
 
   useEffect(() => {
     setLeads(initialLeads)
@@ -56,7 +66,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
     if (lead) setActiveLead(lead)
   }
 
-  async function handleDragEnd(e: DragEndEvent) {
+  function handleDragEnd(e: DragEndEvent) {
     setActiveLead(null)
     if (!e.over) return
 
@@ -73,40 +83,10 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
     const lead = leads.find((l) => l.id === leadId)
     if (!lead || lead.stage === targetStage) return
 
-    // Optimistic update
-    const sourceStage = lead.stage as Stage
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, stage: targetStage } : l))
-    )
-
-    try {
-      const res = await fetch(`/api/leads/${leadId}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ stage: targetStage }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Failed to move lead')
-      }
-      // Update lastActivityAt indirectly by adding an activity — the server
-      // attributes it to the real logged-in user.
-      await fetch('/api/activities', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          leadId,
-          type: 'note',
-          description: `Stage changed: ${STAGE_LABELS[sourceStage]} → ${STAGE_LABELS[targetStage]}`,
-        }),
-      })
-      router.refresh()
-    } catch {
-      // Revert on failure
-      setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, stage: sourceStage } : l))
-      )
-    }
+    // No optimistic move and no direct PATCH here — a remark is required for
+    // every stage change, so this just opens the same dialog the detail form
+    // uses. The card only actually moves once that's confirmed (onDone).
+    setStageChange({ leadId, target: { kind: 'stage', stage: targetStage } })
   }
 
   return (
@@ -138,6 +118,17 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
           leadId={detailLead.id}
           open={!!detailLead}
           onOpenChange={(open) => !open && setDetailLead(null)}
+          onLeadUpdated={applyUpdatedLead}
+        />
+      )}
+
+      {stageChange && (
+        <StageChangeDialog
+          leadId={stageChange.leadId}
+          open
+          onOpenChange={(open) => !open && setStageChange(null)}
+          target={stageChange.target}
+          onDone={applyUpdatedLead}
         />
       )}
     </>

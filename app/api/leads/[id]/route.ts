@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
 import { validateLeadFields, ONBOARDING_SUB_STAGE_LABELS, type OnboardingSubStage } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
-import { evaluateStageRules } from '@/lib/workflow'
+import { applyStageChange } from '@/lib/leadStage'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,30 +34,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    select: { stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true },
+    select: { stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const enteringOnboarding = body.stage === 'onboarding' && existing.stage !== 'onboarding'
-  const leavingOnboarding = body.stage !== undefined && body.stage !== 'onboarding' && existing.stage === 'onboarding'
+  const isStageChange = body.stage !== undefined && body.stage !== existing.stage
+  const isPendingSubStatusChange =
+    body.pendingSubStatus !== undefined && body.pendingSubStatus !== existing.pendingSubStatus
 
-  // wonAt marks the moment sales moves a lead into the onboarding stage —
-  // distinct from onboardedAt (set later, once ops finishes the sub-pipeline).
-  // Reports/dashboard "won" metrics key off this so they don't have to wait
-  // on ops, and don't drift if the lead is edited again afterward.
-  const nextWonAt = enteringOnboarding ? new Date() : leavingOnboarding ? null : undefined
+  // Top-level stage / pending-sub-status changes always require a remark and
+  // go through the shared applyStageChange (also used by the bulk route,
+  // Kanban, and the lead detail form) — never combined with plain field
+  // edits in the same request (the dialogs that trigger this send only
+  // {stage or pendingSubStatus, remark}).
+  if (isStageChange || isPendingSubStatusChange) {
+    const remark = typeof body.remark === 'string' ? body.remark.trim() : ''
+    if (!remark) {
+      return NextResponse.json({ error: 'A remark is required when changing stage or pending status' }, { status: 400 })
+    }
+    const lead = await applyStageChange(id, existing, { stage: body.stage, pendingSubStatus: body.pendingSubStatus, remark }, user)
+    return NextResponse.json({ lead })
+  }
 
-  // Winning a deal now means entering the onboarding sub-pipeline, not a
-  // resting "Won" state — there's no separate manual "mark onboarded" step;
-  // onboardedAt derives from reaching the last sub-stage.
-  const nextSubStage: string | null | undefined =
-    body.onboardingSubStage !== undefined
-      ? body.onboardingSubStage
-      : enteringOnboarding
-        ? 'document_submission'
-        : leavingOnboarding
-          ? null
-          : undefined
+  // Onboarding's own sub-pipeline progression — unchanged, unrelated to the
+  // stage/pending-sub-status flow above. Direct onboardingSubStage edits come
+  // from components/leads/OnboardingProgressPanel.tsx while stage stays
+  // 'onboarding'; no remark required for these.
+  const nextSubStage: string | null | undefined = body.onboardingSubStage !== undefined ? body.onboardingSubStage : undefined
 
   const nextOnboardedAt =
     nextSubStage === 'final_onboarded'
@@ -96,11 +99,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.painPoints !== undefined && { painPoints: body.painPoints }),
       ...(body.whatTheyWant !== undefined && { whatTheyWant: body.whatTheyWant }),
       ...(body.source !== undefined && { source: body.source }),
-      ...(body.stage !== undefined && { stage: body.stage }),
-      ...(body.stage !== undefined && body.stage !== 'proposal' && { proposalSubStage: null }),
       ...(nextSubStage !== undefined && { onboardingSubStage: nextSubStage }),
       ...(nextOnboardedAt !== undefined && { onboardedAt: nextOnboardedAt }),
-      ...(nextWonAt !== undefined && { wonAt: nextWonAt }),
       ...(body.estimatedVolume !== undefined && { estimatedVolume: Number(body.estimatedVolume) }),
       ...(body.ownerName !== undefined && { ownerName: body.ownerName }),
       ...(body.effort !== undefined && { effort: body.effort }),
@@ -109,18 +109,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.expectedCloseDate !== undefined && {
         expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
       }),
-      ...(body.proposalSubStage !== undefined && { proposalSubStage: body.proposalSubStage }),
       ...(body.notes !== undefined && { notes: body.notes }),
       ...(body.position !== undefined && { position: Number(body.position) }),
       ...(nextSubStage !== undefined && nextSubStage !== existing.onboardingSubStage && { lastActivityAt: new Date() }),
     },
   })
-
-  if (body.stage !== undefined && body.stage !== existing.stage) {
-    // Best-effort — a broken workflow rule (e.g. bad email config) shouldn't
-    // fail the lead update that already succeeded.
-    evaluateStageRules(lead, body.stage).catch((err) => console.error('evaluateStageRules failed', err))
-  }
 
   return NextResponse.json({ lead })
 }

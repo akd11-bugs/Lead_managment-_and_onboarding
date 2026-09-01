@@ -2,8 +2,8 @@
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { Lead } from '@/lib/types'
-import { SOURCE_LABELS } from '@/lib/types'
+import type { Lead, PendingSubStatus } from '@/lib/types'
+import { SOURCE_LABELS, PENDING_SUB_STATUS_LABELS } from '@/lib/types'
 import { formatCurrency, formatRelative, cn } from '@/lib/utils'
 import { AlertCircle } from 'lucide-react'
 
@@ -26,7 +26,7 @@ export function LeadCard({ lead, onClick, isDragging }: LeadCardProps) {
     ? Math.floor((Date.now() - new Date(lead.lastActivityAt).getTime()) / 86400000)
     : 999
 
-  const isStale = daysSinceActivity > 21 && lead.stage !== 'onboarding' && lead.stage !== 'lost'
+  const isStale = daysSinceActivity > 21 && lead.stage !== 'onboarding' && lead.stage !== 'not_interested'
 
   return (
     <div
@@ -56,6 +56,11 @@ export function LeadCard({ lead, onClick, isDragging }: LeadCardProps) {
             <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
               {SOURCE_LABELS[lead.source as keyof typeof SOURCE_LABELS] ?? lead.source}
             </span>
+            {lead.stage === 'pending' && lead.pendingSubStatus && (
+              <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                {PENDING_SUB_STATUS_LABELS[lead.pendingSubStatus as PendingSubStatus]}
+              </span>
+            )}
             <span className={cn('inline-flex items-center gap-1 text-[10px]', isStale ? 'text-amber-600' : 'text-muted-foreground')}>
               {isStale && <AlertCircle className="h-3 w-3" />}
               {lead.lastActivityAt ? formatRelative(lead.lastActivityAt) : 'no activity'}

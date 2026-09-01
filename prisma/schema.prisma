@@ -20,7 +20,7 @@ model Lead {
   industry        String?      // free text vertical, e.g. "Fashion", "Apparel" — filled by sales
   businessType    String?      // b2b | b2c
   source          String       // website | referral | linkedin | cold_outreach | event | other
-  stage           String       // new | contacted | follow_up | qualified | proposal | won | lost
+  stage           String       // new | pending | onboarding | not_interested
   estimatedVolume Float        @default(0)
   ownerId         String       @default("self")
   ownerName       String       @default("You")
@@ -30,7 +30,8 @@ model Lead {
   wonAt           DateTime?    // set automatically the moment stage enters "onboarding" — sales-side won, distinct from onboardedAt
   onboardedAt     DateTime?    // set automatically once onboardingSubStage reaches "final_onboarded"
   expectedCloseDate DateTime?  // forecast date for BD reporting (leads not yet onboarded)
-  proposalSubStage String?     // commercial_agreed | agreement_shared | agreement_done — only meaningful when stage == "proposal"
+  proposalSubStage String?     // retired with the old proposal stage — column kept (unused) so historical data isn't dropped
+  pendingSubStatus String?     // pending_ours | pending_merchant | pending_psp — only meaningful when stage == "pending"
   onboardingSubStage String?   // document_submission | document_verification | psp_verification | final_onboarded — only meaningful when stage == "onboarding"
   painPoints      String       @default("") // discovery: what's hurting them today
   whatTheyWant    String       @default("") // discovery: what they're actually asking for
@@ -120,7 +121,7 @@ model Activity {
   id          String   @id @default(cuid())
   leadId      String
   lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  type        String   // call | email | meeting | note
+  type        String   // call | email | meeting | note | onboarding_step | stage_change
   description String
   authorName  String   @default("You")
   date        DateTime @default(now())

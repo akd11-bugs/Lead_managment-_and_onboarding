@@ -26,7 +26,7 @@ const FILTERS: Record<string, { where: Record<string, unknown>; label: string }>
       label: 'Expected to onboard by month end',
     },
     'open-pipeline': {
-      where: { stage: { notIn: ['onboarding', 'lost'] } },
+      where: { stage: { notIn: ['onboarding', 'not_interested'] } },
       label: 'Open pipeline',
     },
     'won-this-month': {
@@ -38,8 +38,8 @@ const FILTERS: Record<string, { where: Record<string, unknown>; label: string }>
       label: 'Won',
     },
     closed: {
-      where: { stage: { in: ['onboarding', 'lost'] } },
-      label: 'Closed (won or lost)',
+      where: { stage: { in: ['onboarding', 'not_interested'] } },
+      label: 'Closed (won or not interested)',
     },
   }
 })()

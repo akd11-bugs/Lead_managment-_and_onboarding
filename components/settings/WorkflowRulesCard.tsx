@@ -38,7 +38,7 @@ export function WorkflowRulesCard() {
   const [error, setError] = useState<string | null>(null)
 
   const [name, setName] = useState('')
-  const [toStage, setToStage] = useState<Stage>('contacted')
+  const [toStage, setToStage] = useState<Stage>('pending')
   const [actionType, setActionType] = useState<ActionType>('create_task')
   const [taskTitle, setTaskTitle] = useState('')
   const [dueInDays, setDueInDays] = useState('2')

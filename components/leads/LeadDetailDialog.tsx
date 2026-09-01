@@ -46,8 +46,8 @@ import {
   LEAD_TYPE_LABELS,
   BUSINESS_TYPES,
   BUSINESS_TYPE_LABELS,
-  PROPOSAL_SUB_STAGES,
-  PROPOSAL_SUB_STAGE_LABELS,
+  PENDING_SUB_STATUSES,
+  PENDING_SUB_STATUS_LABELS,
   ONBOARDING_SUB_STAGE_LABELS,
   onboardingProgressPercent,
   type Lead,
@@ -58,13 +58,14 @@ import {
   type QualityLevel,
   type LeadType,
   type BusinessType,
-  type ProposalSubStage,
+  type PendingSubStatus,
 } from '@/lib/types'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { SKILLS } from '@/lib/skills/catalog'
 import { EmailComposer } from './EmailComposer'
 import { LeadTasksTab } from './LeadTasksTab'
+import { StageChangeDialog, type StageChangeTarget } from './StageChangeDialog'
 
 interface SkillRunEntry {
   id: string
@@ -80,16 +81,22 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   meeting: <Calendar className="h-3.5 w-3.5" />,
   note: <StickyNote className="h-3.5 w-3.5" />,
   onboarding_step: <ClipboardCheck className="h-3.5 w-3.5" />,
+  stage_change: <ArrowRight className="h-3.5 w-3.5" />,
 }
 
 export function LeadDetailDialog({
   leadId,
   open,
   onOpenChange,
+  onLeadUpdated,
 }: {
   leadId: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Lets the Kanban board underneath (this dialog opens from a card click)
+  // move the card live the moment a stage/pending-sub-status change is
+  // confirmed here, without waiting for a close + page refresh.
+  onLeadUpdated?: (lead: Lead) => void
 }) {
   const router = useRouter()
   const [lead, setLead] = useState<Lead | null>(null)
@@ -98,6 +105,7 @@ export function LeadDetailDialog({
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [stageChangeTarget, setStageChangeTarget] = useState<StageChangeTarget | null>(null)
   const [activityForm, setActivityForm] = useState<{ type: ActivityType; description: string }>({
     type: 'note',
     description: '',
@@ -206,7 +214,18 @@ export function LeadDetailDialog({
   // Lead-scoped skills
   const leadSkills = SKILLS.filter((s) => s.scope === 'lead')
 
+  function handleStageChangeDone(updated: Lead) {
+    setLead((prev) => (prev ? { ...prev, ...updated } : updated))
+    onLeadUpdated?.(updated)
+    router.refresh()
+    // Activity list changed (a new stage_change row) — refetch it.
+    fetch(`/api/leads/${updated.id}`)
+      .then((r) => r.json())
+      .then((data) => data.lead && setActivities(data.lead.activities ?? []))
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -329,7 +348,10 @@ export function LeadDetailDialog({
               <Field label="Stage">
                 <Select
                   value={lead.stage}
-                  onValueChange={(v) => patchLead({ stage: v as Stage })}
+                  onValueChange={(v) => {
+                    if (v === lead.stage) return
+                    setStageChangeTarget({ kind: 'stage', stage: v as Stage })
+                  }}
                   disabled={saving}
                 >
                   <SelectTrigger className="h-8">
@@ -344,20 +366,23 @@ export function LeadDetailDialog({
                   </SelectContent>
                 </Select>
               </Field>
-              {lead.stage === 'proposal' && (
-                <Field label="Proposal status">
+              {lead.stage === 'pending' && (
+                <Field label="Waiting on">
                   <Select
-                    value={lead.proposalSubStage ?? ''}
-                    onValueChange={(v) => patchLead({ proposalSubStage: v as ProposalSubStage })}
+                    value={lead.pendingSubStatus ?? 'pending_ours'}
+                    onValueChange={(v) => {
+                      if (v === lead.pendingSubStatus) return
+                      setStageChangeTarget({ kind: 'pendingSubStatus', pendingSubStatus: v as PendingSubStatus })
+                    }}
                     disabled={saving}
                   >
                     <SelectTrigger className="h-8">
-                      <SelectValue placeholder="Not set" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PROPOSAL_SUB_STAGES.map((s) => (
+                      {PENDING_SUB_STATUSES.map((s) => (
                         <SelectItem key={s} value={s}>
-                          {PROPOSAL_SUB_STAGE_LABELS[s]}
+                          {PENDING_SUB_STATUS_LABELS[s]}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -538,7 +563,7 @@ export function LeadDetailDialog({
               leadEmail={lead.email}
               isNewStage={lead.stage === 'new'}
               onSent={handleEmailSent}
-              onMarkContacted={() => patchLead({ stage: 'contacted' })}
+              onMarkContacted={() => setStageChangeTarget({ kind: 'stage', stage: 'pending' })}
             />
 
             <div className="rounded-md border p-3 space-y-2">
@@ -651,6 +676,16 @@ export function LeadDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+    {stageChangeTarget && (
+      <StageChangeDialog
+        leadId={lead.id}
+        open
+        onOpenChange={(o) => !o && setStageChangeTarget(null)}
+        target={stageChangeTarget}
+        onDone={handleStageChangeDone}
+      />
+    )}
+    </>
   )
 }
 

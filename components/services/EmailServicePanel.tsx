@@ -12,7 +12,8 @@ import { CustomEmailComposer } from '@/components/leads/CustomEmailComposer'
 import { SkillRunner } from '@/components/skills/SkillRunner'
 import { getSkill } from '@/lib/skills/catalog'
 import { cn } from '@/lib/utils'
-import { STAGE_LABELS, type Stage } from '@/lib/types'
+import { STAGE_LABELS, type Stage, type Lead } from '@/lib/types'
+import { StageChangeDialog } from '@/components/leads/StageChangeDialog'
 
 export interface SlimLead {
   id: string
@@ -30,6 +31,7 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
   const [leads, setLeads] = useState(initialLeads)
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [markPendingOpen, setMarkPendingOpen] = useState(false)
 
   const filtered = leads.filter((l) => {
     const q = search.trim().toLowerCase()
@@ -39,17 +41,9 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
 
   const selected = leads.find((l) => l.id === selectedId) ?? null
 
-  async function markContacted() {
-    if (!selected) return
-    const res = await fetch(`/api/leads/${selected.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ stage: 'contacted' }),
-    })
-    if (res.ok) {
-      setLeads((prev) => prev.map((l) => (l.id === selected.id ? { ...l, stage: 'contacted' } : l)))
-      router.refresh()
-    }
+  function handleMarkPendingDone(updated: Lead) {
+    setLeads((prev) => prev.map((l) => (l.id === updated.id ? { ...l, stage: updated.stage } : l)))
+    router.refresh()
   }
 
   return (
@@ -122,7 +116,7 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
                     leadEmail={selected.email}
                     isNewStage={selected.stage === 'new'}
                     onSent={() => router.refresh()}
-                    onMarkContacted={markContacted}
+                    onMarkContacted={() => setMarkPendingOpen(true)}
                   />
                   <div className="grid gap-4 sm:grid-cols-2">
                     {LEAD_SKILLS.map((id) => {
@@ -167,6 +161,16 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
           })}
         </div>
       </section>
+
+      {selected && (
+        <StageChangeDialog
+          leadId={selected.id}
+          open={markPendingOpen}
+          onOpenChange={setMarkPendingOpen}
+          target={{ kind: 'stage', stage: 'pending' }}
+          onDone={handleMarkPendingDone}
+        />
+      )}
     </div>
   )
 }

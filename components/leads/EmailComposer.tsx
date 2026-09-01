@@ -69,9 +69,9 @@ export function EmailComposer({
       {justSentEmail && isNewStage && (
         <div className="flex items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span className="flex-1">Email sent — mark this lead as Contacted?</span>
+          <span className="flex-1">Email sent — move this lead to Pending?</span>
           <Button size="sm" onClick={markContacted} disabled={markingContacted}>
-            Mark as Contacted
+            Move to Pending
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setJustSentEmail(false)}>
             Not now

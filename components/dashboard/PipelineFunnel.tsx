@@ -12,12 +12,9 @@ import { STAGES, STAGE_LABELS } from '@/lib/types'
 
 const STAGE_HEX: Record<Stage, string> = {
   new: '#64748b',
-  contacted: '#3b82f6',
-  follow_up: '#f59e0b',
-  qualified: '#8b5cf6',
-  proposal: '#ec4899',
+  pending: '#f59e0b',
   onboarding: '#10b981',
-  lost: '#f43f5e',
+  not_interested: '#f43f5e',
 }
 
 interface PipelineData {
@@ -81,14 +78,14 @@ export function PipelineFunnel({ data }: { data: PipelineData[] }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="grid grid-cols-7 gap-1 mt-2 text-center">
+        <div className="grid grid-cols-4 gap-1 mt-2 text-center">
           {rows.map((r) => (
             <Link key={r.stage} href={`/leads?stage=${r.stage}`} className="text-[10px] rounded hover:bg-accent/60">
               <p className={cn('font-semibold tabular-nums')}>{formatCurrency(r.value)}</p>
             </Link>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1 mt-1 text-center">
+        <div className="grid grid-cols-4 gap-1 mt-1 text-center">
           {rows.map((r) => (
             <Link
               key={r.stage}

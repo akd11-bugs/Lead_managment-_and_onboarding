@@ -14,6 +14,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { SavedViewsMenu, type LeadViewFilters } from '@/components/leads/SavedViewsMenu'
 import { formatCurrency, formatRelative, cn } from '@/lib/utils'
 import {
@@ -69,6 +78,8 @@ export function LeadsTable({
   const [bulkOwnerId, setBulkOwnerId] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
+  const [bulkRemarkOpen, setBulkRemarkOpen] = useState(false)
+  const [bulkRemark, setBulkRemark] = useState('')
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -114,7 +125,7 @@ export function LeadsTable({
     })
   }
 
-  async function runBulkAction(action: 'stage' | 'reassign') {
+  async function runBulkAction(action: 'stage' | 'reassign', remark?: string) {
     if (selected.size === 0) return
     setBulkBusy(true)
     setBulkMessage(null)
@@ -126,7 +137,7 @@ export function LeadsTable({
         body: JSON.stringify({
           leadIds: Array.from(selected),
           action,
-          ...(action === 'stage' && { stage: bulkStage }),
+          ...(action === 'stage' && { stage: bulkStage, remark }),
           ...(action === 'reassign' && { ownerId: owner?.id }),
         }),
       })
@@ -145,6 +156,14 @@ export function LeadsTable({
     } finally {
       setBulkBusy(false)
     }
+  }
+
+  async function confirmBulkStageChange() {
+    const remark = bulkRemark.trim()
+    if (!remark) return
+    await runBulkAction('stage', remark)
+    setBulkRemarkOpen(false)
+    setBulkRemark('')
   }
 
   return (
@@ -226,7 +245,7 @@ export function LeadsTable({
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" disabled={!bulkStage || bulkBusy} onClick={() => runBulkAction('stage')}>
+          <Button size="sm" variant="outline" disabled={!bulkStage || bulkBusy} onClick={() => setBulkRemarkOpen(true)}>
             {bulkBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Apply stage
           </Button>
@@ -323,6 +342,33 @@ export function LeadsTable({
           </tbody>
         </table>
       </div>
+
+      <Dialog open={bulkRemarkOpen} onOpenChange={(o) => { setBulkRemarkOpen(o); if (!o) setBulkRemark('') }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move {selected.size} lead{selected.size === 1 ? '' : 's'} to {bulkStage ? STAGE_LABELS[bulkStage] : ''}</DialogTitle>
+            <DialogDescription>
+              One remark, logged identically to every selected lead&apos;s activity timeline.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            rows={4}
+            placeholder="What happened?"
+            value={bulkRemark}
+            onChange={(e) => setBulkRemark(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkRemarkOpen(false)} disabled={bulkBusy}>
+              Cancel
+            </Button>
+            <Button onClick={confirmBulkStageChange} disabled={bulkBusy || !bulkRemark.trim()}>
+              {bulkBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

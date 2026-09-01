@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope, isAdmin } from '@/lib/session'
 import { validateLeadFields } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
+import { applyStageChange } from '@/lib/leadStage'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,22 +35,42 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: 'None of the selected leads are in your scope' }, { status: 403 })
   }
 
-  let data: Record<string, unknown>
   if (action === 'stage') {
     const validationError = validateLeadFields({ stage: body.stage })
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
-    data = { stage: body.stage, ...(body.stage !== 'proposal' && { proposalSubStage: null }) }
-  } else {
-    const ownerId = String(body.ownerId ?? '')
-    if (!ownerId) return NextResponse.json({ error: 'ownerId is required' }, { status: 400 })
-    const targetUser = await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true, isActive: true } })
-    if (!targetUser || !targetUser.isActive) {
-      return NextResponse.json({ error: 'Target owner must be an active user' }, { status: 400 })
+    const remark = typeof body.remark === 'string' ? body.remark.trim() : ''
+    if (!remark) {
+      return NextResponse.json({ error: 'A remark is required when changing stage' }, { status: 400 })
     }
-    data = { ownerId: targetUser.id, ownerName: targetUser.name }
+
+    const scopedLeads = await prisma.lead.findMany({
+      where: { id: { in: scopedIds } },
+      select: { id: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true },
+    })
+    // Sequential, not Promise.all — applyStageChange does a read-then-write
+    // per lead (workflow rules, activity log); running these concurrently
+    // risks interleaved writes for no real speed benefit at bulk-action scale.
+    for (const lead of scopedLeads) {
+      await applyStageChange(lead.id, lead, { stage: body.stage, remark }, user)
+    }
+
+    return NextResponse.json({
+      updated: scopedLeads.length,
+      requested: leadIds.length,
+      skipped: leadIds.length - scopedIds.length,
+    })
   }
 
-  const result = await prisma.lead.updateMany({ where: { id: { in: scopedIds } }, data })
+  const ownerId = String(body.ownerId ?? '')
+  if (!ownerId) return NextResponse.json({ error: 'ownerId is required' }, { status: 400 })
+  const targetUser = await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true, isActive: true } })
+  if (!targetUser || !targetUser.isActive) {
+    return NextResponse.json({ error: 'Target owner must be an active user' }, { status: 400 })
+  }
+  const result = await prisma.lead.updateMany({
+    where: { id: { in: scopedIds } },
+    data: { ownerId: targetUser.id, ownerName: targetUser.name },
+  })
 
   return NextResponse.json({
     updated: result.count,

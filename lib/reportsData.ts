@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db'
 import { getRange, getWeeklyBuckets, getMonthlyBuckets, type RangeKey, type TrendBucket } from '@/lib/reportRange'
 import type { TrendPoint } from '@/components/reports/TrendChart'
 
-const ACTOR_ACTIVITY_TYPES = ['call', 'email', 'meeting', 'note']
+const ACTOR_ACTIVITY_TYPES = ['call', 'email', 'meeting', 'note', 'stage_change']
 
 export interface ReportsData {
   range: { key: RangeKey; start: Date; end: Date; label: string }
@@ -18,12 +18,6 @@ export interface ReportsData {
   funnel: { new: number; followedUp: number; qualified: number; onboarded: number; live: number }
 }
 
-// Reached "qualified" or further along the pipeline. Excludes 'lost' — we
-// only track a lead's current stage, not its history, so a lost lead's peak
-// stage before it dropped out isn't knowable; undercounting here is safer
-// than assuming every lost lead had qualified first.
-const QUALIFIED_OR_LATER = new Set(['qualified', 'proposal', 'onboarding'])
-
 // Single source of truth for every number on /reports — also consumed by the
 // external API route, so the two can never drift out of sync with each other.
 export async function getReportsData(range: RangeKey): Promise<ReportsData> {
@@ -36,7 +30,7 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
   const [createdLeads, wonLeads, activities, trendLeads] = await Promise.all([
     prisma.lead.findMany({
       where: { createdAt: { gte: start, lte: end } },
-      select: { id: true, ownerName: true, stage: true, wonAt: true, onboardedAt: true },
+      select: { id: true, ownerName: true, stage: true, wonAt: true, onboardedAt: true, pendingSubStatus: true },
     }),
     prisma.lead.findMany({
       // Counts as soon as sales marks a lead won (wonAt, set when it enters
@@ -115,7 +109,9 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
     funnel: {
       new: createdLeads.length,
       followedUp: createdLeads.filter((l) => l.stage !== 'new').length,
-      qualified: createdLeads.filter((l) => QUALIFIED_OR_LATER.has(l.stage)).length,
+      // "Further along" than a fresh pending lead — the ball has moved to the
+      // merchant or PSP's court at least once, not just sitting with us.
+      qualified: createdLeads.filter((l) => l.pendingSubStatus === 'pending_merchant' || l.pendingSubStatus === 'pending_psp').length,
       onboarded: createdLeads.filter((l) => l.wonAt).length,
       live: createdLeads.filter((l) => l.onboardedAt).length,
     },

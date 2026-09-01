@@ -20,7 +20,7 @@ export interface SkillEntry {
   alertWhen?: {
     metric:
       | 'staleLeadsCount'        // number of leads with no activity past N days
-      | 'lostLeadsCount'         // leads in 'lost' stage
+      | 'lostLeadsCount'         // leads in 'not_interested' stage
       | 'qualifiedLeadsNoActivity' // qualified/proposal leads with no recent activity
       | 'followUpNeeded'         // leads in contacted/follow_up with no recent activity
       | 'always'                 // always show on dashboard

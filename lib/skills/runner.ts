@@ -107,7 +107,7 @@ async function runPipelineHygiene(
   start: number,
 ): Promise<RunSkillResult> {
   // Export open leads to CSV and shell out to the Python script.
-  const openLeads = input.leads.filter((l) => l.stage !== 'onboarding' && l.stage !== 'lost')
+  const openLeads = input.leads.filter((l) => l.stage !== 'onboarding' && l.stage !== 'not_interested')
   const csv = leadsToCsv(openLeads)
   const tmpCsv = `/tmp/lrm_pipeline_${Date.now()}.csv`
   await fs.writeFile(tmpCsv, csv, 'utf-8')

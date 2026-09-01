@@ -50,9 +50,10 @@ export function computeAlerts(leads: Lead[]): Alert[] {
     })
   }
 
-  // Ghosted after demo — qualified/proposal leads with no activity 21+ days
+  // Ghosted — pending on the merchant or PSP's side with no activity 21+ days
   const ghosted = leads.filter((l) => {
-    if (l.stage !== 'qualified' && l.stage !== 'proposal') return false
+    if (l.stage !== 'pending') return false
+    if (l.pendingSubStatus !== 'pending_merchant' && l.pendingSubStatus !== 'pending_psp') return false
     if (!l.lastActivityAt) return true
     return now - new Date(l.lastActivityAt).getTime() > 21 * DAY
   })
@@ -61,15 +62,15 @@ export function computeAlerts(leads: Lead[]): Alert[] {
     alerts.push({
       skillId: skill.id,
       skillName: skill.name,
-      reason: `${ghosted.length} qualified/proposal lead${ghosted.length === 1 ? '' : 's'} silent for 21+ days`,
+      reason: `${ghosted.length} lead${ghosted.length === 1 ? '' : 's'} pending on merchant/PSP, silent for 21+ days`,
       metric: 'qualifiedLeadsNoActivity',
       severity: 'high',
     })
   }
 
-  // Follow-up needed
+  // Follow-up needed — it's our turn and we haven't touched it in 14+ days
   const followUpOverdue = leads.filter((l) => {
-    if (l.stage !== 'contacted' && l.stage !== 'follow_up') return false
+    if (l.stage !== 'pending' || l.pendingSubStatus !== 'pending_ours') return false
     if (!l.lastActivityAt) return true
     return now - new Date(l.lastActivityAt).getTime() > 14 * DAY
   })
@@ -78,14 +79,14 @@ export function computeAlerts(leads: Lead[]): Alert[] {
     alerts.push({
       skillId: skill.id,
       skillName: skill.name,
-      reason: `${followUpOverdue.length} contacted/follow-up leads without touch in 14+ days`,
+      reason: `${followUpOverdue.length} lead${followUpOverdue.length === 1 ? '' : 's'} pending on our side without touch in 14+ days`,
       metric: 'followUpNeeded',
       severity: followUpOverdue.length >= 5 ? 'medium' : 'low',
     })
   }
 
-  // Lost leads
-  const lost = leads.filter((l) => l.stage === 'lost')
+  // Not Interested leads
+  const lost = leads.filter((l) => l.stage === 'not_interested')
   if (lost.length >= 10) {
     const skill = SKILLS.find((s) => s.id === 'disqualification-reason-miner')!
     alerts.push({

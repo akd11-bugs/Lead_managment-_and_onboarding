@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Mail, Sparkles, Building2, Calendar } from 'lucide-react'
+import { ArrowLeft, Mail, Sparkles, Building2, Calendar, ArrowRight } from 'lucide-react'
 import { formatDateTime, formatRelative } from '@/lib/utils'
 import { STAGE_LABELS, SOURCE_LABELS, type Stage, type LeadSource, type BusinessType } from '@/lib/types'
 import { LeadSkillActions } from '@/components/leads/LeadSkillActions'
@@ -33,6 +33,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     email: <Mail className="h-3.5 w-3.5" />,
     meeting: <Calendar className="h-3.5 w-3.5" />,
     note: <Calendar className="h-3.5 w-3.5" />,
+    stage_change: <ArrowRight className="h-3.5 w-3.5" />,
   }
 
   return (

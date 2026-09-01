@@ -1,12 +1,15 @@
-// Seed 25 realistic B2B leads across the 7-stage pipeline, with activities.
-// Designed so dashboard alerts can fire (some leads with no activity past N days).
+// Seed 25 realistic B2B leads across the 4-stage pipeline (New → Pending →
+// Onboarding / Not Interested), with activities. Designed so dashboard
+// alerts can fire (some leads with no activity past N days).
 
 import { PrismaClient } from '@prisma/client'
 import { clearAllLeadData } from './seed-helpers'
 
 const prisma = new PrismaClient()
 
-const STAGES = ['new', 'contacted', 'follow_up', 'qualified', 'proposal', 'onboarding', 'lost'] as const
+const STAGES = ['new', 'pending', 'onboarding', 'not_interested'] as const
+const PENDING_SUB_STATUSES = ['pending_ours', 'pending_merchant', 'pending_psp'] as const
+const ONBOARDING_SUB_STAGES = ['document_submission', 'document_verification', 'psp_verification', 'final_onboarded'] as const
 
 const SOURCES = ['website', 'referral', 'linkedin', 'cold_outreach', 'event', 'other'] as const
 const QUALITY_LEVELS = ['low', 'medium', 'high'] as const
@@ -27,6 +30,16 @@ const BUSINESS_TYPES = ['b2b', 'b2c'] as const
 
 function pick<T>(arr: readonly T[], i: number): T {
   return arr[i % arr.length]
+}
+
+// Roughly proportional distribution across 25 leads: a few brand new, most
+// of the book sitting in Pending (split across the three sub-statuses), a
+// handful onboarding, a handful not interested.
+function stageFor(i: number): (typeof STAGES)[number] {
+  if (i < 3) return 'new'
+  if (i < 18) return 'pending'
+  if (i < 22) return 'onboarding'
+  return 'not_interested'
 }
 
 function assertSafeToSeedDestructively() {
@@ -54,8 +67,7 @@ async function main() {
   const leads = []
 
   for (let i = 0; i < 25; i++) {
-    const stageIdx = Math.min(STAGES.length - 1, Math.floor(i / 3.5))
-    const stage = STAGES[stageIdx]
+    const stage = stageFor(i)
     const source = pick(SOURCES, i)
     const firstName = pick(FIRST_NAMES, i)
     const lastName = pick(LAST_NAMES, i + 3)
@@ -71,19 +83,11 @@ async function main() {
     const lastActivityAt = new Date(now.getTime() - daysSinceActivity * 86400000)
 
     // ₹5L–₹1Cr per deal — realistic scale for the BD "expected volume in Cr" reporting
-    const estimatedVolume = stage === 'lost' ? 0 : Math.round((500000 + Math.random() * 9500000) / 10000) * 10000
+    const estimatedVolume = stage === 'not_interested' ? 0 : Math.round((500000 + Math.random() * 9500000) / 10000) * 10000
 
     const type: 'partner' | 'merchant' = i % 5 === 0 ? 'partner' : 'merchant'
 
-    const PROPOSAL_SUB_STAGES = ['commercial_agreed', 'agreement_shared', 'agreement_done'] as const
-    const proposalSubStage = stage === 'proposal' ? pick(PROPOSAL_SUB_STAGES, i) : null
-
-    const ONBOARDING_SUB_STAGES = [
-      'document_submission',
-      'document_verification',
-      'psp_verification',
-      'final_onboarded',
-    ] as const
+    const pendingSubStatus = stage === 'pending' ? pick(PENDING_SUB_STATUSES, i) : null
     const onboardingSubStage = stage === 'onboarding' ? pick(ONBOARDING_SUB_STAGES, i) : null
 
     // Onboarding leads: some have completed the full sub-pipeline, some are
@@ -94,11 +98,12 @@ async function main() {
       stage === 'onboarding' && onboardingSubStage === 'final_onboarded'
         ? new Date(now.getFullYear(), now.getMonth(), 1 + (i % 20))
         : null
+    const wonAt = stage === 'onboarding' ? new Date(now.getFullYear(), now.getMonth(), 1 + (i % 20)) : null
 
-    // Leads still in play get a forecast date — split across this month and next,
-    // so "expected to onboard by month end" has something real to count.
+    // Leads still in play get a forecast date so "expected to onboard by
+    // month end" has something real to count.
     const expectedCloseDate =
-      stage === 'qualified' || stage === 'proposal'
+      stage === 'pending'
         ? new Date(now.getFullYear(), now.getMonth() + (i % 3 === 0 ? 1 : 0), 5 + (i % 20))
         : null
 
@@ -119,26 +124,25 @@ async function main() {
         effort: pick(QUALITY_LEVELS, i + 2),
         quality: pick(QUALITY_LEVELS, i),
         type,
+        wonAt,
         onboardedAt,
         expectedCloseDate,
-        proposalSubStage,
+        pendingSubStatus,
         onboardingSubStage,
         painPoints: i % 2 === 0 ? 'Current vendor has slow settlement times and poor support SLAs.' : '',
         whatTheyWant: i % 2 === 0 ? 'Faster payouts and a dedicated account manager.' : '',
         notes:
-          stage === 'proposal'
-            ? 'Sent SOW on Monday. Waiting for legal review. Their CFO signed off on budget.'
-            : stage === 'qualified'
-              ? 'Confirmed budget cycle in Q3. They are comparing us with one competitor. Decision in 3 weeks.'
-              : stage === 'follow_up'
-                ? 'Positive second call. Asked for customer references in fintech vertical.'
-                : stage === 'contacted'
-                  ? 'Replied to cold outreach. Wants a 15-min intro call next Tuesday.'
-                  : stage === 'onboarding'
-                    ? 'Signed 12-month contract at ₹40L ARR. Onboarding kicked off.'
-                    : stage === 'lost'
-                      ? 'Chose competitor on price. Keep warm for next year renewal cycle.'
-                      : 'Imported via website form. Has not been contacted yet.',
+          stage === 'pending'
+            ? pendingSubStatus === 'pending_merchant'
+              ? 'Sent onboarding docs — waiting on the merchant to sign and return.'
+              : pendingSubStatus === 'pending_psp'
+                ? 'With the PSP for underwriting review. Following up weekly.'
+                : 'Had a good intro call. Our turn to send the proposal.'
+            : stage === 'onboarding'
+              ? 'Signed 12-month contract at ₹40L ARR. Onboarding kicked off.'
+              : stage === 'not_interested'
+                ? 'Chose competitor on price. Keep warm for next year renewal cycle.'
+                : 'Imported via website form. Has not been contacted yet.',
         createdAt,
         updatedAt: lastActivityAt,
         lastActivityAt,

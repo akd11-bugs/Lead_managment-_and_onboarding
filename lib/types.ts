@@ -1,16 +1,27 @@
 // Shared types for LRM_blu
 // Mirrors Prisma models but stays UI-friendly (Date objects, enums).
 
-export type Stage = 'new' | 'contacted' | 'follow_up' | 'qualified' | 'proposal' | 'onboarding' | 'lost'
+// New → Pending (whoever's turn it is to act) → Onboarding (won) or Not
+// Interested (lost, reason required). Replaces a longer Contacted/Follow Up/
+// Qualified/Proposal/Lost pipeline that didn't match how leads actually move
+// — most of a lead's life is spent waiting on someone, and only two outcomes
+// matter in the end.
+export type Stage = 'new' | 'pending' | 'onboarding' | 'not_interested'
 
 export type LeadSource = 'website' | 'referral' | 'linkedin' | 'cold_outreach' | 'event' | 'other'
 
-// 'onboarding_step' is written server-side only (app/api/leads/[id]/route.ts,
-// on every onboardingSubStage change) — never user-selectable in the manual
-// activity form. Its description always ends with `(<subStageValue>)`, e.g.
-// "(final_onboarded)" — the Reports page's "Onboarded" metric filters on
-// that exact suffix, so keep both in sync if this format ever changes.
-export type ActivityType = 'call' | 'email' | 'meeting' | 'note' | 'onboarding_step'
+// 'onboarding_step' and 'stage_change' are written server-side only (never
+// user-selectable in the manual activity form):
+// - 'onboarding_step' — app/api/leads/[id]/route.ts, on every
+//   onboardingSubStage change. Its description always ends with
+//   `(<subStageValue>)`, e.g. "(final_onboarded)" — the Reports page's
+//   "Onboarded" metric filters on that exact suffix, so keep both in sync if
+//   this format ever changes.
+// - 'stage_change' — lib/leadStage.ts, on every stage or pendingSubStatus
+//   change. Its description is exactly the remark the user typed (the "what
+//   happened on this call" note), and doubles as the required reason when
+//   the new stage is 'not_interested'.
+export type ActivityType = 'call' | 'email' | 'meeting' | 'note' | 'onboarding_step' | 'stage_change'
 
 export type QualityLevel = 'low' | 'medium' | 'high'
 
@@ -18,7 +29,10 @@ export type LeadType = 'partner' | 'merchant'
 
 export type BusinessType = 'b2b' | 'b2c'
 
-export type ProposalSubStage = 'commercial_agreed' | 'agreement_shared' | 'agreement_done'
+// Only meaningful when stage === 'pending'. Freely switchable in either
+// direction (not a sequential checklist) — it just records whose turn it is
+// to act next.
+export type PendingSubStatus = 'pending_ours' | 'pending_merchant' | 'pending_psp'
 
 // Won leads go straight into onboarding — there is no separate "Won" resting
 // state. Operated by the sales team for now; ops-team access comes later.
@@ -44,7 +58,7 @@ export interface Lead {
   wonAt: Date | string | null
   onboardedAt: Date | string | null
   expectedCloseDate: Date | string | null
-  proposalSubStage: ProposalSubStage | null
+  pendingSubStatus: PendingSubStatus | null
   onboardingSubStage: OnboardingSubStage | null
   painPoints: string
   whatTheyWant: string
@@ -94,26 +108,20 @@ export interface SkillRun {
 }
 
 // UI metadata for stages
-export const STAGES: Stage[] = ['new', 'contacted', 'follow_up', 'qualified', 'proposal', 'onboarding', 'lost']
+export const STAGES: Stage[] = ['new', 'pending', 'onboarding', 'not_interested']
 
 export const STAGE_LABELS: Record<Stage, string> = {
   new: 'New',
-  contacted: 'Contacted',
-  follow_up: 'Follow Up',
-  qualified: 'Qualified',
-  proposal: 'Proposal',
+  pending: 'Pending',
   onboarding: 'Onboarding',
-  lost: 'Lost',
+  not_interested: 'Not Interested',
 }
 
 export const STAGE_DESCRIPTIONS: Record<Stage, string> = {
   new: 'Just captured, not yet contacted',
-  contacted: 'First outreach done, awaiting reply',
-  follow_up: 'Needs second touch — nurture / qualify',
-  qualified: 'Budget, authority, need, timing confirmed',
-  proposal: 'Quote or SOW sent',
+  pending: 'Being worked — waiting on us, the merchant, or the PSP',
   onboarding: 'Closed-won — document & PSP verification in progress',
-  lost: 'Closed-lost',
+  not_interested: 'Closed-lost, with a stated reason',
 }
 
 export const SOURCE_LABELS: Record<LeadSource, string> = {
@@ -156,13 +164,14 @@ export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
   b2c: 'B2C',
 }
 
-// Only meaningful when stage === 'proposal'
-export const PROPOSAL_SUB_STAGES: ProposalSubStage[] = ['commercial_agreed', 'agreement_shared', 'agreement_done']
+// Only meaningful when stage === 'pending'. Not sequential — any value can
+// switch to any other.
+export const PENDING_SUB_STATUSES: PendingSubStatus[] = ['pending_ours', 'pending_merchant', 'pending_psp']
 
-export const PROPOSAL_SUB_STAGE_LABELS: Record<ProposalSubStage, string> = {
-  commercial_agreed: 'Commercial agreed',
-  agreement_shared: 'Agreement shared',
-  agreement_done: 'Agreement done',
+export const PENDING_SUB_STATUS_LABELS: Record<PendingSubStatus, string> = {
+  pending_ours: 'Pending — our side',
+  pending_merchant: 'Pending — merchant side',
+  pending_psp: 'Pending — PSP side',
 }
 
 // Only meaningful when stage === 'onboarding'. Reaching 'final_onboarded' is
@@ -200,7 +209,7 @@ export function validateLeadFields(body: Record<string, unknown>): string | null
   if (body.quality !== undefined && !QUALITY_LEVELS.includes(body.quality as QualityLevel)) return `Invalid quality: ${body.quality}`
   if (body.effort !== undefined && !QUALITY_LEVELS.includes(body.effort as QualityLevel)) return `Invalid effort: ${body.effort}`
   if (body.businessType != null && !BUSINESS_TYPES.includes(body.businessType as BusinessType)) return `Invalid businessType: ${body.businessType}`
-  if (body.proposalSubStage != null && !PROPOSAL_SUB_STAGES.includes(body.proposalSubStage as ProposalSubStage)) return `Invalid proposalSubStage: ${body.proposalSubStage}`
+  if (body.pendingSubStatus != null && !PENDING_SUB_STATUSES.includes(body.pendingSubStatus as PendingSubStatus)) return `Invalid pendingSubStatus: ${body.pendingSubStatus}`
   if (body.onboardingSubStage != null && !ONBOARDING_SUB_STAGES.includes(body.onboardingSubStage as OnboardingSubStage)) return `Invalid onboardingSubStage: ${body.onboardingSubStage}`
   if (body.estimatedVolume !== undefined && !Number.isFinite(Number(body.estimatedVolume))) {
     return `Invalid estimatedVolume: ${body.estimatedVolume}`

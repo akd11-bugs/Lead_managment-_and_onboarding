@@ -34,11 +34,11 @@ export default async function DashboardPage() {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
   })
   const openPipelineValue = leads
-    .filter((l) => l.stage !== 'onboarding' && l.stage !== 'lost')
+    .filter((l) => l.stage !== 'onboarding' && l.stage !== 'not_interested')
     .reduce((sum, l) => sum + l.estimatedVolume, 0)
   const wonValueThisMonth = wonThisMonth.reduce((sum, l) => sum + l.estimatedVolume, 0)
   const closedWon = leads.filter((l) => l.stage === 'onboarding').length
-  const closedLost = leads.filter((l) => l.stage === 'lost').length
+  const closedLost = leads.filter((l) => l.stage === 'not_interested').length
   // Counts as soon as sales marks a lead won (stage === 'onboarding'), not
   // only once ops finishes the sub-pipeline and onboardedAt is set.
   const conversionRate = totalLeads > 0 ? Math.round((closedWon / totalLeads) * 100) : 0
@@ -62,9 +62,9 @@ export default async function DashboardPage() {
   for (const lead of leads) {
     const cur = byOwner.get(lead.ownerName) ?? { openValue: 0, totalLeads: 0, won: 0, lost: 0 }
     cur.totalLeads++
-    if (lead.stage !== 'onboarding' && lead.stage !== 'lost') cur.openValue += lead.estimatedVolume
+    if (lead.stage !== 'onboarding' && lead.stage !== 'not_interested') cur.openValue += lead.estimatedVolume
     if (lead.stage === 'onboarding') cur.won++
-    if (lead.stage === 'lost') cur.lost++
+    if (lead.stage === 'not_interested') cur.lost++
     byOwner.set(lead.ownerName, cur)
   }
   const repPerformance: RepPerformanceRow[] = Array.from(byOwner.entries())
@@ -84,7 +84,7 @@ export default async function DashboardPage() {
     cur.value += lead.estimatedVolume
     cur.count++
     if (lead.stage === 'onboarding') cur.won++
-    if (lead.stage === 'lost') cur.lost++
+    if (lead.stage === 'not_interested') cur.lost++
     bySource.set(source, cur)
   }
   const sourceROI: SourceROIRow[] = Array.from(bySource.entries())
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
         <CurrencyTile
           label="Open pipeline"
           value={openPipelineValue}
-          hint={`${leads.filter((l) => l.stage !== 'onboarding' && l.stage !== 'lost').length} open leads`}
+          hint={`${leads.filter((l) => l.stage !== 'onboarding' && l.stage !== 'not_interested').length} open leads`}
           icon={<DollarSign className="h-4 w-4" />}
           href="/leads?filter=open-pipeline"
         />

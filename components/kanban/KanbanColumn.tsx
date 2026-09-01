@@ -14,12 +14,9 @@ interface KanbanColumnProps {
 
 const STAGE_HEX: Record<Stage, string> = {
   new: '#64748b',
-  contacted: '#3b82f6',
-  follow_up: '#f59e0b',
-  qualified: '#8b5cf6',
-  proposal: '#ec4899',
+  pending: '#f59e0b',
   onboarding: '#10b981',
-  lost: '#f43f5e',
+  not_interested: '#f43f5e',
 }
 
 export function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
@@ -29,6 +26,21 @@ export function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
   })
 
   const totalValue = leads.reduce((sum, l) => sum + l.estimatedVolume, 0)
+
+  // Sub-status breakdown, shown only on the Pending column — this is what
+  // makes "pending and its sub-stages" legible on the board, since Pending
+  // is a single column rather than three.
+  const pendingBreakdown =
+    stage === 'pending'
+      ? ([
+          ['pending_ours', 'Ours'],
+          ['pending_merchant', 'Merchant'],
+          ['pending_psp', 'PSP'],
+        ] as const).map(([key, short]) => ({
+          short,
+          count: leads.filter((l) => (l.pendingSubStatus ?? 'pending_ours') === key).length,
+        }))
+      : null
 
   return (
     <div className="w-72 shrink-0">
@@ -48,6 +60,16 @@ export function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
       <p className="px-1 mb-2 text-[11px] text-muted-foreground line-clamp-1">
         {STAGE_DESCRIPTIONS[stage]}
       </p>
+      {pendingBreakdown && (
+        <p className="px-1 mb-2 text-[11px] text-muted-foreground">
+          {pendingBreakdown.map((b, i) => (
+            <span key={b.short}>
+              {i > 0 && ' · '}
+              {b.count} {b.short}
+            </span>
+          ))}
+        </p>
+      )}
       <div
         ref={setNodeRef}
         className={cn(
