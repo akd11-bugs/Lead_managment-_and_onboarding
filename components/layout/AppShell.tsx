@@ -6,6 +6,11 @@ import { TopBar } from './TopBar'
 import type { SessionUser } from '@/lib/session'
 
 // The login page renders standalone — no nav shell around a sign-in form.
+// /rep is the separate PIN-authenticated rep form — it must never show the
+// dashboard shell, even for someone who also happens to be logged into the
+// dashboard in the same browser (an admin testing it, for instance). Reps
+// themselves never have a NextAuth session at all, but that alone isn't
+// enough to guarantee isolation, so this checks the path explicitly.
 export function AppShell({
   user,
   signOutButton,
@@ -16,7 +21,7 @@ export function AppShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  if (pathname === '/login' || !user) {
+  if (pathname === '/login' || pathname === '/rep' || !user) {
     return <>{children}</>
   }
   return (
