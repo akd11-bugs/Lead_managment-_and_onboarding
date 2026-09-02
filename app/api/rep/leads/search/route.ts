@@ -11,7 +11,18 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const q = url.searchParams.get('q')?.trim() ?? ''
-  if (q.length < 2) return NextResponse.json({ leads: [] })
+
+  // No search yet — show the rep's freshest leads instead of a blank screen,
+  // so there's always something to work from.
+  if (q.length < 2) {
+    const leads = await prisma.lead.findMany({
+      where: { ...leadScope(user), stage: 'new' },
+      select: { id: true, company: true, poc: true, stage: true, pendingSubStatus: true },
+      take: 30,
+      orderBy: { createdAt: 'desc' },
+    })
+    return NextResponse.json({ leads, isFresh: true })
+  }
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -27,5 +38,5 @@ export async function GET(req: Request) {
     orderBy: { lastActivityAt: 'desc' },
   })
 
-  return NextResponse.json({ leads })
+  return NextResponse.json({ leads, isFresh: false })
 }

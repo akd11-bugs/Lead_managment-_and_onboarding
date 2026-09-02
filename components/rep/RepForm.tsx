@@ -14,7 +14,22 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2, LogOut, Search, ArrowLeft, CheckCircle2 } from 'lucide-react'
-import { BOARD_COLUMNS, BOARD_COLUMN_LABELS, boardColumnFor, boardColumnToInput, type BoardColumnKey, type PendingSubStatus } from '@/lib/types'
+import {
+  BOARD_COLUMNS,
+  BOARD_COLUMN_LABELS,
+  boardColumnFor,
+  boardColumnToInput,
+  SOURCE_LABELS,
+  LEAD_TYPE_LABELS,
+  QUALITY_LABELS,
+  BUSINESS_TYPE_LABELS,
+  type BoardColumnKey,
+  type PendingSubStatus,
+  type LeadSource,
+  type LeadType,
+  type QualityLevel,
+  type BusinessType,
+} from '@/lib/types'
 
 interface LeadSummary {
   id: string
@@ -27,8 +42,25 @@ interface LeadSummary {
 interface LeadDetail extends LeadSummary {
   email: string
   phone: string | null
+  website: string | null
+  industry: string | null
+  businessType: BusinessType | null
+  source: LeadSource
+  type: LeadType
+  quality: QualityLevel
+  effort: string
+  estimatedVolume: number
+  ownerName: string
+  expectedCloseDate: string | null
+  painPoints: string
+  whatTheyWant: string
   notes: string
+  createdAt: string
   activities: { id: string; type: string; description: string; authorName: string; date: string }[]
+}
+
+function formatCurrency(n: number) {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n)
 }
 
 export function RepForm() {
@@ -40,6 +72,7 @@ export function RepForm() {
 
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<LeadSummary[]>([])
+  const [isFresh, setIsFresh] = useState(true)
   const [searching, setSearching] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -53,29 +86,33 @@ export function RepForm() {
   const [savingRemark, setSavingRemark] = useState(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (query.trim().length < 2) {
-      return
-    }
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const res = await fetch(`/api/rep/leads/search?q=${encodeURIComponent(query.trim())}`)
-        if (res.status === 401) {
-          setLoggedIn(false)
-          return
-        }
-        const data = await res.json()
-        setResults(data.leads ?? [])
-      } finally {
-        setSearching(false)
+  async function runSearch(q: string) {
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/rep/leads/search?q=${encodeURIComponent(q)}`)
+      if (res.status === 401) {
+        setLoggedIn(false)
+        return
       }
-    }, 300)
+      const data = await res.json()
+      setResults(data.leads ?? [])
+      setIsFresh(data.isFresh ?? false)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  // Runs on login (loads the default "fresh leads" browse list) and on every
+  // query change — an empty query re-fetches that same fresh-leads list.
+  useEffect(() => {
+    if (!loggedIn) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const q = query.trim()
+    debounceRef.current = setTimeout(() => runSearch(q), q.length < 2 ? 0 : 300)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [query])
+  }, [loggedIn, query])
 
   async function handleLogin() {
     setLoggingIn(true)
@@ -103,6 +140,7 @@ export function RepForm() {
     setLoggedIn(false)
     setSelected(null)
     setResults([])
+    setIsFresh(true)
     setQuery('')
   }
 
@@ -225,7 +263,79 @@ export function RepForm() {
           <h2 className="text-lg font-semibold">{selected.company}</h2>
           <p className="text-sm text-muted-foreground">{selected.poc || '—'} · {selected.email}</p>
           {selected.phone && <p className="text-sm text-muted-foreground">{selected.phone}</p>}
+          {selected.website && (
+            <a href={selected.website} target="_blank" rel="noreferrer" className="text-sm text-primary underline underline-offset-2">
+              {selected.website}
+            </a>
+          )}
         </div>
+
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-md border p-3 text-sm">
+          <div>
+            <p className="text-[11px] text-muted-foreground">Industry</p>
+            <p>{selected.industry || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Business type</p>
+            <p>{selected.businessType ? BUSINESS_TYPE_LABELS[selected.businessType] : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Source</p>
+            <p>{SOURCE_LABELS[selected.source]}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Type</p>
+            <p>{LEAD_TYPE_LABELS[selected.type]}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Quality</p>
+            <p>{QUALITY_LABELS[selected.quality]}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Effort</p>
+            <p className="capitalize">{selected.effort}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Est. volume</p>
+            <p>{formatCurrency(selected.estimatedVolume)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Owner</p>
+            <p>{selected.ownerName}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Expected close</p>
+            <p>{selected.expectedCloseDate ? new Date(selected.expectedCloseDate).toLocaleDateString() : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Created</p>
+            <p>{new Date(selected.createdAt).toLocaleDateString()}</p>
+          </div>
+        </div>
+
+        {(selected.painPoints || selected.whatTheyWant) && (
+          <div className="space-y-2">
+            {selected.painPoints && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Pain points</p>
+                <p className="text-sm whitespace-pre-wrap">{selected.painPoints}</p>
+              </div>
+            )}
+            {selected.whatTheyWant && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">What they want</p>
+                <p className="text-sm whitespace-pre-wrap">{selected.whatTheyWant}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {selected.notes && (
+          <div>
+            <p className="text-[11px] text-muted-foreground">Notes</p>
+            <p className="text-sm whitespace-pre-wrap">{selected.notes}</p>
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <Label className="text-xs">Stage</Label>
@@ -313,9 +423,12 @@ export function RepForm() {
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
+      {isFresh && results.length > 0 && (
+        <p className="text-xs text-muted-foreground">Your {results.length} newest leads — search above to find something else.</p>
+      )}
       {searching && <Loader2 className="h-4 w-4 animate-spin mx-auto" />}
       <div className="space-y-1.5">
-        {(query.trim().length < 2 ? [] : results).map((lead) => (
+        {results.map((lead) => (
           <button
             key={lead.id}
             className="w-full text-left rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
@@ -327,8 +440,11 @@ export function RepForm() {
             </p>
           </button>
         ))}
-        {query.trim().length >= 2 && !searching && results.length === 0 && (
+        {!isFresh && !searching && results.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-4">No matching leads.</p>
+        )}
+        {isFresh && !searching && results.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No leads yet — search above once you have one.</p>
         )}
       </div>
     </div>
