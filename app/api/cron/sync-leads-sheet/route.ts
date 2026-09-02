@@ -13,18 +13,6 @@ const OWNER_SYNONYMS = ['owner', 'assigned to', 'sales rep', 'owner email', 'ass
 // app/api/external/reports/route.ts, no browser session involved.
 export async function POST(req: Request) {
   const expectedKey = process.env.CRON_SYNC_API_KEY
-  // TEMPORARY — diagnosing a 503 that persists despite the var being set on
-  // Render. Logs presence/length only, never the value. Remove after use.
-  console.log(
-    '[sync-leads-sheet debug]',
-    JSON.stringify({
-      hasKey: !!expectedKey,
-      keyLength: expectedKey?.length ?? 0,
-      nodeEnv: process.env.NODE_ENV,
-      hasSheetId: !!process.env.LEADS_SHEET_ID,
-      hasDefaultOwner: !!process.env.SHEET_IMPORT_DEFAULT_OWNER_EMAIL,
-    }),
-  )
   if (!expectedKey) {
     return NextResponse.json({ error: 'Sheet sync is not configured' }, { status: 503 })
   }

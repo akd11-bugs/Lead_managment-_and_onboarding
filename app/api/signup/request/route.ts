@@ -3,26 +3,49 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import { readJsonBody } from '@/lib/http'
+import { isValidEmail } from '@/lib/types'
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
 const TOKEN_TTL_MS = 30 * 60 * 1000
+// Blocks re-sending to the same address faster than this — the actual abuse
+// this stops is one person (or a script) flooding someone else's inbox with
+// signup links, not a legitimate user who mistyped and wants to retry.
+const RESEND_COOLDOWN_MS = 2 * 60 * 1000
 
 // Public route — no requireApiUser(). Anyone can ask for a signup link;
 // they still land as a 'pending' account with no access until an admin
 // approves them from Organisation. Excluded from proxy.ts's auth wall.
 export async function POST(req: Request) {
+  const ip = getClientIp(req)
+  const rateLimit = checkRateLimit(`signup-request:${ip}`, 5, 60 * 60 * 1000)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many attempts — try again later' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } },
+    )
+  }
+
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
   const email = String(body.email ?? '').trim().toLowerCase()
 
-  if (!email || !email.includes('@')) {
+  if (!email || !isValidEmail(email)) {
     return NextResponse.json({ error: 'A valid email is required' }, { status: 400 })
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email } })
   if (existingUser) {
     return NextResponse.json({ error: 'That email is already registered — log in instead' }, { status: 409 })
+  }
+
+  const recentToken = await prisma.signupToken.findFirst({
+    where: { email, createdAt: { gte: new Date(Date.now() - RESEND_COOLDOWN_MS) } },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (recentToken) {
+    return NextResponse.json({ error: 'A signup link was already sent — check your inbox, or wait a couple of minutes to request another' }, { status: 429 })
   }
 
   const token = crypto.randomBytes(32).toString('base64url')

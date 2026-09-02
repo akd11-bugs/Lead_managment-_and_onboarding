@@ -3,13 +3,27 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
 import { readJsonBody } from '@/lib/http'
+import { isValidEmail } from '@/lib/types'
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
 // Public route — no requireApiUser(). Anyone with a valid, still-pending
 // invite code can redeem it into a real account. Excluded from proxy.ts's
-// auth wall (see the matcher there).
+// auth wall (see the matcher there). The code itself has ~48 bits of entropy
+// (see app/api/invites/route.ts) so isn't practically brute-forceable today,
+// but there was previously nothing at all rate-limiting guesses against it —
+// this is defense-in-depth in case that entropy is ever reduced.
 export async function POST(req: Request) {
+  const ip = getClientIp(req)
+  const rateLimit = checkRateLimit(`invite-redeem:${ip}`, 20, 15 * 60 * 1000)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many attempts — try again later' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } },
+    )
+  }
+
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
   const code = String(body.code ?? '').trim()
@@ -18,6 +32,9 @@ export async function POST(req: Request) {
 
   if (!code || !email || !password) {
     return NextResponse.json({ error: 'code, email, and password are required' }, { status: 400 })
+  }
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: 'A valid email is required' }, { status: 400 })
   }
   if (password.length < 8) {
     return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })

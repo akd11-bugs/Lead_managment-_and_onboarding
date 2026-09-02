@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { authConfig } from '@/lib/auth.config'
 import { logAudit } from '@/lib/audit'
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
 
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MS = 15 * 60 * 1000
@@ -36,7 +37,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: 'Email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        // On top of the per-account lockout below — catches an attacker
+        // sweeping many different emails from one IP, which a per-account
+        // counter alone can't.
+        const ip = getClientIp(request)
+        const rateLimit = checkRateLimit(`dashboard-login:${ip}`, 20, 15 * 60 * 1000)
+        if (!rateLimit.allowed) return null
+
         const email = String(credentials?.email ?? '').trim().toLowerCase()
         const password = String(credentials?.password ?? '')
         if (!email || !password) return null

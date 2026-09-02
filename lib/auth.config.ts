@@ -5,7 +5,13 @@ import type { NextAuthConfig } from 'next-auth'
 // lib/auth.ts for everything else (API routes, server components).
 export const authConfig: NextAuthConfig = {
   pages: { signIn: '/login' },
-  session: { strategy: 'jwt' },
+  // Short-lived on purpose: the JWT session is never re-checked against the
+  // database (unlike the separate rep_session, which re-reads the User row
+  // on every request), so a deactivated account or a changed role would
+  // otherwise stay valid for however long the session lasts. 4h caps that
+  // exposure instead of the framework's 30-day default, at the cost of
+  // reps/admins needing to re-log-in more often.
+  session: { strategy: 'jwt', maxAge: 4 * 60 * 60 },
   // Render (and most non-Vercel hosts) sit behind a reverse proxy, so the
   // Host header isn't the one NextAuth would otherwise verify against.
   trustHost: true,

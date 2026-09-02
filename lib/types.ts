@@ -253,6 +253,30 @@ export function isValidWebsite(value: string): boolean {
   return WEBSITE_PATTERN.test(value.trim())
 }
 
+// Deliberately simple (no full RFC 5322 parsing) — this is a sanity check
+// against garbage input, not a mailbox-existence guarantee.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export function isValidEmail(value: string): boolean {
+  return EMAIL_PATTERN.test(value.trim())
+}
+
+// A ceiling on free-text fields — not tuned precisely, just enough to stop
+// a multi-megabyte string from ever reaching the database on a field that
+// should only ever hold a name, a note, or a phone number.
+const FIELD_MAX_LENGTHS: Record<string, number> = {
+  company: 200,
+  poc: 200,
+  email: 254,
+  phone: 40,
+  website: 500,
+  industry: 100,
+  ownerName: 200,
+  notes: 10000,
+  painPoints: 5000,
+  whatTheyWant: 5000,
+}
+
 // Validates enum-like Lead fields present in a request body against the
 // arrays above. Returns an error message, or null if everything present is
 // valid. Fields absent from the body are left untouched (PATCH semantics).
@@ -270,6 +294,15 @@ export function validateLeadFields(body: Record<string, unknown>): string | null
   }
   if (body.website != null && body.website !== '' && !isValidWebsite(String(body.website))) {
     return `Invalid website: ${body.website}`
+  }
+  if (body.email != null && body.email !== '' && !isValidEmail(String(body.email))) {
+    return `Invalid email: ${body.email}`
+  }
+  for (const [field, max] of Object.entries(FIELD_MAX_LENGTHS)) {
+    const value = body[field]
+    if (typeof value === 'string' && value.length > max) {
+      return `${field} is too long (max ${max} characters)`
+    }
   }
   return null
 }

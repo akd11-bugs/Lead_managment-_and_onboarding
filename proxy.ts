@@ -24,6 +24,22 @@ export default auth((req) => {
   // everything except this one page until an admin approves them.
   const isPending = req.auth?.user?.role === 'pending'
 
+  // Defense-in-depth beyond the session cookie's own sameSite=lax setting
+  // (which already blocks the cookie from riding along on a genuine
+  // cross-site request): reject a state-changing API call whose Origin
+  // header doesn't match this host. A same-origin fetch always sends
+  // Origin on POST/PATCH/PUT/DELETE, so this never blocks legitimate
+  // in-app requests — only ones missing Origin entirely (rare, and left
+  // alone rather than risk breaking some legitimate caller) pass through.
+  const isStateChangingApiCall =
+    pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+  if (isStateChangingApiCall) {
+    const origin = req.headers.get('origin')
+    if (origin && new URL(origin).host !== req.nextUrl.host) {
+      return NextResponse.json({ error: 'Cross-origin request blocked' }, { status: 403 })
+    }
+  }
+
   if (!isLoggedIn && !isPublicPage) {
     const url = new URL('/login', req.nextUrl.origin)
     url.searchParams.set('from', pathname)
