@@ -26,14 +26,16 @@ import { Textarea } from '@/components/ui/textarea'
 import { SavedViewsMenu, type LeadViewFilters } from '@/components/leads/SavedViewsMenu'
 import { formatCurrency, formatRelative, cn } from '@/lib/utils'
 import {
-  STAGES,
-  STAGE_LABELS,
+  BOARD_COLUMNS,
+  BOARD_COLUMN_LABELS,
+  boardColumnFor,
+  boardColumnToInput,
   SOURCES,
   SOURCE_LABELS,
   QUALITY_LABELS,
   QUALITY_RANK,
   type Lead,
-  type Stage,
+  type BoardColumnKey,
   type LeadSource,
   type QualityLevel,
 } from '@/lib/types'
@@ -70,11 +72,11 @@ export function LeadsTable({
 }) {
   const router = useRouter()
   const [search, setSearch] = useState(initialQuery ?? '')
-  const [stageFilter, setStageFilter] = useState<Stage | 'all'>('all')
+  const [stageFilter, setStageFilter] = useState<BoardColumnKey | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<LeadSource | 'all'>('all')
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [bulkStage, setBulkStage] = useState<Stage | ''>('')
+  const [bulkStage, setBulkStage] = useState<BoardColumnKey | ''>('')
   const [bulkOwnerId, setBulkOwnerId] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
@@ -84,7 +86,7 @@ export function LeadsTable({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const rows = initialLeads.filter((l) => {
-      if (stageFilter !== 'all' && l.stage !== stageFilter) return false
+      if (stageFilter !== 'all' && boardColumnFor(l) !== stageFilter) return false
       if (sourceFilter !== 'all' && l.source !== sourceFilter) return false
       if (q && !(`${l.company} ${l.poc ?? ''} ${l.email} ${l.industry ?? ''}`.toLowerCase().includes(q))) return false
       return true
@@ -96,7 +98,7 @@ export function LeadsTable({
     } else if (sortKey === 'quality') {
       sorted.sort((a, b) => QUALITY_RANK[b.quality] - QUALITY_RANK[a.quality])
     } else if (sortKey === 'stage') {
-      sorted.sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage))
+      sorted.sort((a, b) => BOARD_COLUMNS.indexOf(boardColumnFor(a)) - BOARD_COLUMNS.indexOf(boardColumnFor(b)))
     }
     return sorted
   }, [initialLeads, search, stageFilter, sourceFilter, sortKey])
@@ -137,7 +139,7 @@ export function LeadsTable({
         body: JSON.stringify({
           leadIds: Array.from(selected),
           action,
-          ...(action === 'stage' && { stage: bulkStage, remark }),
+          ...(action === 'stage' && bulkStage && { ...boardColumnToInput(bulkStage), remark }),
           ...(action === 'reassign' && { ownerId: owner?.id }),
         }),
       })
@@ -178,15 +180,15 @@ export function LeadsTable({
             className="pl-9 h-9"
           />
         </div>
-        <Select value={stageFilter} onValueChange={(v) => setStageFilter(v as Stage | 'all')}>
+        <Select value={stageFilter} onValueChange={(v) => setStageFilter(v as BoardColumnKey | 'all')}>
           <SelectTrigger className="h-9 w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All stages</SelectItem>
-            {STAGES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {STAGE_LABELS[s]}
+            {BOARD_COLUMNS.map((c) => (
+              <SelectItem key={c} value={c}>
+                {BOARD_COLUMN_LABELS[c]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -220,7 +222,7 @@ export function LeadsTable({
           filters={{ search, stageFilter, sourceFilter, sortKey }}
           onApply={(v: LeadViewFilters) => {
             setSearch(v.search)
-            setStageFilter((STAGES as string[]).includes(v.stageFilter) ? (v.stageFilter as Stage) : 'all')
+            setStageFilter((BOARD_COLUMNS as string[]).includes(v.stageFilter) ? (v.stageFilter as BoardColumnKey) : 'all')
             setSourceFilter((SOURCES as string[]).includes(v.sourceFilter) ? (v.sourceFilter as LeadSource) : 'all')
             setSortKey((Object.keys(SORT_LABELS) as string[]).includes(v.sortKey) ? (v.sortKey as SortKey) : 'date')
           }}
@@ -233,14 +235,14 @@ export function LeadsTable({
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-accent/40 px-3 py-2">
           <span className="text-sm font-medium">{selected.size} selected</span>
-          <Select value={bulkStage} onValueChange={(v) => setBulkStage(v as Stage)}>
+          <Select value={bulkStage} onValueChange={(v) => setBulkStage(v as BoardColumnKey)}>
             <SelectTrigger className="h-8 w-40">
               <SelectValue placeholder="Move to stage…" />
             </SelectTrigger>
             <SelectContent>
-              {STAGES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STAGE_LABELS[s]}
+              {BOARD_COLUMNS.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {BOARD_COLUMN_LABELS[c]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -317,7 +319,7 @@ export function LeadsTable({
                   </Link>
                 </td>
                 <td className="px-3 py-2 hidden md:table-cell">
-                  <Badge variant="outline">{STAGE_LABELS[l.stage as Stage]}</Badge>
+                  <Badge variant="outline">{BOARD_COLUMN_LABELS[boardColumnFor(l)]}</Badge>
                 </td>
                 <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">
                   {SOURCE_LABELS[l.source as LeadSource] ?? l.source}
@@ -346,7 +348,7 @@ export function LeadsTable({
       <Dialog open={bulkRemarkOpen} onOpenChange={(o) => { setBulkRemarkOpen(o); if (!o) setBulkRemark('') }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Move {selected.size} lead{selected.size === 1 ? '' : 's'} to {bulkStage ? STAGE_LABELS[bulkStage] : ''}</DialogTitle>
+            <DialogTitle>Move {selected.size} lead{selected.size === 1 ? '' : 's'} to {bulkStage ? BOARD_COLUMN_LABELS[bulkStage] : ''}</DialogTitle>
             <DialogDescription>
               One remark, logged identically to every selected lead&apos;s activity timeline.
             </DialogDescription>

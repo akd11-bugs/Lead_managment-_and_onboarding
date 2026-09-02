@@ -174,6 +174,60 @@ export const PENDING_SUB_STATUS_LABELS: Record<PendingSubStatus, string> = {
   pending_psp: 'Pending — PSP side',
 }
 
+// A "board column" is the actual unit Kanban, the Leads filter, and every
+// stage-picking dropdown work in — it's `Stage` with 'pending' expanded into
+// its three sub-statuses (which is why a PendingSubStatus value is also a
+// valid BoardColumnKey; the string sets don't overlap with the other
+// stages). This is a pure UI/selection concept — the database only ever
+// stores `stage` + `pendingSubStatus` separately.
+export type BoardColumnKey = 'new' | PendingSubStatus | 'onboarding' | 'not_interested'
+
+export const BOARD_COLUMNS: BoardColumnKey[] = [
+  'new',
+  'pending_ours',
+  'pending_merchant',
+  'pending_psp',
+  'onboarding',
+  'not_interested',
+]
+
+export const BOARD_COLUMN_LABELS: Record<BoardColumnKey, string> = {
+  new: 'New',
+  pending_ours: 'Pending — Our Side',
+  pending_merchant: 'Pending — Merchant',
+  pending_psp: 'Pending — PSP',
+  onboarding: 'Onboarding',
+  not_interested: 'Not Interested',
+}
+
+export const BOARD_COLUMN_DESCRIPTIONS: Record<BoardColumnKey, string> = {
+  new: 'Just captured, not yet contacted',
+  pending_ours: 'Our turn to follow up',
+  pending_merchant: 'Waiting on the merchant to act',
+  pending_psp: 'Waiting on the PSP to act',
+  onboarding: 'Closed-won — document & PSP verification in progress',
+  not_interested: 'Closed-lost, with a stated reason',
+}
+
+// Where a lead currently sits, expanded to sub-column granularity.
+export function boardColumnFor(lead: { stage: string; pendingSubStatus?: string | null }): BoardColumnKey {
+  if (lead.stage === 'pending') {
+    return (lead.pendingSubStatus as BoardColumnKey) || 'pending_ours'
+  }
+  return lead.stage as BoardColumnKey
+}
+
+// Reverse mapping — what to PATCH to move a lead into this column. Always
+// includes `stage` (harmless if unchanged) so a single call can move a lead
+// from any column to any other, including New straight into a specific
+// pending sub-status, in one request.
+export function boardColumnToInput(column: BoardColumnKey): { stage: Stage; pendingSubStatus?: PendingSubStatus } {
+  if ((PENDING_SUB_STATUSES as string[]).includes(column)) {
+    return { stage: 'pending', pendingSubStatus: column as PendingSubStatus }
+  }
+  return { stage: column as Stage }
+}
+
 // Only meaningful when stage === 'onboarding'. Reaching 'final_onboarded' is
 // what sets Lead.onboardedAt.
 export const ONBOARDING_SUB_STAGES: OnboardingSubStage[] = [

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope, isAdmin } from '@/lib/session'
-import { validateLeadFields } from '@/lib/types'
+import { validateLeadFields, PENDING_SUB_STATUSES, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange } from '@/lib/leadStage'
 
@@ -36,12 +36,16 @@ export async function PATCH(req: Request) {
   }
 
   if (action === 'stage') {
-    const validationError = validateLeadFields({ stage: body.stage })
+    const validationError = validateLeadFields({ stage: body.stage, pendingSubStatus: body.pendingSubStatus })
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
     const remark = typeof body.remark === 'string' ? body.remark.trim() : ''
     if (!remark) {
       return NextResponse.json({ error: 'A remark is required when changing stage' }, { status: 400 })
     }
+    const pendingSubStatus =
+      body.pendingSubStatus != null && (PENDING_SUB_STATUSES as string[]).includes(body.pendingSubStatus)
+        ? (body.pendingSubStatus as PendingSubStatus)
+        : undefined
 
     const scopedLeads = await prisma.lead.findMany({
       where: { id: { in: scopedIds } },
@@ -51,7 +55,7 @@ export async function PATCH(req: Request) {
     // per lead (workflow rules, activity log); running these concurrently
     // risks interleaved writes for no real speed benefit at bulk-action scale.
     for (const lead of scopedLeads) {
-      await applyStageChange(lead.id, lead, { stage: body.stage, remark }, user)
+      await applyStageChange(lead.id, lead, { stage: body.stage, pendingSubStatus, remark }, user)
     }
 
     return NextResponse.json({

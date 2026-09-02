@@ -22,7 +22,7 @@ export async function GET(req: Request) {
         { email: { contains: q, mode: 'insensitive' } },
       ],
     },
-    select: { id: true, company: true, poc: true, stage: true },
+    select: { id: true, company: true, poc: true, stage: true, pendingSubStatus: true },
     take: 20,
     orderBy: { lastActivityAt: 'desc' },
   })

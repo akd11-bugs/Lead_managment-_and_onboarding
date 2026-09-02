@@ -14,20 +14,20 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2, LogOut, Search, ArrowLeft, CheckCircle2 } from 'lucide-react'
-import { STAGES, STAGE_LABELS, PENDING_SUB_STATUSES, PENDING_SUB_STATUS_LABELS, type Stage, type PendingSubStatus } from '@/lib/types'
+import { BOARD_COLUMNS, BOARD_COLUMN_LABELS, boardColumnFor, boardColumnToInput, type BoardColumnKey, type PendingSubStatus } from '@/lib/types'
 
 interface LeadSummary {
   id: string
   company: string
   poc: string | null
   stage: string
+  pendingSubStatus: PendingSubStatus | null
 }
 
 interface LeadDetail extends LeadSummary {
   email: string
   phone: string | null
   notes: string
-  pendingSubStatus: PendingSubStatus | null
   activities: { id: string; type: string; description: string; authorName: string; date: string }[]
 }
 
@@ -45,8 +45,7 @@ export function RepForm() {
 
   const [selected, setSelected] = useState<LeadDetail | null>(null)
   const [loadingLead, setLoadingLead] = useState(false)
-  const [stage, setStage] = useState<Stage | ''>('')
-  const [pendingSubStatus, setPendingSubStatus] = useState<PendingSubStatus | ''>('')
+  const [column, setColumn] = useState<BoardColumnKey | ''>('')
   const [stageRemark, setStageRemark] = useState('')
   const [stageError, setStageError] = useState<string | null>(null)
   const [remark, setRemark] = useState('')
@@ -118,8 +117,7 @@ export function RepForm() {
       }
       const data = await res.json()
       setSelected(data.lead)
-      setStage(data.lead.stage)
-      setPendingSubStatus(data.lead.pendingSubStatus ?? '')
+      setColumn(boardColumnFor(data.lead))
       setStageRemark('')
       setStageError(null)
       setRemark('')
@@ -129,10 +127,9 @@ export function RepForm() {
   }
 
   async function saveStage() {
-    if (!selected) return
-    const stageChanged = stage && stage !== selected.stage
-    const subStatusChanged = pendingSubStatus && pendingSubStatus !== (selected.pendingSubStatus ?? '')
-    if (!stageChanged && !subStatusChanged) return
+    if (!selected || !column) return
+    const currentColumn = boardColumnFor(selected)
+    if (column === currentColumn) return
     if (!stageRemark.trim()) {
       setStageError('A remark is required')
       return
@@ -144,11 +141,7 @@ export function RepForm() {
       const res = await fetch(`/api/rep/leads/${selected.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          ...(stageChanged && { stage }),
-          ...(subStatusChanged && { pendingSubStatus }),
-          remark: stageRemark.trim(),
-        }),
+        body: JSON.stringify({ ...boardColumnToInput(column), remark: stageRemark.trim() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -215,6 +208,7 @@ export function RepForm() {
   }
 
   if (selected) {
+    const currentColumn = boardColumnFor(selected)
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -235,42 +229,24 @@ export function RepForm() {
 
         <div className="space-y-1.5">
           <Label className="text-xs">Stage</Label>
-          <Select value={stage} onValueChange={(v) => setStage(v as Stage)}>
+          <Select value={column} onValueChange={(v) => setColumn(v as BoardColumnKey)}>
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {STAGES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STAGE_LABELS[s]}
+              {BOARD_COLUMNS.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {BOARD_COLUMN_LABELS[c]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {stage === 'pending' && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Waiting on</Label>
-            <Select value={pendingSubStatus} onValueChange={(v) => setPendingSubStatus(v as PendingSubStatus)}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PENDING_SUB_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {PENDING_SUB_STATUS_LABELS[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {(stage !== selected.stage || (pendingSubStatus || '') !== (selected.pendingSubStatus ?? '')) && (
+        {column !== currentColumn && (
           <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-3">
             <Label className="text-xs">
-              {stage === 'not_interested' ? 'Reason for marking Not Interested' : 'What happened?'}
+              {column === 'not_interested' ? 'Reason for marking Not Interested' : 'What happened?'}
             </Label>
             <Textarea
               value={stageRemark}
@@ -347,7 +323,7 @@ export function RepForm() {
           >
             <p className="font-medium">{lead.company}</p>
             <p className="text-xs text-muted-foreground">
-              {lead.poc || '—'} · <Badge variant="outline" className="text-[10px]">{STAGE_LABELS[lead.stage as Stage] ?? lead.stage}</Badge>
+              {lead.poc || '—'} · <Badge variant="outline" className="text-[10px]">{BOARD_COLUMN_LABELS[boardColumnFor(lead)]}</Badge>
             </p>
           </button>
         ))}

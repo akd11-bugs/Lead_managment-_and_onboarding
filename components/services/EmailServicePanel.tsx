@@ -167,7 +167,7 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
           leadId={selected.id}
           open={markPendingOpen}
           onOpenChange={setMarkPendingOpen}
-          target={{ kind: 'stage', stage: 'pending' }}
+          target="pending_ours"
           onDone={handleMarkPendingDone}
         />
       )}

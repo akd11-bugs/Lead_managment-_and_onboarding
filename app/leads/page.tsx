@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { LeadsTable } from '@/components/leads/LeadsTable'
 import { requireUser, leadScope, isAdmin } from '@/lib/session'
-import { STAGE_LABELS, SOURCE_LABELS, type Stage, type LeadSource } from '@/lib/types'
+import { BOARD_COLUMN_LABELS, boardColumnToInput, PENDING_SUB_STATUSES, SOURCE_LABELS, type BoardColumnKey, type LeadSource } from '@/lib/types'
 import { getRange, parseRangeKey, RANGE_LABELS, type RangeKey } from '@/lib/reportRange'
 
 export const dynamic = 'force-dynamic'
@@ -79,7 +79,17 @@ export default async function LeadsPage({
   }
   if (owner) labels.push(`Owner: ${owner}`)
   if (source) labels.push(`Source: ${SOURCE_LABELS[source as LeadSource] ?? source}`)
-  if (stage) labels.push(`Stage: ${STAGE_LABELS[stage as Stage] ?? stage}`)
+  if (stage) labels.push(`Stage: ${BOARD_COLUMN_LABELS[stage as BoardColumnKey] ?? stage}`)
+
+  // `stage` may be a plain Stage ('new', 'onboarding', 'not_interested') or a
+  // board-column pseudo-stage — one of the pending sub-statuses — coming from
+  // links generated off boardColumnFor() elsewhere (funnel charts, Kanban).
+  // boardColumnToInput() maps either back to the real {stage, pendingSubStatus}.
+  const stageWhere = stage
+    ? (PENDING_SUB_STATUSES as string[]).includes(stage)
+      ? boardColumnToInput(stage as BoardColumnKey)
+      : { stage }
+    : {}
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -88,7 +98,7 @@ export default async function LeadsPage({
       ...periodWhere,
       ...(owner ? { ownerName: owner } : {}),
       ...(source ? { source } : {}),
-      ...(stage ? { stage } : {}),
+      ...stageWhere,
     },
     orderBy: { updatedAt: 'desc' },
   })

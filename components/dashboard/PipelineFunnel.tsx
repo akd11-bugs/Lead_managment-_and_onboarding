@@ -7,18 +7,20 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, LabelL
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, cn } from '@/lib/utils'
 import { claymorphicBar } from './ClayBar'
-import type { Stage } from '@/lib/types'
-import { STAGES, STAGE_LABELS } from '@/lib/types'
+import type { BoardColumnKey } from '@/lib/types'
+import { BOARD_COLUMNS, BOARD_COLUMN_LABELS } from '@/lib/types'
 
-const STAGE_HEX: Record<Stage, string> = {
+const BOARD_COLUMN_HEX: Record<BoardColumnKey, string> = {
   new: '#64748b',
-  pending: '#f59e0b',
+  pending_ours: '#f59e0b',
+  pending_merchant: '#f97316',
+  pending_psp: '#eab308',
   onboarding: '#10b981',
   not_interested: '#f43f5e',
 }
 
 interface PipelineData {
-  stage: Stage
+  stage: BoardColumnKey
   count: number
   value: number
 }
@@ -27,9 +29,9 @@ export function PipelineFunnel({ data }: { data: PipelineData[] }) {
   const uid = useId().replace(/:/g, '')
   const router = useRouter()
   const byStage = new Map(data.map((d) => [d.stage, d]))
-  const rows = STAGES.map((s) => ({
+  const rows = BOARD_COLUMNS.map((s) => ({
     stage: s,
-    label: STAGE_LABELS[s],
+    label: BOARD_COLUMN_LABELS[s],
     count: byStage.get(s)?.count ?? 0,
     value: byStage.get(s)?.value ?? 0,
   }))
@@ -71,21 +73,21 @@ export function PipelineFunnel({ data }: { data: PipelineData[] }) {
               />
               <Bar dataKey="count" shape={claymorphicBar(uid)} cursor="pointer" onClick={(d) => router.push(`/leads?stage=${d.payload.stage}`)}>
                 {rows.map((r) => (
-                  <Cell key={r.stage} fill={STAGE_HEX[r.stage]} />
+                  <Cell key={r.stage} fill={BOARD_COLUMN_HEX[r.stage]} />
                 ))}
                 <LabelList dataKey="count" position="top" style={{ fontSize: 11, fontWeight: 600 }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="grid grid-cols-4 gap-1 mt-2 text-center">
+        <div className="grid grid-cols-6 gap-1 mt-2 text-center">
           {rows.map((r) => (
             <Link key={r.stage} href={`/leads?stage=${r.stage}`} className="text-[10px] rounded hover:bg-accent/60">
               <p className={cn('font-semibold tabular-nums')}>{formatCurrency(r.value)}</p>
             </Link>
           ))}
         </div>
-        <div className="grid grid-cols-4 gap-1 mt-1 text-center">
+        <div className="grid grid-cols-6 gap-1 mt-1 text-center">
           {rows.map((r) => (
             <Link
               key={r.stage}

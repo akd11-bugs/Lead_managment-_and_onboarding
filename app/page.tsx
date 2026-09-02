@@ -10,7 +10,7 @@ import { BDSummary, type BDSummaryData } from '@/components/dashboard/BDSummary'
 import { Users, DollarSign, Target, TrendingUp, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import type { LeadSource } from '@/lib/types'
+import { boardColumnFor, type LeadSource } from '@/lib/types'
 import { redirect } from 'next/navigation'
 import { requireUser, leadScope, isOperations } from '@/lib/session'
 
@@ -43,15 +43,16 @@ export default async function DashboardPage() {
   // only once ops finishes the sub-pipeline and onboardedAt is set.
   const conversionRate = totalLeads > 0 ? Math.round((closedWon / totalLeads) * 100) : 0
 
-  // Pipeline by stage
-  const byStage = new Map<string, { count: number; value: number }>()
+  // Pipeline by board column — Pending split into ours/merchant/PSP
+  const byColumn = new Map<string, { count: number; value: number }>()
   for (const lead of leads) {
-    const cur = byStage.get(lead.stage) ?? { count: 0, value: 0 }
+    const column = boardColumnFor(lead)
+    const cur = byColumn.get(column) ?? { count: 0, value: 0 }
     cur.count++
     cur.value += lead.estimatedVolume
-    byStage.set(lead.stage, cur)
+    byColumn.set(column, cur)
   }
-  const funnelData = Array.from(byStage.entries()).map(([stage, d]) => ({
+  const funnelData = Array.from(byColumn.entries()).map(([stage, d]) => ({
     stage: stage as any,
     count: d.count,
     value: d.value,

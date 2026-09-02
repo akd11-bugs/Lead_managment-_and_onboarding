@@ -12,16 +12,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2 } from 'lucide-react'
-import { STAGE_LABELS, PENDING_SUB_STATUS_LABELS, type Lead, type Stage, type PendingSubStatus } from '@/lib/types'
+import { BOARD_COLUMN_LABELS, boardColumnToInput, type Lead, type BoardColumnKey } from '@/lib/types'
 
 // The one path every stage / pending-sub-status change goes through —
-// reachable from a Kanban drag, a Kanban card's sub-status control, or the
-// lead detail form's Stage select — so there's exactly one implementation of
-// "change a lead's state," always producing an Activity row, never silent.
-export type StageChangeTarget =
-  | { kind: 'stage'; stage: Stage }
-  | { kind: 'pendingSubStatus'; pendingSubStatus: PendingSubStatus }
-
+// reachable from a Kanban drag or the lead detail form's Stage select — so
+// there's exactly one implementation of "change a lead's state," always
+// producing an Activity row, never silent. `target` is a board column (New /
+// Pending — Our Side / Pending — Merchant / Pending — PSP / Onboarding / Not
+// Interested), which folds stage + pendingSubStatus into one selection.
 export function StageChangeDialog({
   leadId,
   open,
@@ -32,17 +30,15 @@ export function StageChangeDialog({
   leadId: string
   open: boolean
   onOpenChange: (open: boolean) => void
-  target: StageChangeTarget
+  target: BoardColumnKey
   onDone: (lead: Lead) => void
 }) {
   const [remark, setRemark] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const isNotInterested = target.kind === 'stage' && target.stage === 'not_interested'
-  const heading =
-    target.kind === 'stage' ? `Move to ${STAGE_LABELS[target.stage]}` : `Waiting on: ${PENDING_SUB_STATUS_LABELS[target.pendingSubStatus]}`
-  const remarkLabel = isNotInterested ? 'Reason for marking Not Interested' : 'What happened?'
+  const isNotInterested = target === 'not_interested'
+  const heading = `Move to ${BOARD_COLUMN_LABELS[target]}`
 
   async function confirm() {
     const trimmed = remark.trim()
@@ -53,10 +49,7 @@ export function StageChangeDialog({
       const res = await fetch(`/api/leads/${leadId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          ...(target.kind === 'stage' ? { stage: target.stage } : { pendingSubStatus: target.pendingSubStatus }),
-          remark: trimmed,
-        }),
+        body: JSON.stringify({ ...boardColumnToInput(target), remark: trimmed }),
       })
       const data = await res.json()
       if (!res.ok) {

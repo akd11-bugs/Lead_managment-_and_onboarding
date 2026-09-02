@@ -15,7 +15,7 @@ export interface ReportsData {
   salesByRep: { name: string; created: number; won: number; activities: number }[]
   operationsOnboarded: { name: string; count: number }[]
   trend: { weekly: TrendPoint[]; monthly: TrendPoint[] }
-  funnel: { new: number; followedUp: number; qualified: number; onboarded: number; live: number }
+  funnel: { new: number; pendingOurs: number; pendingMerchant: number; pendingPsp: number; onboarded: number; live: number }
 }
 
 // Single source of truth for every number on /reports — also consumed by the
@@ -108,10 +108,9 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
     trend: { weekly: bucketTrend(weeklyBuckets), monthly: bucketTrend(monthlyBuckets) },
     funnel: {
       new: createdLeads.length,
-      followedUp: createdLeads.filter((l) => l.stage !== 'new').length,
-      // "Further along" than a fresh pending lead — the ball has moved to the
-      // merchant or PSP's court at least once, not just sitting with us.
-      qualified: createdLeads.filter((l) => l.pendingSubStatus === 'pending_merchant' || l.pendingSubStatus === 'pending_psp').length,
+      pendingOurs: createdLeads.filter((l) => l.stage === 'pending' && (l.pendingSubStatus ?? 'pending_ours') === 'pending_ours').length,
+      pendingMerchant: createdLeads.filter((l) => l.stage === 'pending' && l.pendingSubStatus === 'pending_merchant').length,
+      pendingPsp: createdLeads.filter((l) => l.stage === 'pending' && l.pendingSubStatus === 'pending_psp').length,
       onboarded: createdLeads.filter((l) => l.wonAt).length,
       live: createdLeads.filter((l) => l.onboardedAt).length,
     },

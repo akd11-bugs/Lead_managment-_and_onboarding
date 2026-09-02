@@ -36,8 +36,9 @@ import {
 } from 'lucide-react'
 import { formatCurrency, formatDate, formatDateTime, formatRelative } from '@/lib/utils'
 import {
-  STAGES,
-  STAGE_LABELS,
+  BOARD_COLUMNS,
+  BOARD_COLUMN_LABELS,
+  boardColumnFor,
   SOURCES,
   SOURCE_LABELS,
   QUALITY_LEVELS,
@@ -46,26 +47,23 @@ import {
   LEAD_TYPE_LABELS,
   BUSINESS_TYPES,
   BUSINESS_TYPE_LABELS,
-  PENDING_SUB_STATUSES,
-  PENDING_SUB_STATUS_LABELS,
   ONBOARDING_SUB_STAGE_LABELS,
   onboardingProgressPercent,
   type Lead,
   type Activity,
   type ActivityType,
-  type Stage,
+  type BoardColumnKey,
   type LeadSource,
   type QualityLevel,
   type LeadType,
   type BusinessType,
-  type PendingSubStatus,
 } from '@/lib/types'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { SKILLS } from '@/lib/skills/catalog'
 import { EmailComposer } from './EmailComposer'
 import { LeadTasksTab } from './LeadTasksTab'
-import { StageChangeDialog, type StageChangeTarget } from './StageChangeDialog'
+import { StageChangeDialog } from './StageChangeDialog'
 
 interface SkillRunEntry {
   id: string
@@ -105,7 +103,7 @@ export function LeadDetailDialog({
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
-  const [stageChangeTarget, setStageChangeTarget] = useState<StageChangeTarget | null>(null)
+  const [stageChangeTarget, setStageChangeTarget] = useState<BoardColumnKey | null>(null)
   const [activityForm, setActivityForm] = useState<{ type: ActivityType; description: string }>({
     type: 'note',
     description: '',
@@ -243,7 +241,7 @@ export function LeadDetailDialog({
                   <span>{formatCurrency(lead.estimatedVolume)}</span>
                   <span>·</span>
                   <Badge variant="outline" className="capitalize">
-                    {STAGE_LABELS[lead.stage as Stage]}
+                    {BOARD_COLUMN_LABELS[boardColumnFor(lead)]}
                   </Badge>
                 </div>
               </DialogDescription>
@@ -347,10 +345,10 @@ export function LeadDetailDialog({
               </Field>
               <Field label="Stage">
                 <Select
-                  value={lead.stage}
+                  value={boardColumnFor(lead)}
                   onValueChange={(v) => {
-                    if (v === lead.stage) return
-                    setStageChangeTarget({ kind: 'stage', stage: v as Stage })
+                    if (v === boardColumnFor(lead)) return
+                    setStageChangeTarget(v as BoardColumnKey)
                   }}
                   disabled={saving}
                 >
@@ -358,37 +356,14 @@ export function LeadDetailDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STAGES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {STAGE_LABELS[s]}
+                    {BOARD_COLUMNS.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {BOARD_COLUMN_LABELS[c]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
-              {lead.stage === 'pending' && (
-                <Field label="Waiting on">
-                  <Select
-                    value={lead.pendingSubStatus ?? 'pending_ours'}
-                    onValueChange={(v) => {
-                      if (v === lead.pendingSubStatus) return
-                      setStageChangeTarget({ kind: 'pendingSubStatus', pendingSubStatus: v as PendingSubStatus })
-                    }}
-                    disabled={saving}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PENDING_SUB_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {PENDING_SUB_STATUS_LABELS[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              )}
               <Field label="Source">
                 <Select
                   value={lead.source}
@@ -563,7 +538,7 @@ export function LeadDetailDialog({
               leadEmail={lead.email}
               isNewStage={lead.stage === 'new'}
               onSent={handleEmailSent}
-              onMarkContacted={() => setStageChangeTarget({ kind: 'stage', stage: 'pending' })}
+              onMarkContacted={() => setStageChangeTarget('pending_ours')}
             />
 
             <div className="rounded-md border p-3 space-y-2">

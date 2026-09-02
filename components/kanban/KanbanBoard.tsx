@@ -16,9 +16,9 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { KanbanColumn } from './KanbanColumn'
 import { LeadCard } from './LeadCard'
 import { LeadDetailDialog } from '@/components/leads/LeadDetailDialog'
-import { StageChangeDialog, type StageChangeTarget } from '@/components/leads/StageChangeDialog'
-import type { Lead, Stage } from '@/lib/types'
-import { STAGES } from '@/lib/types'
+import { StageChangeDialog } from '@/components/leads/StageChangeDialog'
+import type { Lead, BoardColumnKey } from '@/lib/types'
+import { BOARD_COLUMNS, boardColumnFor } from '@/lib/types'
 
 interface KanbanBoardProps {
   initialLeads: Lead[]
@@ -29,7 +29,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads)
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
   const [detailLead, setDetailLead] = useState<Lead | null>(null)
-  const [stageChange, setStageChange] = useState<{ leadId: string; target: StageChangeTarget } | null>(null)
+  const [stageChange, setStageChange] = useState<{ leadId: string; target: BoardColumnKey } | null>(null)
 
   function applyUpdatedLead(updated: Lead) {
     setLeads((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)))
@@ -45,13 +45,13 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
-  const leadsByStage = useMemo(() => {
-    const map = new Map<Stage, Lead[]>()
-    for (const stage of STAGES) {
-      map.set(stage, [])
+  const leadsByColumn = useMemo(() => {
+    const map = new Map<BoardColumnKey, Lead[]>()
+    for (const column of BOARD_COLUMNS) {
+      map.set(column, [])
     }
     for (const lead of leads) {
-      const list = map.get(lead.stage as Stage)
+      const list = map.get(boardColumnFor(lead))
       if (list) list.push(lead)
     }
     // Sort by position
@@ -72,21 +72,22 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
 
     const leadId = e.active.id as string
     const overId = e.over.id as string
-    const overData = e.over.data.current as { type?: string; stage?: Stage } | undefined
+    const overData = e.over.data.current as { type?: string; columnKey?: BoardColumnKey } | undefined
 
-    // Dropping on the column's empty area gives us the stage directly.
-    // Dropping on top of another card doesn't — resolve via that card's own stage.
-    const targetStage =
-      overData?.type === 'column' ? overData.stage : (leads.find((l) => l.id === overId)?.stage as Stage | undefined)
-
-    if (!targetStage) return
+    // Dropping on the column's empty area gives us the column directly.
+    // Dropping on top of another card doesn't — resolve via that card's own column.
     const lead = leads.find((l) => l.id === leadId)
-    if (!lead || lead.stage === targetStage) return
+    if (!lead) return
+    const overLead = leads.find((l) => l.id === overId)
+    const targetColumn = overData?.type === 'column' ? overData.columnKey : overLead ? boardColumnFor(overLead) : undefined
+
+    if (!targetColumn || boardColumnFor(lead) === targetColumn) return
 
     // No optimistic move and no direct PATCH here — a remark is required for
-    // every stage change, so this just opens the same dialog the detail form
-    // uses. The card only actually moves once that's confirmed (onDone).
-    setStageChange({ leadId, target: { kind: 'stage', stage: targetStage } })
+    // every stage/sub-status change, so this just opens the same dialog the
+    // detail form uses. The card only actually moves once that's confirmed
+    // (onDone).
+    setStageChange({ leadId, target: targetColumn })
   }
 
   return (
@@ -94,11 +95,11 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="kanban-scroll overflow-x-auto pb-4">
           <div className="flex gap-3 min-w-max">
-            {STAGES.map((stage) => {
-              const stageLeads = leadsByStage.get(stage) ?? []
+            {BOARD_COLUMNS.map((column) => {
+              const columnLeads = leadsByColumn.get(column) ?? []
               return (
-                <SortableContext key={stage} items={stageLeads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-                  <KanbanColumn stage={stage} leads={stageLeads} onCardClick={setDetailLead} />
+                <SortableContext key={column} items={columnLeads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                  <KanbanColumn columnKey={column} leads={columnLeads} onCardClick={setDetailLead} />
                 </SortableContext>
               )
             })}

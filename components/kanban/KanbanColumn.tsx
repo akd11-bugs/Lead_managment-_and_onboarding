@@ -2,45 +2,32 @@
 
 import { useDroppable } from '@dnd-kit/core'
 import { LeadCard } from './LeadCard'
-import type { Lead, Stage } from '@/lib/types'
-import { STAGE_LABELS, STAGE_DESCRIPTIONS } from '@/lib/types'
+import type { Lead, BoardColumnKey } from '@/lib/types'
+import { BOARD_COLUMN_LABELS, BOARD_COLUMN_DESCRIPTIONS } from '@/lib/types'
 import { formatCurrency, cn } from '@/lib/utils'
 
 interface KanbanColumnProps {
-  stage: Stage
+  columnKey: BoardColumnKey
   leads: Lead[]
   onCardClick: (lead: Lead) => void
 }
 
-const STAGE_HEX: Record<Stage, string> = {
+const BOARD_COLUMN_HEX: Record<BoardColumnKey, string> = {
   new: '#64748b',
-  pending: '#f59e0b',
+  pending_ours: '#f59e0b',
+  pending_merchant: '#f97316',
+  pending_psp: '#eab308',
   onboarding: '#10b981',
   not_interested: '#f43f5e',
 }
 
-export function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
+export function KanbanColumn({ columnKey, leads, onCardClick }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
-    id: `column-${stage}`,
-    data: { type: 'column', stage },
+    id: `column-${columnKey}`,
+    data: { type: 'column', columnKey },
   })
 
   const totalValue = leads.reduce((sum, l) => sum + l.estimatedVolume, 0)
-
-  // Sub-status breakdown, shown only on the Pending column — this is what
-  // makes "pending and its sub-stages" legible on the board, since Pending
-  // is a single column rather than three.
-  const pendingBreakdown =
-    stage === 'pending'
-      ? ([
-          ['pending_ours', 'Ours'],
-          ['pending_merchant', 'Merchant'],
-          ['pending_psp', 'PSP'],
-        ] as const).map(([key, short]) => ({
-          short,
-          count: leads.filter((l) => (l.pendingSubStatus ?? 'pending_ours') === key).length,
-        }))
-      : null
 
   return (
     <div className="w-72 shrink-0">
@@ -48,9 +35,9 @@ export function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
         <div className="flex items-center gap-2 min-w-0">
           <span
             className="h-2 w-2 rounded-full shrink-0"
-            style={{ backgroundColor: STAGE_HEX[stage] }}
+            style={{ backgroundColor: BOARD_COLUMN_HEX[columnKey] }}
           />
-          <h3 className="text-sm font-semibold truncate">{STAGE_LABELS[stage]}</h3>
+          <h3 className="text-sm font-semibold truncate">{BOARD_COLUMN_LABELS[columnKey]}</h3>
           <span className="text-xs text-muted-foreground">{leads.length}</span>
         </div>
         <span className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -58,18 +45,8 @@ export function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
         </span>
       </div>
       <p className="px-1 mb-2 text-[11px] text-muted-foreground line-clamp-1">
-        {STAGE_DESCRIPTIONS[stage]}
+        {BOARD_COLUMN_DESCRIPTIONS[columnKey]}
       </p>
-      {pendingBreakdown && (
-        <p className="px-1 mb-2 text-[11px] text-muted-foreground">
-          {pendingBreakdown.map((b, i) => (
-            <span key={b.short}>
-              {i > 0 && ' · '}
-              {b.count} {b.short}
-            </span>
-          ))}
-        </p>
-      )}
       <div
         ref={setNodeRef}
         className={cn(
