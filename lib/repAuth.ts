@@ -12,17 +12,25 @@ export type RepLoginResult =
 // Separate lockout counters from the real dashboard password (User.pinHash /
 // pinFailedAttempts / pinLockedUntil) — a rep locked out of the PIN form
 // shouldn't lock their dashboard login, or vice versa.
-export async function verifyRepLogin(email: string, pin: string): Promise<RepLoginResult> {
-  const normalizedEmail = email.trim().toLowerCase()
-  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+//
+// Identified by name (not email) — User.name has no unique constraint, so a
+// duplicate name is treated as a failed login rather than silently picking
+// one of the matches; an admin should rename one of them if this ever fires.
+export async function verifyRepLogin(name: string, pin: string): Promise<RepLoginResult> {
+  const normalizedName = name.trim()
+  const matches = await prisma.user.findMany({
+    where: { name: { equals: normalizedName, mode: 'insensitive' } },
+  })
+  const user = matches.length === 1 ? matches[0] : null
 
   if (!user || !user.isActive || !user.pinHash) {
-    await logAudit({ action: 'rep_login_failed', metadata: { email: normalizedEmail, reason: 'no_pin_set' } })
-    return { ok: false, status: 401, error: 'Invalid email or PIN' }
+    const reason = matches.length > 1 ? 'ambiguous_name' : 'no_pin_set'
+    await logAudit({ action: 'rep_login_failed', metadata: { name: normalizedName, reason } })
+    return { ok: false, status: 401, error: 'Invalid name or PIN' }
   }
 
   if (user.pinLockedUntil && user.pinLockedUntil > new Date()) {
-    await logAudit({ action: 'rep_login_locked', targetUserId: user.id, metadata: { email: normalizedEmail } })
+    await logAudit({ action: 'rep_login_locked', targetUserId: user.id, metadata: { name: normalizedName } })
     return { ok: false, status: 423, error: 'Too many attempts — try again in 15 minutes' }
   }
 
@@ -40,12 +48,12 @@ export async function verifyRepLogin(email: string, pin: string): Promise<RepLog
     await logAudit({
       action: lockingNow ? 'rep_login_locked' : 'rep_login_failed',
       targetUserId: user.id,
-      metadata: { email: normalizedEmail, attempts },
+      metadata: { name: normalizedName, attempts },
     })
     return {
       ok: false,
       status: lockingNow ? 423 : 401,
-      error: lockingNow ? 'Too many attempts — try again in 15 minutes' : 'Invalid email or PIN',
+      error: lockingNow ? 'Too many attempts — try again in 15 minutes' : 'Invalid name or PIN',
     }
   }
 
@@ -53,7 +61,7 @@ export async function verifyRepLogin(email: string, pin: string): Promise<RepLog
     where: { id: user.id },
     data: { pinFailedAttempts: 0, pinLockedUntil: null },
   })
-  await logAudit({ action: 'rep_login_success', actorUserId: user.id, targetUserId: user.id, metadata: { email: normalizedEmail } })
+  await logAudit({ action: 'rep_login_success', actorUserId: user.id, targetUserId: user.id, metadata: { name: normalizedName } })
 
   return { ok: true, userId: user.id }
 }

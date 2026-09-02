@@ -33,7 +33,7 @@ interface LeadDetail extends LeadSummary {
 
 export function RepForm() {
   const [loggedIn, setLoggedIn] = useState(false)
-  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loggingIn, setLoggingIn] = useState(false)
@@ -84,7 +84,7 @@ export function RepForm() {
       const res = await fetch('/api/rep/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, pin }),
+        body: JSON.stringify({ name, pin }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -180,12 +180,12 @@ export function RepForm() {
       <div className="space-y-4">
         <div>
           <h1 className="text-xl font-semibold">Update your leads</h1>
-          <p className="text-sm text-muted-foreground">Enter your email and PIN to continue.</p>
+          <p className="text-sm text-muted-foreground">Enter your name and PIN to continue.</p>
         </div>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs">Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" />
+            <Label className="text-xs">Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} type="text" autoComplete="name" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">PIN</Label>
@@ -198,7 +198,7 @@ export function RepForm() {
             />
           </div>
           {loginError && <p className="text-xs text-rose-600">{loginError}</p>}
-          <Button className="w-full" onClick={handleLogin} disabled={loggingIn || !email || pin.length !== 6}>
+          <Button className="w-full" onClick={handleLogin} disabled={loggingIn || !name || pin.length !== 6}>
             {loggingIn && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Continue
           </Button>

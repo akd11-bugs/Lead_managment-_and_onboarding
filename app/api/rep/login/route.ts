@@ -9,13 +9,13 @@ export async function POST(req: Request) {
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
 
-  const email = String(body?.email ?? '').trim()
+  const name = String(body?.name ?? '').trim()
   const pin = String(body?.pin ?? '').trim()
-  if (!email || !pin) {
-    return NextResponse.json({ error: 'Email and PIN are required' }, { status: 400 })
+  if (!name || !pin) {
+    return NextResponse.json({ error: 'Name and PIN are required' }, { status: 400 })
   }
 
-  const result = await verifyRepLogin(email, pin)
+  const result = await verifyRepLogin(name, pin)
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }

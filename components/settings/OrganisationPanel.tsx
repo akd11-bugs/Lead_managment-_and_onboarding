@@ -339,7 +339,8 @@ export function OrganisationPanel({
             <DialogTitle>Set PIN for {pinTarget?.name}</DialogTitle>
             <DialogDescription>
               Used to sign in at <code className="text-xs">/rep</code> — the lightweight lead-update form. Reps
-              enter their email and this 6-digit PIN, nothing else.
+              enter their name and this 6-digit PIN, nothing else. Make sure {pinTarget?.name}&apos;s name is spelled
+              exactly the way they&apos;ll type it — it must be unique across your team.
             </DialogDescription>
           </DialogHeader>
           <Input
