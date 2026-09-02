@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2, LogOut, Search, ArrowLeft, CheckCircle2 } from 'lucide-react'
-import { STAGES, STAGE_LABELS, type Stage } from '@/lib/types'
+import { STAGES, STAGE_LABELS, PENDING_SUB_STATUSES, PENDING_SUB_STATUS_LABELS, type Stage, type PendingSubStatus } from '@/lib/types'
 
 interface LeadSummary {
   id: string
@@ -27,6 +27,7 @@ interface LeadDetail extends LeadSummary {
   email: string
   phone: string | null
   notes: string
+  pendingSubStatus: PendingSubStatus | null
   activities: { id: string; type: string; description: string; authorName: string; date: string }[]
 }
 
@@ -45,6 +46,9 @@ export function RepForm() {
   const [selected, setSelected] = useState<LeadDetail | null>(null)
   const [loadingLead, setLoadingLead] = useState(false)
   const [stage, setStage] = useState<Stage | ''>('')
+  const [pendingSubStatus, setPendingSubStatus] = useState<PendingSubStatus | ''>('')
+  const [stageRemark, setStageRemark] = useState('')
+  const [stageError, setStageError] = useState<string | null>(null)
   const [remark, setRemark] = useState('')
   const [savingStage, setSavingStage] = useState(false)
   const [savingRemark, setSavingRemark] = useState(false)
@@ -115,6 +119,9 @@ export function RepForm() {
       const data = await res.json()
       setSelected(data.lead)
       setStage(data.lead.stage)
+      setPendingSubStatus(data.lead.pendingSubStatus ?? '')
+      setStageRemark('')
+      setStageError(null)
       setRemark('')
     } finally {
       setLoadingLead(false)
@@ -122,20 +129,34 @@ export function RepForm() {
   }
 
   async function saveStage() {
-    if (!selected || !stage || stage === selected.stage) return
+    if (!selected) return
+    const stageChanged = stage && stage !== selected.stage
+    const subStatusChanged = pendingSubStatus && pendingSubStatus !== (selected.pendingSubStatus ?? '')
+    if (!stageChanged && !subStatusChanged) return
+    if (!stageRemark.trim()) {
+      setStageError('A remark is required')
+      return
+    }
     setSavingStage(true)
     setSavedMessage(null)
+    setStageError(null)
     try {
       const res = await fetch(`/api/rep/leads/${selected.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ stage }),
+        body: JSON.stringify({
+          ...(stageChanged && { stage }),
+          ...(subStatusChanged && { pendingSubStatus }),
+          remark: stageRemark.trim(),
+        }),
       })
       const data = await res.json()
-      if (res.ok) {
-        setSelected(data.lead)
-        setSavedMessage('Stage updated')
+      if (!res.ok) {
+        setStageError(data.error ?? 'Failed to save')
+        return
       }
+      await selectLead(selected.id)
+      setSavedMessage('Updated')
     } finally {
       setSavingStage(false)
     }
@@ -153,8 +174,8 @@ export function RepForm() {
       })
       if (res.ok) {
         setRemark('')
+        await selectLead(selected.id)
         setSavedMessage('Remark added')
-        selectLead(selected.id)
       }
     } finally {
       setSavingRemark(false)
@@ -214,24 +235,56 @@ export function RepForm() {
 
         <div className="space-y-1.5">
           <Label className="text-xs">Stage</Label>
-          <div className="flex gap-2">
-            <Select value={stage} onValueChange={(v) => setStage(v as Stage)}>
+          <Select value={stage} onValueChange={(v) => setStage(v as Stage)}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STAGES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STAGE_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {stage === 'pending' && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Waiting on</Label>
+            <Select value={pendingSubStatus} onValueChange={(v) => setPendingSubStatus(v as PendingSubStatus)}>
               <SelectTrigger className="h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {STAGES.map((s) => (
+                {PENDING_SUB_STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {STAGE_LABELS[s]}
+                    {PENDING_SUB_STATUS_LABELS[s]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={saveStage} disabled={savingStage || stage === selected.stage}>
-              {savingStage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+          </div>
+        )}
+
+        {(stage !== selected.stage || (pendingSubStatus || '') !== (selected.pendingSubStatus ?? '')) && (
+          <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-3">
+            <Label className="text-xs">
+              {stage === 'not_interested' ? 'Reason for marking Not Interested' : 'What happened?'}
+            </Label>
+            <Textarea
+              value={stageRemark}
+              onChange={(e) => setStageRemark(e.target.value)}
+              placeholder="A remark is required to save this change"
+              rows={3}
+            />
+            {stageError && <p className="text-xs text-rose-600">{stageError}</p>}
+            <Button size="sm" onClick={saveStage} disabled={savingStage || !stageRemark.trim()}>
+              {savingStage && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Save change
             </Button>
           </div>
-        </div>
+        )}
 
         <div className="space-y-1.5">
           <Label className="text-xs">Add a remark</Label>
