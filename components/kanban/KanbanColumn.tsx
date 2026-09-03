@@ -17,6 +17,7 @@ const BOARD_COLUMN_HEX: Record<BoardColumnKey, string> = {
   pending_ours: '#f59e0b',
   pending_merchant: '#f97316',
   pending_psp: '#eab308',
+  proposal: '#8b5cf6',
   onboarding: '#10b981',
   not_interested: '#f43f5e',
 }
