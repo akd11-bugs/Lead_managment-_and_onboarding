@@ -1,13 +1,13 @@
-// Seed 25 realistic B2B leads across the 4-stage pipeline (New → Pending →
-// Onboarding / Not Interested), with activities. Designed so dashboard
-// alerts can fire (some leads with no activity past N days).
+// Seed 25 realistic B2B leads across the 5-stage pipeline (New → Pending →
+// Proposal → Onboarding / Not Interested), with activities. Designed so
+// dashboard alerts can fire (some leads with no activity past N days).
 
 import { PrismaClient } from '@prisma/client'
 import { clearAllLeadData } from './seed-helpers'
 
 const prisma = new PrismaClient()
 
-const STAGES = ['new', 'pending', 'onboarding', 'not_interested'] as const
+const STAGES = ['new', 'pending', 'proposal', 'onboarding', 'not_interested'] as const
 const PENDING_SUB_STATUSES = ['pending_ours', 'pending_merchant', 'pending_psp'] as const
 const ONBOARDING_SUB_STAGES = ['document_submission', 'document_verification', 'psp_verification', 'final_onboarded'] as const
 
@@ -34,11 +34,12 @@ function pick<T>(arr: readonly T[], i: number): T {
 
 // Roughly proportional distribution across 25 leads: a few brand new, most
 // of the book sitting in Pending (split across the three sub-statuses), a
-// handful onboarding, a handful not interested.
+// handful with a proposal out, a handful onboarding, a couple not interested.
 function stageFor(i: number): (typeof STAGES)[number] {
   if (i < 3) return 'new'
-  if (i < 18) return 'pending'
-  if (i < 22) return 'onboarding'
+  if (i < 15) return 'pending'
+  if (i < 19) return 'proposal'
+  if (i < 23) return 'onboarding'
   return 'not_interested'
 }
 
@@ -103,7 +104,7 @@ async function main() {
     // Leads still in play get a forecast date so "expected to onboard by
     // month end" has something real to count.
     const expectedCloseDate =
-      stage === 'pending'
+      stage === 'pending' || stage === 'proposal'
         ? new Date(now.getFullYear(), now.getMonth() + (i % 3 === 0 ? 1 : 0), 5 + (i % 20))
         : null
 
@@ -138,11 +139,13 @@ async function main() {
               : pendingSubStatus === 'pending_psp'
                 ? 'With the PSP for underwriting review. Following up weekly.'
                 : 'Had a good intro call. Our turn to send the proposal.'
-            : stage === 'onboarding'
-              ? 'Signed 12-month contract at ₹40L ARR. Onboarding kicked off.'
-              : stage === 'not_interested'
-                ? 'Chose competitor on price. Keep warm for next year renewal cycle.'
-                : 'Imported via website form. Has not been contacted yet.',
+            : stage === 'proposal'
+              ? 'Proposal sent — reviewing internally, expecting a decision soon.'
+              : stage === 'onboarding'
+                ? 'Signed 12-month contract at ₹40L ARR. Onboarding kicked off.'
+                : stage === 'not_interested'
+                  ? 'Chose competitor on price. Keep warm for next year renewal cycle.'
+                  : 'Imported via website form. Has not been contacted yet.',
         createdAt,
         updatedAt: lastActivityAt,
         lastActivityAt,

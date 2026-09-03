@@ -1,12 +1,9 @@
 // Shared types for LRM_blu
 // Mirrors Prisma models but stays UI-friendly (Date objects, enums).
 
-// New → Pending (whoever's turn it is to act) → Onboarding (won) or Not
-// Interested (lost, reason required). Replaces a longer Contacted/Follow Up/
-// Qualified/Proposal/Lost pipeline that didn't match how leads actually move
-// — most of a lead's life is spent waiting on someone, and only two outcomes
-// matter in the end.
-export type Stage = 'new' | 'pending' | 'onboarding' | 'not_interested'
+// New → Pending (whoever's turn it is to act) → Proposal (sent, awaiting a
+// decision) → Onboarding (won) or Not Interested (lost, reason required).
+export type Stage = 'new' | 'pending' | 'proposal' | 'onboarding' | 'not_interested'
 
 export type LeadSource = 'website' | 'referral' | 'linkedin' | 'cold_outreach' | 'event' | 'other'
 
@@ -110,11 +107,12 @@ export interface SkillRun {
 }
 
 // UI metadata for stages
-export const STAGES: Stage[] = ['new', 'pending', 'onboarding', 'not_interested']
+export const STAGES: Stage[] = ['new', 'pending', 'proposal', 'onboarding', 'not_interested']
 
 export const STAGE_LABELS: Record<Stage, string> = {
   new: 'New',
   pending: 'Pending',
+  proposal: 'Proposal',
   onboarding: 'Onboarding',
   not_interested: 'Not Interested',
 }
@@ -122,6 +120,7 @@ export const STAGE_LABELS: Record<Stage, string> = {
 export const STAGE_DESCRIPTIONS: Record<Stage, string> = {
   new: 'Just captured, not yet contacted',
   pending: 'Being worked — waiting on us, the merchant, or the PSP',
+  proposal: 'Proposal sent, awaiting a decision',
   onboarding: 'Closed-won — document & PSP verification in progress',
   not_interested: 'Closed-lost, with a stated reason',
 }
@@ -182,13 +181,14 @@ export const PENDING_SUB_STATUS_LABELS: Record<PendingSubStatus, string> = {
 // valid BoardColumnKey; the string sets don't overlap with the other
 // stages). This is a pure UI/selection concept — the database only ever
 // stores `stage` + `pendingSubStatus` separately.
-export type BoardColumnKey = 'new' | PendingSubStatus | 'onboarding' | 'not_interested'
+export type BoardColumnKey = 'new' | PendingSubStatus | 'proposal' | 'onboarding' | 'not_interested'
 
 export const BOARD_COLUMNS: BoardColumnKey[] = [
   'new',
   'pending_ours',
   'pending_merchant',
   'pending_psp',
+  'proposal',
   'onboarding',
   'not_interested',
 ]
@@ -198,6 +198,7 @@ export const BOARD_COLUMN_LABELS: Record<BoardColumnKey, string> = {
   pending_ours: 'Pending — Our Side',
   pending_merchant: 'Pending — Merchant',
   pending_psp: 'Pending — PSP',
+  proposal: 'Proposal',
   onboarding: 'Onboarding',
   not_interested: 'Not Interested',
 }
@@ -207,6 +208,7 @@ export const BOARD_COLUMN_DESCRIPTIONS: Record<BoardColumnKey, string> = {
   pending_ours: 'Our turn to follow up',
   pending_merchant: 'Waiting on the merchant to act',
   pending_psp: 'Waiting on the PSP to act',
+  proposal: 'Proposal sent, awaiting a decision',
   onboarding: 'Closed-won — document & PSP verification in progress',
   not_interested: 'Closed-lost, with a stated reason',
 }
@@ -317,16 +319,18 @@ export function onboardingProgressPercent(subStage: OnboardingSubStage | null): 
   return Math.round(((idx + 1) / ONBOARDING_SUB_STAGES.length) * 100)
 }
 
-// The whole-funnel checkpoint bar (New → Pending → Onboarding → Onboarded) —
-// distinct from onboardingProgressPercent, which only covers the fine-grained
-// steps inside Onboarding. 'not_interested' has no place on this bar; callers
-// check for it separately and show a terminal badge instead.
-export const PIPELINE_CHECKPOINTS = ['new', 'pending', 'onboarding', 'onboarded'] as const
+// The whole-funnel checkpoint bar (New → Pending → Proposal → Onboarding →
+// Onboarded) — distinct from onboardingProgressPercent, which only covers
+// the fine-grained steps inside Onboarding. 'not_interested' has no place on
+// this bar; callers check for it separately and show a terminal badge
+// instead.
+export const PIPELINE_CHECKPOINTS = ['new', 'pending', 'proposal', 'onboarding', 'onboarded'] as const
 export type PipelineCheckpoint = (typeof PIPELINE_CHECKPOINTS)[number]
 
 export function pipelineCheckpointIndex(lead: { stage: Stage; onboardingSubStage?: OnboardingSubStage | null }): number {
   if (lead.stage === 'new') return 0
   if (lead.stage === 'pending') return 1
-  if (lead.stage === 'onboarding') return lead.onboardingSubStage === 'final_onboarded' ? 3 : 2
+  if (lead.stage === 'proposal') return 2
+  if (lead.stage === 'onboarding') return lead.onboardingSubStage === 'final_onboarded' ? 4 : 3
   return 0
 }

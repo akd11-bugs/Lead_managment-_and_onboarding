@@ -5,6 +5,7 @@ import { PIPELINE_CHECKPOINTS, pipelineCheckpointIndex, type OnboardingSubStage,
 const CHECKPOINT_LABELS: Record<(typeof PIPELINE_CHECKPOINTS)[number], string> = {
   new: 'New',
   pending: 'Pending',
+  proposal: 'Proposal',
   onboarding: 'Onboarding',
   onboarded: 'Onboarded',
 }

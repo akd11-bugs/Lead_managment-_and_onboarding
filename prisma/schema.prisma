@@ -20,7 +20,7 @@ model Lead {
   industry        String?      // free text vertical, e.g. "Fashion", "Apparel" — filled by sales
   businessType    String?      // b2b | b2c
   source          String       // website | referral | linkedin | cold_outreach | event | other
-  stage           String       // new | pending | onboarding | not_interested
+  stage           String       // new | pending | proposal | onboarding | not_interested
   estimatedVolume Float        @default(0)
   ownerId         String       @default("self")
   ownerName       String       @default("You")
