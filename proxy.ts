@@ -58,11 +58,16 @@ export default auth((req) => {
 })
 
 export const config = {
-  // Skip static assets, the NextAuth API routes, the invite-redemption and
-  // signup APIs (must be callable while logged out), the external reports
-  // API + the leads-sheet sync cron route (both authenticate callers with
-  // their own API key, not a browser session), and the rep-form API (its own
-  // rep_session cookie) — everything else (pages and our own /api/* routes)
-  // requires a NextAuth session.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/rep).*)'],
+  // Skip static assets (both /_next's own and anything served straight out
+  // of /public, e.g. the logo — matched by file extension since /login,
+  // /signup, and /rep must be able to load it while logged out), the
+  // NextAuth API routes, the invite-redemption and signup APIs (must be
+  // callable while logged out), the external reports API + the
+  // leads-sheet sync cron route (both authenticate callers with their own
+  // API key, not a browser session), and the rep-form API (its own
+  // rep_session cookie) — everything else (pages and our own /api/*
+  // routes) requires a NextAuth session.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/rep).*)',
+  ],
 }

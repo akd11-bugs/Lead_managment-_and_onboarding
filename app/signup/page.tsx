@@ -38,7 +38,7 @@ export default function SignupPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Join LRM_blu</CardTitle>
+          <CardTitle className="text-xl">Join bluSwap</CardTitle>
           <CardDescription>
             {sent
               ? 'Check your inbox for a link to finish creating your account.'

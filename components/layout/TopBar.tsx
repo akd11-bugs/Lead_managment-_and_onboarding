@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Search, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,7 +26,9 @@ export function TopBar({ user, signOutButton }: { user: SessionUser; signOutButt
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/95 px-4 md:px-6 backdrop-blur">
-      <div className="md:hidden font-semibold">LRM_blu</div>
+      <div className="md:hidden">
+        <Image src="/logo-bluswap.webp" alt="bluSwap" width={132} height={38} className="h-6 w-auto" />
+      </div>
       <div className="flex-1 max-w-xl">
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
