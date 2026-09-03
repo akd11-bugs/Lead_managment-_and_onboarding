@@ -1,14 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Mail } from 'lucide-react'
+import { Search, Mail, Settings2, CheckCircle2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EmailComposer } from '@/components/leads/EmailComposer'
 import { CustomEmailComposer } from '@/components/leads/CustomEmailComposer'
+import { EmailSettingsCard } from '@/components/settings/EmailSettingsCard'
 import { SkillRunner } from '@/components/skills/SkillRunner'
 import { getSkill } from '@/lib/skills/catalog'
 import { cn } from '@/lib/utils'
@@ -32,6 +35,18 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [markPendingOpen, setMarkPendingOpen] = useState(false)
+  const [configOpen, setConfigOpen] = useState(false)
+  const [emailConfig, setEmailConfig] = useState<{ configured: boolean; emailFromAddress: string | null } | null>(null)
+
+  function refreshEmailConfig() {
+    fetch('/api/settings/email')
+      .then((res) => res.json())
+      .then((data) => setEmailConfig({ configured: !!data.configured, emailFromAddress: data.emailFromAddress ?? null }))
+  }
+
+  useEffect(() => {
+    refreshEmailConfig()
+  }, [])
 
   const filtered = leads.filter((l) => {
     const q = search.trim().toLowerCase()
@@ -48,6 +63,23 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+        {emailConfig?.configured ? (
+          <p className="flex items-center gap-1.5 text-sm">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+            Sending as <span className="font-medium">{emailConfig.emailFromAddress}</span>
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Sending from the shared mailbox — configure your own address to send as yourself.
+          </p>
+        )}
+        <Button size="sm" variant="outline" onClick={() => setConfigOpen(true)}>
+          <Settings2 className="h-3.5 w-3.5" />
+          Configure your email
+        </Button>
+      </div>
+
       <Tabs defaultValue="lead">
         <TabsList>
           <TabsTrigger value="lead">Send to a lead</TabsTrigger>
@@ -171,6 +203,24 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
           onDone={handleMarkPendingDone}
         />
       )}
+
+      <Dialog
+        open={configOpen}
+        onOpenChange={(o) => {
+          setConfigOpen(o)
+          if (!o) refreshEmailConfig()
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Configure your email</DialogTitle>
+            <DialogDescription>
+              Add a Gmail app password so emails you send from here go out from your own address.
+            </DialogDescription>
+          </DialogHeader>
+          <EmailSettingsCard />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

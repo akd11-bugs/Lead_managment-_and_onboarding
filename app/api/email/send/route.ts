@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { sendEmail } from '@/lib/email'
+import { sendEmailAs } from '@/lib/email'
 import { requireApiUser, leadScope } from '@/lib/session'
 import { readJsonBody } from '@/lib/http'
 import { isValidEmail } from '@/lib/types'
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
     }
     try {
-      const result = await sendEmail({ to: lead.email, subject, body: emailBody })
+      const result = await sendEmailAs(user.id, { to: lead.email, subject, body: emailBody })
 
       const activity = await prisma.activity.create({
         data: {
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'A valid "to" address is required' }, { status: 400 })
   }
   try {
-    const result = await sendEmail({ to, subject, body: emailBody })
+    const result = await sendEmailAs(user.id, { to, subject, body: emailBody })
     await logAudit({ action: 'custom_email_sent', actorUserId: user.id, metadata: { to } })
     return NextResponse.json({ ok: true, emailId: result.id })
   } catch (err) {
