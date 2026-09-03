@@ -61,7 +61,9 @@ export async function POST(req: Request) {
     })
     return NextResponse.json({ ...result, runId: run.id })
   } catch (err) {
-    // Persistence failed but skill ran — return the result anyway
-    return NextResponse.json({ ...result, persistenceError: String(err) })
+    // Persistence failed but skill ran — return the result anyway, without
+    // leaking the raw Prisma error (can reveal schema/column details).
+    console.error('Failed to persist skill run', err)
+    return NextResponse.json({ ...result, persistenceError: 'Failed to save this run to history' })
   }
 }
