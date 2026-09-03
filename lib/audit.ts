@@ -17,6 +17,7 @@ export type AuditAction =
   | 'rep_login_success'
   | 'rep_login_failed'
   | 'rep_login_locked'
+  | 'custom_email_sent'
 
 export async function logAudit(entry: {
   action: AuditAction

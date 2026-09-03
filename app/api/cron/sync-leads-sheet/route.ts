@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { getSheetRows } from '@/lib/googleSheets'
 import { autoMapHeaders, normalizeHeader, FIELDS } from '@/lib/headerMapping'
 import { importLeadRows, type ImportOwner } from '@/lib/leadImport'
+import { safeEqual } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
   }
   const authHeader = req.headers.get('authorization') ?? ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-  if (token !== expectedKey) {
+  if (!token || !safeEqual(token, expectedKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -3,12 +3,22 @@ import { prisma } from '@/lib/db'
 import { leadScope } from '@/lib/session'
 import { getRepSessionUser } from '@/lib/repSession'
 import { readJsonBody } from '@/lib/http'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   const user = await getRepSessionUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimit = checkRateLimit(`rep-activity:${user.id}`, 60, 15 * 60 * 1000)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests — try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } },
+    )
+  }
+
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
   if (!body.leadId) return NextResponse.json({ error: 'leadId required' }, { status: 400 })

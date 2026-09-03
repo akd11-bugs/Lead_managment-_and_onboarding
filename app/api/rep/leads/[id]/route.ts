@@ -5,6 +5,7 @@ import { getRepSessionUser } from '@/lib/repSession'
 import { STAGES, PENDING_SUB_STATUSES, type Stage, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getRepSessionUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimit = checkRateLimit(`rep-lead-patch:${user.id}`, 60, 15 * 60 * 1000)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests — try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } },
+    )
+  }
+
   const { id } = await params
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
