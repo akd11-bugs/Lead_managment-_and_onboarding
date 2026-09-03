@@ -42,7 +42,7 @@ export default function RedeemInvitePage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Join LRM_blu</CardTitle>
+          <CardTitle className="text-xl">Join bluSwap</CardTitle>
           <CardDescription>Enter the invite code your admin gave you, and set your login details.</CardDescription>
         </CardHeader>
         <CardContent>

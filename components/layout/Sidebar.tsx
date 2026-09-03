@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -36,11 +37,8 @@ export function Sidebar({ user }: { user: SessionUser }) {
   return (
     <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 z-30 border-r bg-muted/30">
       <div className="flex h-14 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <div className="h-7 w-7 rounded-md bg-gradient-to-br from-blue-500 to-violet-600 grid place-items-center text-white text-sm">
-            L
-          </div>
-          <span>LRM_blu</span>
+        <Link href="/" className="flex items-center font-semibold">
+          <Image src="/logo-bluswap.webp" alt="bluSwap" width={132} height={38} className="h-7 w-auto" priority />
         </Link>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4 text-sm">

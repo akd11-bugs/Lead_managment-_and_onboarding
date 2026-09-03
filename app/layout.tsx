@@ -6,7 +6,7 @@ import { SignOutButton } from '@/components/layout/SignOutButton'
 import type { SessionUser } from '@/lib/session'
 
 export const metadata: Metadata = {
-  title: 'LRM_blu — Lead Management',
+  title: 'bluSwap — Lead Management',
   description: 'Skill-driven lead management system. CRM with built-in B2B diagnostics.',
 }
 

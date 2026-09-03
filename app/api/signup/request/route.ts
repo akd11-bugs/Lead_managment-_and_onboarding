@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   try {
     await sendEmail({
       to: email,
-      subject: 'Finish setting up your LRM_blu account',
+      subject: 'Finish setting up your bluSwap account',
       body: `Click the link below to set your name and password and finish creating your account:\n\n${link}\n\nThis link expires in 30 minutes. If you didn't request this, you can ignore this email.`,
     })
   } catch (err) {
