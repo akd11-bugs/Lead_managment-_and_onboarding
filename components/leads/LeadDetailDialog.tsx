@@ -64,6 +64,7 @@ import { SKILLS } from '@/lib/skills/catalog'
 import { EmailComposer } from './EmailComposer'
 import { LeadTasksTab } from './LeadTasksTab'
 import { StageChangeDialog } from './StageChangeDialog'
+import { PipelineProgressBar } from './PipelineProgressBar'
 
 interface SkillRunEntry {
   id: string
@@ -267,6 +268,13 @@ export function LeadDetailDialog({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 pt-2">
+            <div className="rounded-md border p-3">
+              <PipelineProgressBar
+                stage={lead.stage}
+                onboardingSubStage={lead.onboardingSubStage}
+                assignedOpsName={lead.assignedOpsName}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Field label="Email">
                 <Input
@@ -486,7 +494,7 @@ export function LeadDetailDialog({
                       href={`/leads/${lead.id}/onboarding`}
                       className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
                     >
-                      View more <ArrowRight className="h-3 w-3" />
+                      Checklist <ArrowRight className="h-3 w-3" />
                     </Link>
                   </div>
                 )}

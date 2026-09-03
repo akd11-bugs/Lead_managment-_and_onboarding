@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,21 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
 import { BOARD_COLUMN_LABELS, boardColumnToInput, type Lead, type BoardColumnKey } from '@/lib/types'
+
+interface OperationsUser {
+  id: string
+  name: string
+}
 
 // The one path every stage / pending-sub-status change goes through —
 // reachable from a Kanban drag or the lead detail form's Stage select — so
@@ -38,18 +51,34 @@ export function StageChangeDialog({
   const [error, setError] = useState<string | null>(null)
 
   const isNotInterested = target === 'not_interested'
+  const isOnboarding = target === 'onboarding'
   const heading = `Move to ${BOARD_COLUMN_LABELS[target]}`
+
+  const [operationsUsers, setOperationsUsers] = useState<OperationsUser[]>([])
+  const [assignedOpsId, setAssignedOpsId] = useState('')
+
+  useEffect(() => {
+    if (!open || !isOnboarding) return
+    fetch('/api/users/operations')
+      .then((r) => r.json())
+      .then((data) => setOperationsUsers(data.operationsUsers ?? []))
+  }, [open, isOnboarding])
 
   async function confirm() {
     const trimmed = remark.trim()
     if (!trimmed) return
+    if (isOnboarding && !assignedOpsId) return
     setSaving(true)
     setError(null)
     try {
       const res = await fetch(`/api/leads/${leadId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...boardColumnToInput(target), remark: trimmed }),
+        body: JSON.stringify({
+          ...boardColumnToInput(target),
+          remark: trimmed,
+          ...(isOnboarding && { assignedOpsId }),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -57,6 +86,7 @@ export function StageChangeDialog({
         return
       }
       setRemark('')
+      setAssignedOpsId('')
       onDone(data.lead)
       onOpenChange(false)
     } finally {
@@ -68,7 +98,10 @@ export function StageChangeDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) setRemark('')
+        if (!o) {
+          setRemark('')
+          setAssignedOpsId('')
+        }
         onOpenChange(o)
       }}
     >
@@ -81,6 +114,26 @@ export function StageChangeDialog({
               : 'A short remark is required so the next follow-up has context — this is logged to the activity timeline.'}
           </DialogDescription>
         </DialogHeader>
+        {isOnboarding && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Assign to operations</Label>
+            <Select value={assignedOpsId} onValueChange={setAssignedOpsId}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Choose who handles onboarding" />
+              </SelectTrigger>
+              <SelectContent>
+                {operationsUsers.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {operationsUsers.length === 0 && (
+              <p className="text-xs text-muted-foreground">No active operations users yet — add one under Settings.</p>
+            )}
+          </div>
+        )}
         <Textarea
           autoFocus
           rows={4}
@@ -93,7 +146,7 @@ export function StageChangeDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={confirm} disabled={saving || !remark.trim()}>
+          <Button onClick={confirm} disabled={saving || !remark.trim() || (isOnboarding && !assignedOpsId)}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Confirm
           </Button>

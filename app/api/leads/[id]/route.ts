@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
 import { validateLeadFields, ONBOARDING_SUB_STAGE_LABELS, type OnboardingSubStage } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
-import { applyStageChange } from '@/lib/leadStage'
+import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,7 +52,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!remark) {
       return NextResponse.json({ error: 'A remark is required when changing stage or pending status' }, { status: 400 })
     }
-    const lead = await applyStageChange(id, existing, { stage: body.stage, pendingSubStatus: body.pendingSubStatus, remark }, user)
+
+    let assignedOps: { id: string; name: string } | undefined
+    if (body.stage === 'onboarding' && existing.stage !== 'onboarding') {
+      const assignedOpsId = typeof body.assignedOpsId === 'string' ? body.assignedOpsId : ''
+      if (!assignedOpsId) {
+        return NextResponse.json({ error: 'An operations person must be assigned to move a lead to Onboarding' }, { status: 400 })
+      }
+      const resolved = await resolveOpsAssignment(assignedOpsId)
+      if (!resolved) {
+        return NextResponse.json({ error: 'assignedOpsId must be an active operations user' }, { status: 400 })
+      }
+      assignedOps = resolved
+    }
+
+    const lead = await applyStageChange(
+      id,
+      existing,
+      {
+        stage: body.stage,
+        pendingSubStatus: body.pendingSubStatus,
+        remark,
+        assignedOpsId: assignedOps?.id,
+        assignedOpsName: assignedOps?.name,
+      },
+      user,
+    )
     return NextResponse.json({ lead })
   }
 

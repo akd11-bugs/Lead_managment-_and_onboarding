@@ -33,6 +33,8 @@ model Lead {
   proposalSubStage String?     // retired with the old proposal stage — column kept (unused) so historical data isn't dropped
   pendingSubStatus String?     // pending_ours | pending_merchant | pending_psp — only meaningful when stage == "pending"
   onboardingSubStage String?   // document_submission | document_verification | psp_verification | final_onboarded — only meaningful when stage == "onboarding"
+  assignedOpsId    String?     // operations User.id handling this lead's onboarding — set the moment stage enters "onboarding", cleared on leaving
+  assignedOpsName  String?     // denormalized, same convention as ownerName
   painPoints      String       @default("") // discovery: what's hurting them today
   whatTheyWant    String       @default("") // discovery: what they're actually asking for
   notes           String       @default("")

@@ -60,6 +60,8 @@ export interface Lead {
   expectedCloseDate: Date | string | null
   pendingSubStatus: PendingSubStatus | null
   onboardingSubStage: OnboardingSubStage | null
+  assignedOpsId: string | null
+  assignedOpsName: string | null
   painPoints: string
   whatTheyWant: string
   notes: string
@@ -313,4 +315,18 @@ export function onboardingProgressPercent(subStage: OnboardingSubStage | null): 
   const idx = ONBOARDING_SUB_STAGES.indexOf(subStage)
   if (idx === -1) return 0
   return Math.round(((idx + 1) / ONBOARDING_SUB_STAGES.length) * 100)
+}
+
+// The whole-funnel checkpoint bar (New → Pending → Onboarding → Onboarded) —
+// distinct from onboardingProgressPercent, which only covers the fine-grained
+// steps inside Onboarding. 'not_interested' has no place on this bar; callers
+// check for it separately and show a terminal badge instead.
+export const PIPELINE_CHECKPOINTS = ['new', 'pending', 'onboarding', 'onboarded'] as const
+export type PipelineCheckpoint = (typeof PIPELINE_CHECKPOINTS)[number]
+
+export function pipelineCheckpointIndex(lead: { stage: Stage; onboardingSubStage?: OnboardingSubStage | null }): number {
+  if (lead.stage === 'new') return 0
+  if (lead.stage === 'pending') return 1
+  if (lead.stage === 'onboarding') return lead.onboardingSubStage === 'final_onboarded' ? 3 : 2
+  return 0
 }

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope, isAdmin } from '@/lib/session'
 import { validateLeadFields, PENDING_SUB_STATUSES, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
-import { applyStageChange } from '@/lib/leadStage'
+import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,11 +51,30 @@ export async function PATCH(req: Request) {
       where: { id: { in: scopedIds } },
       select: { id: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true },
     })
+
+    let assignedOps: { id: string; name: string } | undefined
+    if (body.stage === 'onboarding' && scopedLeads.some((l) => l.stage !== 'onboarding')) {
+      const assignedOpsId = typeof body.assignedOpsId === 'string' ? body.assignedOpsId : ''
+      if (!assignedOpsId) {
+        return NextResponse.json({ error: 'An operations person must be assigned to move leads to Onboarding' }, { status: 400 })
+      }
+      const resolved = await resolveOpsAssignment(assignedOpsId)
+      if (!resolved) {
+        return NextResponse.json({ error: 'assignedOpsId must be an active operations user' }, { status: 400 })
+      }
+      assignedOps = resolved
+    }
+
     // Sequential, not Promise.all — applyStageChange does a read-then-write
     // per lead (workflow rules, activity log); running these concurrently
     // risks interleaved writes for no real speed benefit at bulk-action scale.
     for (const lead of scopedLeads) {
-      await applyStageChange(lead.id, lead, { stage: body.stage, pendingSubStatus, remark }, user)
+      await applyStageChange(
+        lead.id,
+        lead,
+        { stage: body.stage, pendingSubStatus, remark, assignedOpsId: assignedOps?.id, assignedOpsName: assignedOps?.name },
+        user,
+      )
     }
 
     return NextResponse.json({

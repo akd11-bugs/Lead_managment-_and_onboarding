@@ -7,6 +7,16 @@ export interface StageChangeActor {
   name: string
 }
 
+// Looks up and validates an operations-assignment id — shared by every route
+// that can move a lead into onboarding, so "must be a real, active operations
+// user" can't drift between them. Returns null for an invalid id (caller
+// turns that into a 400).
+export async function resolveOpsAssignment(assignedOpsId: string): Promise<{ id: string; name: string } | null> {
+  const opsUser = await prisma.user.findUnique({ where: { id: assignedOpsId }, select: { id: true, name: true, role: true, isActive: true } })
+  if (!opsUser || !opsUser.isActive || opsUser.role !== 'operations') return null
+  return { id: opsUser.id, name: opsUser.name }
+}
+
 export interface StageChangeInput {
   stage?: Stage
   pendingSubStatus?: PendingSubStatus
@@ -16,6 +26,11 @@ export interface StageChangeInput {
   // (this function trusts it, so a 400 for an empty remark happens earlier,
   // at the route, where it can be returned to the client properly).
   remark: string
+  // Required exactly when entering onboarding from a non-onboarding stage —
+  // the route validates assignedOpsId names a real, active operations user
+  // and resolves assignedOpsName itself; this function trusts both.
+  assignedOpsId?: string
+  assignedOpsName?: string
 }
 
 type ExistingLead = Pick<Lead, 'stage' | 'wonAt' | 'onboardedAt' | 'onboardingSubStage'>
@@ -72,12 +87,20 @@ export async function applyStageChange(
           ? null
           : undefined
 
+  // Assigned the moment a lead enters onboarding (who from Operations picks
+  // it up); cleared on leaving so a later re-entry always asks again rather
+  // than silently keeping a stale assignee.
+  const nextAssignedOpsId = enteringOnboarding ? input.assignedOpsId ?? null : leavingOnboarding ? null : undefined
+  const nextAssignedOpsName = enteringOnboarding ? input.assignedOpsName ?? null : leavingOnboarding ? null : undefined
+
   const data: Record<string, unknown> = { lastActivityAt: new Date() }
   if (nextStage !== undefined) data.stage = nextStage
   if (nextPendingSubStatus !== undefined) data.pendingSubStatus = nextPendingSubStatus
   if (nextOnboardingSubStage !== undefined) data.onboardingSubStage = nextOnboardingSubStage
   if (nextOnboardedAt !== undefined) data.onboardedAt = nextOnboardedAt
   if (nextWonAt !== undefined) data.wonAt = nextWonAt
+  if (nextAssignedOpsId !== undefined) data.assignedOpsId = nextAssignedOpsId
+  if (nextAssignedOpsName !== undefined) data.assignedOpsName = nextAssignedOpsName
 
   const lead = await prisma.lead.update({ where: { id: leadId }, data })
 

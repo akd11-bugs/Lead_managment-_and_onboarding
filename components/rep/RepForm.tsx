@@ -29,7 +29,10 @@ import {
   type LeadType,
   type QualityLevel,
   type BusinessType,
+  type OnboardingSubStage,
+  type Stage,
 } from '@/lib/types'
+import { PipelineProgressBar } from '@/components/leads/PipelineProgressBar'
 
 interface LeadSummary {
   id: string
@@ -56,7 +59,14 @@ interface LeadDetail extends LeadSummary {
   whatTheyWant: string
   notes: string
   createdAt: string
+  onboardingSubStage: OnboardingSubStage | null
+  assignedOpsName: string | null
   activities: { id: string; type: string; description: string; authorName: string; date: string }[]
+}
+
+interface OperationsUser {
+  id: string
+  name: string
 }
 
 function formatCurrency(n: number) {
@@ -81,6 +91,8 @@ export function RepForm() {
   const [column, setColumn] = useState<BoardColumnKey | ''>('')
   const [stageRemark, setStageRemark] = useState('')
   const [stageError, setStageError] = useState<string | null>(null)
+  const [operationsUsers, setOperationsUsers] = useState<OperationsUser[]>([])
+  const [assignedOpsId, setAssignedOpsId] = useState('')
   const [remark, setRemark] = useState('')
   const [savingStage, setSavingStage] = useState(false)
   const [savingRemark, setSavingRemark] = useState(false)
@@ -159,10 +171,20 @@ export function RepForm() {
       setStageRemark('')
       setStageError(null)
       setRemark('')
+      setAssignedOpsId('')
     } finally {
       setLoadingLead(false)
     }
   }
+
+  // Load the operations team as soon as the rep picks "Onboarding" as the
+  // target column — the picker below needs it before they can confirm.
+  useEffect(() => {
+    if (column !== 'onboarding') return
+    fetch('/api/rep/operations')
+      .then((r) => r.json())
+      .then((data) => setOperationsUsers(data.operationsUsers ?? []))
+  }, [column])
 
   async function saveStage() {
     if (!selected || !column) return
@@ -172,6 +194,11 @@ export function RepForm() {
       setStageError('A remark is required')
       return
     }
+    const movingToOnboarding = column === 'onboarding'
+    if (movingToOnboarding && !assignedOpsId) {
+      setStageError('Choose who from operations will handle this lead')
+      return
+    }
     setSavingStage(true)
     setSavedMessage(null)
     setStageError(null)
@@ -179,13 +206,18 @@ export function RepForm() {
       const res = await fetch(`/api/rep/leads/${selected.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...boardColumnToInput(column), remark: stageRemark.trim() }),
+        body: JSON.stringify({
+          ...boardColumnToInput(column),
+          remark: stageRemark.trim(),
+          ...(movingToOnboarding && { assignedOpsId }),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
         setStageError(data.error ?? 'Failed to save')
         return
       }
+      setAssignedOpsId('')
       await selectLead(selected.id)
       setSavedMessage('Updated')
     } finally {
@@ -268,6 +300,14 @@ export function RepForm() {
               {selected.website}
             </a>
           )}
+        </div>
+
+        <div className="rounded-md border p-3">
+          <PipelineProgressBar
+            stage={selected.stage as Stage}
+            onboardingSubStage={selected.onboardingSubStage}
+            assignedOpsName={selected.assignedOpsName}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-md border p-3 text-sm">
@@ -355,6 +395,26 @@ export function RepForm() {
 
         {column !== currentColumn && (
           <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-3">
+            {column === 'onboarding' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Assign to operations</Label>
+                <Select value={assignedOpsId} onValueChange={setAssignedOpsId}>
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue placeholder="Choose who handles onboarding" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operationsUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {operationsUsers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No active operations users yet.</p>
+                )}
+              </div>
+            )}
             <Label className="text-xs">
               {column === 'not_interested' ? 'Reason for marking Not Interested' : 'What happened?'}
             </Label>
@@ -365,7 +425,11 @@ export function RepForm() {
               rows={3}
             />
             {stageError && <p className="text-xs text-rose-600">{stageError}</p>}
-            <Button size="sm" onClick={saveStage} disabled={savingStage || !stageRemark.trim()}>
+            <Button
+              size="sm"
+              onClick={saveStage}
+              disabled={savingStage || !stageRemark.trim() || (column === 'onboarding' && !assignedOpsId)}
+            >
               {savingStage && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Save change
             </Button>

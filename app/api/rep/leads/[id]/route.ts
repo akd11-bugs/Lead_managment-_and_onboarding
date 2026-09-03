@@ -4,7 +4,7 @@ import { leadScope } from '@/lib/session'
 import { getRepSessionUser } from '@/lib/repSession'
 import { STAGES, PENDING_SUB_STATUSES, type Stage, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
-import { applyStageChange } from '@/lib/leadStage'
+import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,10 +56,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  let assignedOps: { id: string; name: string } | undefined
+  if (nextStage === 'onboarding' && existing.stage !== 'onboarding') {
+    const assignedOpsId = typeof body?.assignedOpsId === 'string' ? body.assignedOpsId : ''
+    if (!assignedOpsId) {
+      return NextResponse.json({ error: 'An operations person must be assigned to move a lead to Onboarding' }, { status: 400 })
+    }
+    const resolved = await resolveOpsAssignment(assignedOpsId)
+    if (!resolved) {
+      return NextResponse.json({ error: 'assignedOpsId must be an active operations user' }, { status: 400 })
+    }
+    assignedOps = resolved
+  }
+
   const lead = await applyStageChange(
     id,
     existing,
-    { stage: nextStage as Stage | undefined, pendingSubStatus: nextPendingSubStatus as PendingSubStatus | undefined, remark },
+    {
+      stage: nextStage as Stage | undefined,
+      pendingSubStatus: nextPendingSubStatus as PendingSubStatus | undefined,
+      remark,
+      assignedOpsId: assignedOps?.id,
+      assignedOpsName: assignedOps?.name,
+    },
     { name: user.name },
   )
   return NextResponse.json({ lead })
