@@ -31,11 +31,20 @@ export default auth((req) => {
   // Origin on POST/PATCH/PUT/DELETE, so this never blocks legitimate
   // in-app requests — only ones missing Origin entirely (rare, and left
   // alone rather than risk breaking some legitimate caller) pass through.
+  //
+  // req.nextUrl.host reflects the raw Host header, which on Render (and
+  // most non-Vercel hosts) is an internal address behind the reverse
+  // proxy, not the public domain the browser's Origin actually sends —
+  // same reason lib/auth.config.ts sets trustHost: true. Compare against
+  // x-forwarded-host (what the proxy says the public host really is)
+  // first, falling back to nextUrl.host for direct/local requests where
+  // no proxy is in front of it.
   const isStateChangingApiCall =
     pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
   if (isStateChangingApiCall) {
     const origin = req.headers.get('origin')
-    if (origin && new URL(origin).host !== req.nextUrl.host) {
+    const trustedHost = req.headers.get('x-forwarded-host') ?? req.nextUrl.host
+    if (origin && new URL(origin).host !== trustedHost) {
       return NextResponse.json({ error: 'Cross-origin request blocked' }, { status: 403 })
     }
   }
