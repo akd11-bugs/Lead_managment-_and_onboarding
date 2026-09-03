@@ -62,13 +62,28 @@ async function runAction(rule: WorkflowRule, lead: Lead): Promise<void> {
     const config = parseJson<SendEmailAction>(rule.actionConfig)
     if (!config?.subject || !config?.body) return
 
+    const sentToOwner = config.to === 'owner'
     let to: string | null = lead.email || null
-    if (config.to === 'owner') {
+    if (sentToOwner) {
       const owner = await prisma.user.findUnique({ where: { id: rule.ownerId }, select: { email: true } })
       to = owner?.email ?? null
     }
     if (!to) return
 
+    // Only log once the send actually succeeds — if sendEmailAs throws, let
+    // it propagate (caught by evaluateStageRules' caller in
+    // lib/leadStage.ts) rather than record an email that never went out.
     await sendEmailAs(rule.ownerId, { to, subject: config.subject, body: config.body })
+
+    const descriptionPrefix = sentToOwner ? 'Notified owner: ' : 'Sent: '
+    const activity = await prisma.activity.create({
+      data: {
+        leadId: lead.id,
+        type: 'email',
+        description: `${descriptionPrefix}"${config.subject}"\n\n${config.body}`,
+        authorName: `Automation — ${rule.name}`,
+      },
+    })
+    await prisma.lead.update({ where: { id: lead.id }, data: { lastActivityAt: activity.date } })
   }
 }
