@@ -43,6 +43,12 @@ export async function POST(req: Request) {
       port: 465,
       secure: true,
       auth: { user: emailFromAddress, pass: appPassword },
+      // Nodemailer's defaults (up to a 10-minute socket timeout) leave the
+      // "Saving…" button hanging with no feedback if Gmail is slow to
+      // respond or the port is blocked outbound. Fail fast instead.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 10_000,
     })
     await transporter.verify()
   } catch {
