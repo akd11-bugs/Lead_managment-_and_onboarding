@@ -247,7 +247,7 @@ export function RepForm() {
 
   if (!loggedIn) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-md space-y-4">
         <div>
           <h1 className="text-xl font-semibold">Update your leads</h1>
           <p className="text-sm text-muted-foreground">Enter your name and PIN to continue.</p>
@@ -280,7 +280,7 @@ export function RepForm() {
   if (selected) {
     const currentColumn = boardColumnFor(selected)
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-2xl space-y-4">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -471,14 +471,14 @@ export function RepForm() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Find a lead</h1>
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           <LogOut className="h-3.5 w-3.5" />
         </Button>
       </div>
-      <div className="relative">
+      <div className="relative max-w-md">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           className="pl-8"
@@ -491,7 +491,7 @@ export function RepForm() {
         <p className="text-xs text-muted-foreground">Your {results.length} newest leads — search above to find something else.</p>
       )}
       {searching && <Loader2 className="h-4 w-4 animate-spin mx-auto" />}
-      <div className="space-y-1.5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {results.map((lead) => (
           <button
             key={lead.id}
@@ -505,10 +505,10 @@ export function RepForm() {
           </button>
         ))}
         {!isFresh && !searching && results.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4">No matching leads.</p>
+          <p className="col-span-full text-sm text-muted-foreground text-center py-4">No matching leads.</p>
         )}
         {isFresh && !searching && results.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4">No leads yet — search above once you have one.</p>
+          <p className="col-span-full text-sm text-muted-foreground text-center py-4">No leads yet — search above once you have one.</p>
         )}
       </div>
     </div>
