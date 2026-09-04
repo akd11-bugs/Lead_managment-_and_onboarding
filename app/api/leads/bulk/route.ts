@@ -49,7 +49,7 @@ export async function PATCH(req: Request) {
 
     const scopedLeads = await prisma.lead.findMany({
       where: { id: { in: scopedIds } },
-      select: { id: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true },
+      select: { id: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
     })
 
     let assignedOps: { id: string; name: string } | undefined

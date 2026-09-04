@@ -1,6 +1,6 @@
 import type { Lead } from '@prisma/client'
 import { prisma } from '@/lib/db'
-import { type OnboardingSubStage, type PendingSubStatus, type Stage } from '@/lib/types'
+import { boardColumnFor, BOARD_COLUMN_LABELS, type OnboardingSubStage, type PendingSubStatus, type Stage } from '@/lib/types'
 import { evaluateStageRules } from '@/lib/workflow'
 
 export interface StageChangeActor {
@@ -33,7 +33,7 @@ export interface StageChangeInput {
   assignedOpsName?: string
 }
 
-type ExistingLead = Pick<Lead, 'stage' | 'wonAt' | 'onboardedAt' | 'onboardingSubStage'>
+type ExistingLead = Pick<Lead, 'stage' | 'wonAt' | 'onboardedAt' | 'onboardingSubStage' | 'pendingSubStatus'>
 
 // The stage / pendingSubStatus transition core shared by every entry point
 // (the dashboard's PATCH /api/leads/[id], the bulk PATCH, Kanban drag, the
@@ -104,11 +104,24 @@ export async function applyStageChange(
 
   const lead = await prisma.lead.update({ where: { id: leadId }, data })
 
+  // Prefix the remark with the actual movement (e.g. "New → Pending — Our
+  // Side") so the Activity timeline and the daily report both show what
+  // happened, not just the rep's free-text note.
+  const fromColumn = boardColumnFor({ stage: existing.stage, pendingSubStatus: existing.pendingSubStatus })
+  const toColumn = boardColumnFor({
+    stage: nextStage ?? existing.stage,
+    pendingSubStatus: nextPendingSubStatus !== undefined ? nextPendingSubStatus : existing.pendingSubStatus,
+  })
+  const description =
+    fromColumn !== toColumn
+      ? `${BOARD_COLUMN_LABELS[fromColumn]} → ${BOARD_COLUMN_LABELS[toColumn]}: ${input.remark.trim()}`
+      : input.remark.trim()
+
   await prisma.activity.create({
     data: {
       leadId,
       type: 'stage_change',
-      description: input.remark.trim(),
+      description,
       authorName: actor.name,
     },
   })

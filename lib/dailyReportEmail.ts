@@ -3,6 +3,16 @@ import { sendEmail } from '@/lib/email'
 
 const ACTOR_ACTIVITY_TYPES = ['call', 'email', 'meeting', 'note', 'stage_change']
 
+const TYPE_LABELS: Record<string, string> = {
+  call: 'Call',
+  email: 'Email',
+  meeting: 'Meeting',
+  note: 'Note',
+  stage_change: 'Stage change',
+}
+
+const IST = 'Asia/Kolkata'
+
 function dayRange(date: Date): { start: Date; end: Date } {
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   const end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59, 999)
@@ -15,15 +25,19 @@ function yesterday(): Date {
   return d
 }
 
+function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: IST, hour: 'numeric', minute: '2-digit', hour12: true }).format(date)
+}
+
 export interface DailyReportResult {
   recipients: string[]
   reportDate: string
 }
 
 // Rep-wise activity for a single calendar day, emailed to every active
-// admin — same numbers as the "Daily activity — by rep" table on /reports,
-// scoped to one day instead of a trailing 14-day window. Defaults to
-// yesterday so a morning cron run reports on the day that just finished.
+// admin — every call, email, meeting, note, and stage move (e.g.
+// "New → Pending — Our Side") each rep logged, not just a count. Defaults
+// to yesterday so a morning cron run reports on the day that just finished.
 export async function sendDailyActivityReportEmail(date: Date = yesterday()): Promise<DailyReportResult> {
   const { start, end } = dayRange(date)
   const reportDate = start.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
@@ -37,15 +51,18 @@ export async function sendDailyActivityReportEmail(date: Date = yesterday()): Pr
     prisma.lead.count({ where: { wonAt: { gte: start, lte: end } } }),
     prisma.activity.findMany({
       where: { date: { gte: start, lte: end }, authorName: { not: 'System' }, type: { in: ACTOR_ACTIVITY_TYPES } },
-      select: { authorName: true },
+      select: { type: true, description: true, authorName: true, date: true, lead: { select: { company: true } } },
+      orderBy: { date: 'asc' },
     }),
   ])
 
-  const repCounts = new Map<string, number>()
+  const byRep = new Map<string, typeof activities>()
   for (const a of activities) {
-    repCounts.set(a.authorName, (repCounts.get(a.authorName) ?? 0) + 1)
+    const list = byRep.get(a.authorName) ?? []
+    list.push(a)
+    byRep.set(a.authorName, list)
   }
-  const reps = Array.from(repCounts.entries()).sort((a, b) => b[1] - a[1])
+  const reps = Array.from(byRep.entries()).sort((a, b) => b[1].length - a[1].length)
 
   const lines = [
     `Daily activity report — ${reportDate}`,
@@ -55,8 +72,19 @@ export async function sendDailyActivityReportEmail(date: Date = yesterday()): Pr
     `Activities logged: ${activities.length}`,
     '',
     'By rep:',
-    ...(reps.length > 0 ? reps.map(([name, count]) => `  ${name}: ${count}`) : ['  No activity logged.']),
   ]
+  if (reps.length === 0) {
+    lines.push('  No activity logged.')
+  } else {
+    for (const [name, repActivities] of reps) {
+      lines.push('', `${name} (${repActivities.length}):`)
+      for (const a of repActivities) {
+        lines.push(
+          `  ${formatTime(a.date)} · ${TYPE_LABELS[a.type] ?? a.type} · ${a.lead.company} — ${a.description}`
+        )
+      }
+    }
+  }
 
   const recipients = admins.map((a) => a.email)
   if (recipients.length > 0) {

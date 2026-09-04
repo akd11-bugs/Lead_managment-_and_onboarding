@@ -62,7 +62,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    select: { stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true },
+    select: { stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
