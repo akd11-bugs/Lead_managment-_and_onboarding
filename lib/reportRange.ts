@@ -59,3 +59,17 @@ export function getMonthlyBuckets(count: number): TrendBucket[] {
   }
   return buckets
 }
+
+// Trailing calendar days, oldest first, ending with today — independent of
+// the page's own range picker, same convention as the weekly/monthly trend
+// buckets above.
+export function getDailyBuckets(count: number): TrendBucket[] {
+  const now = new Date()
+  const buckets: TrendBucket[] = []
+  for (let i = count - 1; i >= 0; i--) {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59, 999)
+    buckets.push({ start, end, label: start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) })
+  }
+  return buckets
+}

@@ -22,7 +22,15 @@ export default async function ReportsPage({
 
   const { range: rawRange } = await searchParams
   const range: RangeKey = parseRangeKey(rawRange)
-  const { summary, salesByRep: repRows, operationsOnboarded: opsRows, trend, funnel, range: rangeInfo } = await getReportsData(range)
+  const {
+    summary,
+    salesByRep: repRows,
+    operationsOnboarded: opsRows,
+    trend,
+    funnel,
+    dailyActivityByRep,
+    range: rangeInfo,
+  } = await getReportsData(range)
   const { label } = rangeInfo
 
   const maxCreated = Math.max(1, ...repRows.map((r) => r.created))
@@ -189,6 +197,51 @@ export default async function ReportsPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Daily activity — by rep</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Calls, emails, meetings, and notes logged per day — trailing 14 days, regardless of the range above
+          </p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs uppercase tracking-wide">
+                <tr className="text-left">
+                  <th className="px-4 py-2 font-medium">Day</th>
+                  {dailyActivityByRep.reps.map((rep) => (
+                    <th key={rep} className="px-4 py-2 font-medium text-right">{rep}</th>
+                  ))}
+                  <th className="px-4 py-2 font-medium text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {dailyActivityByRep.reps.length === 0 && (
+                  <tr>
+                    <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">
+                      No activity in the last 14 days.
+                    </td>
+                  </tr>
+                )}
+                {dailyActivityByRep.reps.length > 0 &&
+                  dailyActivityByRep.rows.map((row) => (
+                    <tr key={row.day}>
+                      <td className="px-4 py-2 font-medium whitespace-nowrap">{row.day}</td>
+                      {dailyActivityByRep.reps.map((rep) => (
+                        <td key={rep} className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                          {row.counts[rep] || '—'}
+                        </td>
+                      ))}
+                      <td className="px-4 py-2 text-right tabular-nums font-medium">{row.total}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

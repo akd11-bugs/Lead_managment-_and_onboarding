@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db'
-import { getRange, getWeeklyBuckets, getMonthlyBuckets, type RangeKey, type TrendBucket } from '@/lib/reportRange'
+import { getRange, getWeeklyBuckets, getMonthlyBuckets, getDailyBuckets, type RangeKey, type TrendBucket } from '@/lib/reportRange'
 import type { TrendPoint } from '@/components/reports/TrendChart'
 
 const ACTOR_ACTIVITY_TYPES = ['call', 'email', 'meeting', 'note', 'stage_change']
@@ -16,6 +16,10 @@ export interface ReportsData {
   operationsOnboarded: { name: string; count: number }[]
   trend: { weekly: TrendPoint[]; monthly: TrendPoint[] }
   funnel: { new: number; pendingOurs: number; pendingMerchant: number; pendingPsp: number; onboarded: number; live: number }
+  dailyActivityByRep: {
+    reps: string[]
+    rows: { day: string; counts: Record<string, number>; total: number }[]
+  }
 }
 
 // Single source of truth for every number on /reports — also consumed by the
@@ -26,8 +30,9 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
   const weeklyBuckets = getWeeklyBuckets(8)
   const monthlyBuckets = getMonthlyBuckets(6)
   const trendStart = monthlyBuckets[0].start // 6 months back always covers the 8-week window too
+  const dailyBuckets = getDailyBuckets(14)
 
-  const [createdLeads, wonLeads, activities, trendLeads] = await Promise.all([
+  const [createdLeads, wonLeads, activities, trendLeads, dailyActivities] = await Promise.all([
     prisma.lead.findMany({
       where: { createdAt: { gte: start, lte: end } },
       select: { id: true, ownerName: true, stage: true, wonAt: true, onboardedAt: true, pendingSubStatus: true },
@@ -49,6 +54,16 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
     prisma.lead.findMany({
       where: { OR: [{ createdAt: { gte: trendStart } }, { wonAt: { gte: trendStart } }] },
       select: { createdAt: true, wonAt: true },
+    }),
+    // Independent of the page's range picker, like the weekly/monthly trend
+    // above — always the trailing 14 calendar days.
+    prisma.activity.findMany({
+      where: {
+        date: { gte: dailyBuckets[0].start },
+        authorName: { not: 'System' },
+        type: { in: ACTOR_ACTIVITY_TYPES },
+      },
+      select: { date: true, authorName: true },
     }),
   ])
 
@@ -95,6 +110,21 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
 
+  // Daily activity — by rep (trailing 14 days, oldest first)
+  const dailyReps = Array.from(new Set(dailyActivities.map((a) => a.authorName))).sort()
+  const dailyRows = dailyBuckets.map((b) => {
+    const counts: Record<string, number> = {}
+    for (const rep of dailyReps) counts[rep] = 0
+    let total = 0
+    for (const a of dailyActivities) {
+      if (a.date >= b.start && a.date <= b.end) {
+        counts[a.authorName] = (counts[a.authorName] ?? 0) + 1
+        total++
+      }
+    }
+    return { day: b.label, counts, total }
+  })
+
   return {
     range: { key: range, start, end, label },
     summary: {
@@ -114,5 +144,6 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
       onboarded: createdLeads.filter((l) => l.wonAt).length,
       live: createdLeads.filter((l) => l.onboardedAt).length,
     },
+    dailyActivityByRep: { reps: dailyReps, rows: dailyRows },
   }
 }
