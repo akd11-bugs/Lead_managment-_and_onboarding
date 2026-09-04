@@ -1,0 +1,23 @@
+name: Send daily activity report
+
+on:
+  schedule:
+    # 03:00 UTC = 08:30 IST — after midnight IST, so "yesterday" is complete.
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the daily report endpoint
+        run: |
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.DAILY_REPORT_API_KEY }}" \
+            "${{ secrets.APP_URL }}/api/cron/daily-activity-report")
+          echo "HTTP status: $status"
+          cat /tmp/response.json
+          if [ "$status" -ge 400 ]; then
+            exit 1
+          fi
