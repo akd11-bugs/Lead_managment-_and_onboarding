@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireApiUser, isAdmin, type SessionUser } from '@/lib/session'
+import { requireApiUser, isAdmin, isOperations, type SessionUser } from '@/lib/session'
 import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
 async function findOwned(id: string, user: SessionUser) {
-  return prisma.task.findFirst({ where: { id, ...(isAdmin(user) ? {} : { ownerId: user.id }) } })
+  return prisma.task.findFirst({
+    where: {
+      id,
+      orgId: { in: user.visibleOrgIds },
+      ...(isAdmin(user) || isOperations(user) ? {} : { ownerId: user.id }),
+    },
+  })
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

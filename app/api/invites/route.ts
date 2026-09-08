@@ -18,7 +18,10 @@ export async function GET() {
   if (user instanceof NextResponse) return user
   if (!isAdmin(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const invites = await prisma.invite.findMany({ orderBy: { createdAt: 'desc' } })
+  const invites = await prisma.invite.findMany({
+    where: { orgId: { in: user.visibleOrgIds } },
+    orderBy: { createdAt: 'desc' },
+  })
   return NextResponse.json({ invites })
 }
 
@@ -37,7 +40,7 @@ export async function POST(req: Request) {
   for (let attempt = 0; attempt < 3 && !invite; attempt++) {
     try {
       invite = await prisma.invite.create({
-        data: { name, role, code: generateCode(), createdById: user.id },
+        data: { orgId: user.orgId, name, role, code: generateCode(), createdById: user.id },
       })
     } catch (err: unknown) {
       const isUniqueViolation = (err as { code?: string })?.code === 'P2002'

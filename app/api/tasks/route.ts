@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireApiUser, isAdmin } from '@/lib/session'
+import { requireApiUser, isAdmin, isOperations } from '@/lib/session'
 import { readJsonBody } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
@@ -11,7 +11,11 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const leadId = url.searchParams.get('leadId')
   const tasks = await prisma.task.findMany({
-    where: { ...(isAdmin(user) ? {} : { ownerId: user.id }), ...(leadId ? { leadId } : {}) },
+    where: {
+      orgId: { in: user.visibleOrgIds },
+      ...(isAdmin(user) || isOperations(user) ? {} : { ownerId: user.id }),
+      ...(leadId ? { leadId } : {}),
+    },
     orderBy: [{ done: 'asc' }, { dueDate: 'asc' }],
     include: { lead: { select: { company: true } } },
   })
@@ -31,7 +35,7 @@ export async function POST(req: Request) {
   const leadId = body.leadId || null
   if (leadId) {
     const owned = await prisma.lead.findFirst({
-      where: { id: leadId, ...(isAdmin(user) ? {} : { ownerId: user.id }) },
+      where: { id: leadId, orgId: { in: user.visibleOrgIds }, ...(isAdmin(user) || isOperations(user) ? {} : { ownerId: user.id }) },
       select: { id: true },
     })
     if (!owned) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
@@ -39,6 +43,7 @@ export async function POST(req: Request) {
 
   const task = await prisma.task.create({
     data: {
+      orgId: user.orgId,
       leadId,
       title,
       dueDate: body.dueDate ? new Date(body.dueDate) : null,

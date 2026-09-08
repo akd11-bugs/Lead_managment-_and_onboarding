@@ -23,11 +23,12 @@ export async function POST(req: Request) {
   if (body instanceof NextResponse) return body
   if (!body.leadId) return NextResponse.json({ error: 'leadId required' }, { status: 400 })
 
-  const lead = await prisma.lead.findFirst({ where: { id: body.leadId, ...leadScope(user) }, select: { id: true } })
+  const lead = await prisma.lead.findFirst({ where: { id: body.leadId, ...leadScope(user) }, select: { id: true, orgId: true } })
   if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const activity = await prisma.activity.create({
     data: {
+      orgId: lead.orgId,
       leadId: body.leadId,
       type: body.type ?? 'note',
       description: String(body.description ?? ''),

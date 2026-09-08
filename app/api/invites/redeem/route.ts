@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       if (!invite) return null
 
       const user = await tx.user.create({
-        data: { name: invite.name, email, passwordHash, role: invite.role, isActive: true },
+        data: { orgId: invite.orgId, name: invite.name, email, passwordHash, role: invite.role, isActive: true },
       })
       await tx.invite.update({ where: { id: invite.id }, data: { redeemedByUserId: user.id } })
 

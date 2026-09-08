@@ -43,7 +43,7 @@ function normalizeBusinessType(value: string | undefined): BusinessType | null {
 // Shared by the CSV import route and the Google Sheets sync cron route — both
 // end up with the same shape of loosely-typed rows and need identical
 // validation/dedupe/create behavior so they can never quietly drift apart.
-export async function importLeadRows(rows: unknown[], owner: ImportOwner): Promise<ImportResult> {
+export async function importLeadRows(rows: unknown[], owner: ImportOwner, orgId: string): Promise<ImportResult> {
   const skipped: { row: number; reason: string }[] = []
   const toCreate: {
     row: number
@@ -105,6 +105,7 @@ export async function importLeadRows(rows: unknown[], owner: ImportOwner): Promi
   const companies = [...new Set(toCreate.map((r) => r.company.toLowerCase()))]
   const existing = await prisma.lead.findMany({
     where: {
+      orgId,
       OR: [
         ...(emails.length ? [{ email: { in: emails, mode: 'insensitive' as const } }] : []),
         { company: { in: companies, mode: 'insensitive' as const } },
@@ -135,7 +136,7 @@ export async function importLeadRows(rows: unknown[], owner: ImportOwner): Promi
 
   if (finalRows.length > 0) {
     await prisma.lead.createMany({
-      data: finalRows.map(({ row: _row, ...r }) => ({ ...r, stage: 'new', ownerId: owner.id, ownerName: owner.name })),
+      data: finalRows.map(({ row: _row, ...r }) => ({ ...r, orgId, stage: 'new', ownerId: owner.id, ownerName: owner.name })),
     })
   }
 

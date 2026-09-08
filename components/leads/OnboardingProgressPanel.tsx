@@ -4,28 +4,26 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  ONBOARDING_SUB_STAGES,
-  ONBOARDING_SUB_STAGE_LABELS,
-  onboardingProgressPercent,
-  type OnboardingSubStage,
-} from '@/lib/types'
+import { onboardingProgressPercent } from '@/lib/types'
+import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
 
 export function OnboardingProgressPanel({
   leadId,
   subStage,
 }: {
   leadId: string
-  subStage: OnboardingSubStage | null
+  subStage: string | null
 }) {
   const router = useRouter()
   const [current, setCurrent] = useState(subStage)
-  const [saving, setSaving] = useState<OnboardingSubStage | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
+  const { onboardingSteps, finalOnboardingStepKey, loading } = usePipelineConfig()
 
-  const currentIdx = current ? ONBOARDING_SUB_STAGES.indexOf(current) : -1
-  const percent = onboardingProgressPercent(current)
+  const stepKeys = onboardingSteps.map((s) => s.key)
+  const currentIdx = current ? stepKeys.indexOf(current) : -1
+  const percent = onboardingProgressPercent(current, stepKeys)
 
-  async function setStage(next: OnboardingSubStage) {
+  async function setStage(next: string) {
     setSaving(next)
     try {
       const res = await fetch(`/api/leads/${leadId}`, {
@@ -40,6 +38,14 @@ export function OnboardingProgressPanel({
     } finally {
       setSaving(null)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+      </div>
+    )
   }
 
   return (
@@ -58,13 +64,14 @@ export function OnboardingProgressPanel({
       </div>
 
       <div className="space-y-2">
-        {ONBOARDING_SUB_STAGES.map((s, i) => {
-          const done = i < currentIdx || (i === currentIdx && s === 'final_onboarded')
-          const isCurrent = i === currentIdx && s !== 'final_onboarded'
+        {onboardingSteps.map((s, i) => {
+          const isFinal = s.key === finalOnboardingStepKey
+          const done = i < currentIdx || (i === currentIdx && isFinal)
+          const isCurrent = i === currentIdx && !isFinal
           return (
             <button
-              key={s}
-              onClick={() => setStage(s)}
+              key={s.key}
+              onClick={() => setStage(s.key)}
               disabled={saving !== null}
               className={cn(
                 'flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors',
@@ -73,14 +80,14 @@ export function OnboardingProgressPanel({
                 !done && !isCurrent && 'hover:bg-accent'
               )}
             >
-              {saving === s ? (
+              {saving === s.key ? (
                 <Loader2 className="h-4 w-4 animate-spin shrink-0" />
               ) : done ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
               ) : (
                 <Circle className="h-4 w-4 text-muted-foreground shrink-0" />
               )}
-              <span className={done ? 'font-medium' : ''}>{ONBOARDING_SUB_STAGE_LABELS[s]}</span>
+              <span className={done ? 'font-medium' : ''}>{s.label}</span>
               {isCurrent && <span className="ml-auto text-xs text-blue-600">In progress</span>}
             </button>
           )

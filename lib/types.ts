@@ -181,7 +181,10 @@ export const PENDING_SUB_STATUS_LABELS: Record<PendingSubStatus, string> = {
 // valid BoardColumnKey; the string sets don't overlap with the other
 // stages). This is a pure UI/selection concept — the database only ever
 // stores `stage` + `pendingSubStatus` separately.
-export type BoardColumnKey = 'new' | PendingSubStatus | 'proposal' | 'onboarding' | 'not_interested'
+// Loosened from a fixed union to `string` so a custom (per-org) stage from
+// StageDefinition (lib/pipelineConfig.ts) can be a board column too — the
+// literal core values below are still always valid members of it.
+export type BoardColumnKey = string
 
 export const BOARD_COLUMNS: BoardColumnKey[] = [
   'new',
@@ -284,15 +287,23 @@ const FIELD_MAX_LENGTHS: Record<string, number> = {
 // Validates enum-like Lead fields present in a request body against the
 // arrays above. Returns an error message, or null if everything present is
 // valid. Fields absent from the body are left untouched (PATCH semantics).
-export function validateLeadFields(body: Record<string, unknown>): string | null {
-  if (body.stage !== undefined && !STAGES.includes(body.stage as Stage)) return `Invalid stage: ${body.stage}`
+export function validateLeadFields(
+  body: Record<string, unknown>,
+  options?: { validStageKeys?: string[]; validOnboardingStepKeys?: string[] }
+): string | null {
+  // Falls back to the static built-in lists when no org-scoped definitions are
+  // passed (e.g. a caller that hasn't been updated yet) — every org starts
+  // seeded with exactly these values anyway, see lib/pipelineConfig.ts.
+  const stageKeys = options?.validStageKeys ?? STAGES
+  const onboardingStepKeys = options?.validOnboardingStepKeys ?? ONBOARDING_SUB_STAGES
+  if (body.stage !== undefined && !stageKeys.includes(body.stage as string)) return `Invalid stage: ${body.stage}`
   if (body.source !== undefined && !SOURCES.includes(body.source as LeadSource)) return `Invalid source: ${body.source}`
   if (body.type !== undefined && !LEAD_TYPES.includes(body.type as LeadType)) return `Invalid type: ${body.type}`
   if (body.quality !== undefined && !QUALITY_LEVELS.includes(body.quality as QualityLevel)) return `Invalid quality: ${body.quality}`
   if (body.effort !== undefined && !QUALITY_LEVELS.includes(body.effort as QualityLevel)) return `Invalid effort: ${body.effort}`
   if (body.businessType != null && !BUSINESS_TYPES.includes(body.businessType as BusinessType)) return `Invalid businessType: ${body.businessType}`
   if (body.pendingSubStatus != null && !PENDING_SUB_STATUSES.includes(body.pendingSubStatus as PendingSubStatus)) return `Invalid pendingSubStatus: ${body.pendingSubStatus}`
-  if (body.onboardingSubStage != null && !ONBOARDING_SUB_STAGES.includes(body.onboardingSubStage as OnboardingSubStage)) return `Invalid onboardingSubStage: ${body.onboardingSubStage}`
+  if (body.onboardingSubStage != null && !onboardingStepKeys.includes(body.onboardingSubStage as string)) return `Invalid onboardingSubStage: ${body.onboardingSubStage}`
   if (body.estimatedVolume !== undefined && !Number.isFinite(Number(body.estimatedVolume))) {
     return `Invalid estimatedVolume: ${body.estimatedVolume}`
   }
@@ -311,12 +322,14 @@ export function validateLeadFields(body: Record<string, unknown>): string | null
   return null
 }
 
-// 1-indexed step out of ONBOARDING_SUB_STAGES.length, as a whole percentage.
-export function onboardingProgressPercent(subStage: OnboardingSubStage | null): number {
+// 1-indexed step out of the step list's length, as a whole percentage. Pass
+// an org's actual OnboardingStepDefinition keys (in position order) once
+// they're available — falls back to the static built-in list otherwise.
+export function onboardingProgressPercent(subStage: string | null, stepKeys: string[] = ONBOARDING_SUB_STAGES): number {
   if (!subStage) return 0
-  const idx = ONBOARDING_SUB_STAGES.indexOf(subStage)
+  const idx = stepKeys.indexOf(subStage)
   if (idx === -1) return 0
-  return Math.round(((idx + 1) / ONBOARDING_SUB_STAGES.length) * 100)
+  return Math.round(((idx + 1) / stepKeys.length) * 100)
 }
 
 // The whole-funnel checkpoint bar (New → Pending → Proposal → Onboarding →

@@ -25,7 +25,7 @@ export async function GET() {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
   const rules = await prisma.workflowRule.findMany({
-    where: { ownerId: user.id },
+    where: { orgId: user.orgId, ownerId: user.id },
     orderBy: { createdAt: 'desc' },
   })
   return NextResponse.json({ rules: rules.map(serialize) })
@@ -51,6 +51,7 @@ export async function POST(req: Request) {
 
   const rule = await prisma.workflowRule.create({
     data: {
+      orgId: user.orgId,
       name,
       triggerType: body.triggerType,
       triggerConfig: JSON.stringify(body.triggerConfig),

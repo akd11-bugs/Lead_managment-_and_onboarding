@@ -36,8 +36,6 @@ import {
 } from 'lucide-react'
 import { formatCurrency, formatDate, formatDateTime, formatRelative } from '@/lib/utils'
 import {
-  BOARD_COLUMNS,
-  BOARD_COLUMN_LABELS,
   boardColumnFor,
   SOURCES,
   SOURCE_LABELS,
@@ -47,7 +45,6 @@ import {
   LEAD_TYPE_LABELS,
   BUSINESS_TYPES,
   BUSINESS_TYPE_LABELS,
-  ONBOARDING_SUB_STAGE_LABELS,
   onboardingProgressPercent,
   type Lead,
   type Activity,
@@ -65,6 +62,8 @@ import { EmailComposer } from './EmailComposer'
 import { LeadTasksTab } from './LeadTasksTab'
 import { StageChangeDialog } from './StageChangeDialog'
 import { PipelineProgressBar } from './PipelineProgressBar'
+import { CustomFieldsSection } from './CustomFieldsSection'
+import { usePipelineConfig, useLeadFieldDefinitions } from '@/lib/hooks/usePipelineConfig'
 
 interface SkillRunEntry {
   id: string
@@ -104,11 +103,15 @@ export function LeadDetailDialog({
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
-  const [stageChangeTarget, setStageChangeTarget] = useState<BoardColumnKey | null>(null)
+  const [stageChangeTarget, setStageChangeTarget] = useState<{ key: BoardColumnKey; label: string } | null>(null)
   const [activityForm, setActivityForm] = useState<{ type: ActivityType; description: string }>({
     type: 'note',
     description: '',
   })
+  const { columns, onboardingSteps } = usePipelineConfig()
+  const onboardingStepLabels = Object.fromEntries(onboardingSteps.map((s) => [s.key, s.label]))
+  const { fields: customFieldDefs } = useLeadFieldDefinitions()
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, unknown>>({})
   useEffect(() => {
     if (!open) return
     fetch(`/api/leads/${leadId}`)
@@ -118,6 +121,11 @@ export function LeadDetailDialog({
           setLead(data.lead)
           setActivities(data.lead.activities ?? [])
           setSkillRuns(data.lead.skillRuns ?? [])
+          try {
+            setCustomFieldValues(data.lead.customFieldsJson ? JSON.parse(data.lead.customFieldsJson) : {})
+          } catch {
+            setCustomFieldValues({})
+          }
         }
       })
   }, [open, leadId])
@@ -152,6 +160,11 @@ export function LeadDetailDialog({
     } finally {
       setSaving(false)
     }
+  }
+
+  async function patchCustomField(key: string, value: unknown) {
+    setCustomFieldValues((prev) => ({ ...prev, [key]: value }))
+    await patchLead({ customFields: { [key]: value } } as unknown as Partial<Lead>)
   }
 
   async function addActivity() {
@@ -242,7 +255,7 @@ export function LeadDetailDialog({
                   <span>{formatCurrency(lead.estimatedVolume)}</span>
                   <span>·</span>
                   <Badge variant="outline" className="capitalize">
-                    {BOARD_COLUMN_LABELS[boardColumnFor(lead)]}
+                    {columns.find((c) => c.key === boardColumnFor(lead))?.label ?? boardColumnFor(lead)}
                   </Badge>
                 </div>
               </DialogDescription>
@@ -356,7 +369,8 @@ export function LeadDetailDialog({
                   value={boardColumnFor(lead)}
                   onValueChange={(v) => {
                     if (v === boardColumnFor(lead)) return
-                    setStageChangeTarget(v as BoardColumnKey)
+                    const label = columns.find((c) => c.key === v)?.label ?? v
+                    setStageChangeTarget({ key: v, label })
                   }}
                   disabled={saving}
                 >
@@ -364,9 +378,9 @@ export function LeadDetailDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {BOARD_COLUMNS.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {BOARD_COLUMN_LABELS[c]}
+                    {columns.map((c) => (
+                      <SelectItem key={c.key} value={c.key}>
+                        {c.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -486,9 +500,9 @@ export function LeadDetailDialog({
                   <div className="flex items-center gap-2">
                     <Badge variant={lead.onboardingSubStage === 'final_onboarded' ? 'success' : 'outline'} className="gap-1">
                       {lead.onboardingSubStage === 'final_onboarded' && <CheckCircle2 className="h-3 w-3" />}
-                      {lead.onboardingSubStage ? ONBOARDING_SUB_STAGE_LABELS[lead.onboardingSubStage] : 'Not started'}
+                      {lead.onboardingSubStage ? (onboardingStepLabels[lead.onboardingSubStage] ?? lead.onboardingSubStage) : 'Not started'}
                       {' · '}
-                      {onboardingProgressPercent(lead.onboardingSubStage)}%
+                      {onboardingProgressPercent(lead.onboardingSubStage, onboardingSteps.map((s) => s.key))}%
                     </Badge>
                     <Link
                       href={`/leads/${lead.id}/onboarding`}
@@ -537,6 +551,12 @@ export function LeadDetailDialog({
                 disabled={saving}
               />
             </div>
+            <CustomFieldsSection
+              fields={customFieldDefs}
+              values={customFieldValues}
+              onChange={patchCustomField}
+              disabled={saving}
+            />
           </TabsContent>
 
           <TabsContent value="activities" className="pt-2 space-y-4">
@@ -546,7 +566,7 @@ export function LeadDetailDialog({
               leadEmail={lead.email}
               isNewStage={lead.stage === 'new'}
               onSent={handleEmailSent}
-              onMarkContacted={() => setStageChangeTarget('pending_ours')}
+              onMarkContacted={() => setStageChangeTarget({ key: 'pending_ours', label: 'Pending — Our Side' })}
             />
 
             <div className="rounded-md border p-3 space-y-2">
@@ -664,7 +684,8 @@ export function LeadDetailDialog({
         leadId={lead.id}
         open
         onOpenChange={(o) => !o && setStageChangeTarget(null)}
-        target={stageChangeTarget}
+        target={stageChangeTarget.key}
+        targetLabel={stageChangeTarget.label}
         onDone={handleStageChangeDone}
       />
     )}

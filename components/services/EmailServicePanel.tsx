@@ -200,6 +200,7 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
           open={markPendingOpen}
           onOpenChange={setMarkPendingOpen}
           target="pending_ours"
+          targetLabel="Pending — Our Side"
           onDone={handleMarkPendingDone}
         />
       )}

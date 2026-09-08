@@ -23,8 +23,11 @@ export interface ReportsData {
 }
 
 // Single source of truth for every number on /reports — also consumed by the
-// external API route, so the two can never drift out of sync with each other.
-export async function getReportsData(range: RangeKey): Promise<ReportsData> {
+// external API route, so the two can never drift out of sync with each
+// other. `orgIds` is the caller's visible-org-id set (self + descendants for
+// an admin/operations rollup, per lib/session.ts's visibleOrgIds) — every
+// query below is scoped to it, so a report never mixes another org's data in.
+export async function getReportsData(range: RangeKey, orgIds: string[]): Promise<ReportsData> {
   const { start, end, label } = getRange(range)
 
   const weeklyBuckets = getWeeklyBuckets(8)
@@ -34,31 +37,32 @@ export async function getReportsData(range: RangeKey): Promise<ReportsData> {
 
   const [createdLeads, wonLeads, activities, trendLeads, dailyActivities] = await Promise.all([
     prisma.lead.findMany({
-      where: { createdAt: { gte: start, lte: end } },
+      where: { orgId: { in: orgIds }, createdAt: { gte: start, lte: end } },
       select: { id: true, ownerName: true, stage: true, wonAt: true, onboardedAt: true, pendingSubStatus: true },
     }),
     prisma.lead.findMany({
       // Counts as soon as sales marks a lead won (wonAt, set when it enters
       // the 'onboarding' stage) — not onboardedAt, which only lands once ops
       // finishes the sub-pipeline, possibly much later than this period.
-      where: { wonAt: { gte: start, lte: end } },
+      where: { orgId: { in: orgIds }, wonAt: { gte: start, lte: end } },
       select: { id: true, ownerName: true },
     }),
     prisma.activity.findMany({
       // Excludes legacy rows logged before activities were attributed to
       // the real session user — those have authorName: 'System' and would
       // otherwise show up as a phantom rep.
-      where: { date: { gte: start, lte: end }, authorName: { not: 'System' } },
+      where: { orgId: { in: orgIds }, date: { gte: start, lte: end }, authorName: { not: 'System' } },
       select: { type: true, authorName: true, description: true },
     }),
     prisma.lead.findMany({
-      where: { OR: [{ createdAt: { gte: trendStart } }, { wonAt: { gte: trendStart } }] },
+      where: { orgId: { in: orgIds }, OR: [{ createdAt: { gte: trendStart } }, { wonAt: { gte: trendStart } }] },
       select: { createdAt: true, wonAt: true },
     }),
     // Independent of the page's range picker, like the weekly/monthly trend
     // above — always the trailing 14 calendar days.
     prisma.activity.findMany({
       where: {
+        orgId: { in: orgIds },
         date: { gte: dailyBuckets[0].start },
         authorName: { not: 'System' },
         type: { in: ACTOR_ACTIVITY_TYPES },

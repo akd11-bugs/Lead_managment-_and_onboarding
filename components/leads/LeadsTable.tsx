@@ -26,8 +26,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { SavedViewsMenu, type LeadViewFilters } from '@/components/leads/SavedViewsMenu'
 import { formatCurrency, formatRelative, cn } from '@/lib/utils'
 import {
-  BOARD_COLUMNS,
-  BOARD_COLUMN_LABELS,
   boardColumnFor,
   boardColumnToInput,
   SOURCES,
@@ -39,6 +37,7 @@ import {
   type LeadSource,
   type QualityLevel,
 } from '@/lib/types'
+import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
 
 interface OwnerOption {
   id: string
@@ -71,6 +70,9 @@ export function LeadsTable({
   ownerOptions?: OwnerOption[]
 }) {
   const router = useRouter()
+  const { columns } = usePipelineConfig()
+  const columnLabels = useMemo(() => Object.fromEntries(columns.map((c) => [c.key, c.label])), [columns])
+  const columnKeys = useMemo(() => columns.map((c) => c.key), [columns])
   const [search, setSearch] = useState(initialQuery ?? '')
   const [stageFilter, setStageFilter] = useState<BoardColumnKey | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<LeadSource | 'all'>('all')
@@ -98,10 +100,10 @@ export function LeadsTable({
     } else if (sortKey === 'quality') {
       sorted.sort((a, b) => QUALITY_RANK[b.quality] - QUALITY_RANK[a.quality])
     } else if (sortKey === 'stage') {
-      sorted.sort((a, b) => BOARD_COLUMNS.indexOf(boardColumnFor(a)) - BOARD_COLUMNS.indexOf(boardColumnFor(b)))
+      sorted.sort((a, b) => columnKeys.indexOf(boardColumnFor(a)) - columnKeys.indexOf(boardColumnFor(b)))
     }
     return sorted
-  }, [initialLeads, search, stageFilter, sourceFilter, sortKey])
+  }, [initialLeads, search, stageFilter, sourceFilter, sortKey, columnKeys])
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id))
 
@@ -186,9 +188,9 @@ export function LeadsTable({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All stages</SelectItem>
-            {BOARD_COLUMNS.map((c) => (
-              <SelectItem key={c} value={c}>
-                {BOARD_COLUMN_LABELS[c]}
+            {columns.map((c) => (
+              <SelectItem key={c.key} value={c.key}>
+                {c.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -222,7 +224,7 @@ export function LeadsTable({
           filters={{ search, stageFilter, sourceFilter, sortKey }}
           onApply={(v: LeadViewFilters) => {
             setSearch(v.search)
-            setStageFilter((BOARD_COLUMNS as string[]).includes(v.stageFilter) ? (v.stageFilter as BoardColumnKey) : 'all')
+            setStageFilter(columnKeys.includes(v.stageFilter) ? (v.stageFilter as BoardColumnKey) : 'all')
             setSourceFilter((SOURCES as string[]).includes(v.sourceFilter) ? (v.sourceFilter as LeadSource) : 'all')
             setSortKey((Object.keys(SORT_LABELS) as string[]).includes(v.sortKey) ? (v.sortKey as SortKey) : 'date')
           }}
@@ -240,9 +242,9 @@ export function LeadsTable({
               <SelectValue placeholder="Move to stage…" />
             </SelectTrigger>
             <SelectContent>
-              {BOARD_COLUMNS.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {BOARD_COLUMN_LABELS[c]}
+              {columns.map((c) => (
+                <SelectItem key={c.key} value={c.key}>
+                  {c.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -319,7 +321,7 @@ export function LeadsTable({
                   </Link>
                 </td>
                 <td className="px-3 py-2 hidden md:table-cell">
-                  <Badge variant="outline">{BOARD_COLUMN_LABELS[boardColumnFor(l)]}</Badge>
+                  <Badge variant="outline">{columnLabels[boardColumnFor(l)]}</Badge>
                 </td>
                 <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">
                   {SOURCE_LABELS[l.source as LeadSource] ?? l.source}
@@ -348,7 +350,7 @@ export function LeadsTable({
       <Dialog open={bulkRemarkOpen} onOpenChange={(o) => { setBulkRemarkOpen(o); if (!o) setBulkRemark('') }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Move {selected.size} lead{selected.size === 1 ? '' : 's'} to {bulkStage ? BOARD_COLUMN_LABELS[bulkStage] : ''}</DialogTitle>
+            <DialogTitle>Move {selected.size} lead{selected.size === 1 ? '' : 's'} to {bulkStage ? columnLabels[bulkStage] : ''}</DialogTitle>
             <DialogDescription>
               One remark, logged identically to every selected lead&apos;s activity timeline.
             </DialogDescription>

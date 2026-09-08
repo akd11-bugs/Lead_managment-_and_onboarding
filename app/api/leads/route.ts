@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
 import { validateLeadFields } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
+import { mergeCustomFields } from '@/lib/leadCustomFields'
+import { getStageDefinitions } from '@/lib/pipelineConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,12 +27,14 @@ export async function POST(req: Request) {
   if (!body.company || !body.email) {
     return NextResponse.json({ error: 'company and email are required' }, { status: 400 })
   }
-  const validationError = validateLeadFields(body)
+  const stageDefs = await getStageDefinitions(user.orgId)
+  const validationError = validateLeadFields(body, { validStageKeys: stageDefs.map((s) => s.key) })
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
   if (body.force !== true) {
     const duplicate = await prisma.lead.findFirst({
       where: {
+        orgId: user.orgId,
         OR: [
           { email: { equals: body.email, mode: 'insensitive' } },
           { company: { equals: body.company, mode: 'insensitive' } },
@@ -46,8 +50,18 @@ export async function POST(req: Request) {
     }
   }
 
+  let customFieldsJson = '{}'
+  if (body.customFields !== undefined) {
+    try {
+      customFieldsJson = await mergeCustomFields(user.orgId, '{}', body.customFields)
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid customFields' }, { status: 400 })
+    }
+  }
+
   const lead = await prisma.lead.create({
     data: {
+      orgId: user.orgId,
       poc: body.poc ?? null,
       company: body.company,
       email: body.email,
@@ -62,6 +76,7 @@ export async function POST(req: Request) {
       ownerName: user.name,
       type: body.type ?? 'merchant',
       notes: body.notes ?? '',
+      customFieldsJson,
       position: body.position ?? 0,
     },
   })

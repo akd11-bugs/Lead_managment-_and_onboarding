@@ -11,7 +11,7 @@ export async function PATCH(_req: Request, { params }: { params: Promise<{ id: s
   if (!isAdmin(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 
-  const existing = await prisma.invite.findUnique({ where: { id } })
+  const existing = await prisma.invite.findFirst({ where: { id, orgId: { in: user.visibleOrgIds } } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (existing.status !== 'pending') {
     return NextResponse.json({ error: 'Only pending invites can be revoked' }, { status: 400 })

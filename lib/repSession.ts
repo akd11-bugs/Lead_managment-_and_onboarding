@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
-import type { SessionUser } from '@/lib/session'
+import { resolveVisibleOrgIds, type SessionUser } from '@/lib/session'
 
 const COOKIE_NAME = 'rep_session'
 const MAX_AGE_SECONDS = 10 * 60 * 60 // 10h
@@ -72,9 +72,10 @@ export async function getRepSessionUser(): Promise<SessionUser | null> {
 
   const user = await prisma.user.findUnique({
     where: { id: verified.userId },
-    select: { id: true, name: true, email: true, role: true, isActive: true, pinHash: true },
+    select: { id: true, name: true, email: true, role: true, orgId: true, isActive: true, pinHash: true },
   })
   if (!user || !user.isActive || !user.pinHash) return null
 
-  return { id: user.id, name: user.name, email: user.email, role: user.role }
+  const visibleOrgIds = await resolveVisibleOrgIds(user.orgId, user.role)
+  return { id: user.id, name: user.name, email: user.email, role: user.role, orgId: user.orgId, visibleOrgIds }
 }

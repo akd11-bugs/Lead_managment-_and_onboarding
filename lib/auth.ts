@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { authConfig } from '@/lib/auth.config'
 import { logAudit } from '@/lib/audit'
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
+import { getDefaultOrgId } from '@/lib/org'
 
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MS = 15 * 60 * 1000
@@ -91,7 +92,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         })
         await logAudit({ action: 'login_success', actorUserId: user.id, targetUserId: user.id, metadata: { email } })
 
-        return { id: user.id, name: user.name, email: user.email, role: user.role }
+        return { id: user.id, name: user.name, email: user.email, role: user.role, orgId: user.orgId }
       },
     }),
     ...(googleEnabled
@@ -113,13 +114,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   targetUserId: existing.id,
                   metadata: { email, provider: 'google' },
                 })
-                return { id: existing.id, name: existing.name, email: existing.email, role: existing.role }
+                return { id: existing.id, name: existing.name, email: existing.email, role: existing.role, orgId: existing.orgId }
               }
+              // Phase 2 (Neon Auth) is where a brand-new sign-in should go
+              // create its own organization instead — this NextAuth Google
+              // provider predates that flow, so for now it still lands as
+              // `pending` under the single default org until an admin
+              // approves them (see app/pending/page.tsx and proxy.ts).
               const created = await prisma.user.create({
-                data: { name: profile.name ?? email, email, passwordHash: null, role: 'pending' },
+                data: { name: profile.name ?? email, email, passwordHash: null, role: 'pending', orgId: await getDefaultOrgId() },
               })
               await logAudit({ action: 'oauth_signup_pending', targetUserId: created.id, metadata: { email } })
-              return { id: created.id, name: created.name, email: created.email, role: created.role }
+              return { id: created.id, name: created.name, email: created.email, role: created.role, orgId: created.orgId }
             },
           }),
         ]

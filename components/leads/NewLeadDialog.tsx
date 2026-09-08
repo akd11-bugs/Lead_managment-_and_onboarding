@@ -24,19 +24,19 @@ import {
 } from '@/components/ui/select'
 import { Plus } from 'lucide-react'
 import {
-  STAGES,
-  STAGE_LABELS,
   SOURCES,
   SOURCE_LABELS,
   LEAD_TYPES,
   LEAD_TYPE_LABELS,
   BUSINESS_TYPES,
   BUSINESS_TYPE_LABELS,
-  type Stage,
   type LeadSource,
   type LeadType,
   type BusinessType,
 } from '@/lib/types'
+import { usePipelineConfig, useLeadFieldDefinitions } from '@/lib/hooks/usePipelineConfig'
+import { CustomFieldsSection } from './CustomFieldsSection'
+import { TasksToCreateField, type DraftTask } from './TasksToCreateField'
 
 const NONE = '__none__'
 
@@ -45,6 +45,10 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
+  const { stages } = usePipelineConfig()
+  const { fields: customFieldDefs } = useLeadFieldDefinitions()
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({})
+  const [tasks, setTasks] = useState<DraftTask[]>([])
   const [form, setForm] = useState({
     poc: '',
     company: '',
@@ -54,7 +58,7 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
     industry: '',
     businessType: '' as BusinessType | '',
     source: 'website' as LeadSource,
-    stage: 'new' as Stage,
+    stage: 'new',
     type: 'merchant' as LeadType,
     estimatedVolume: '5000',
     notes: '',
@@ -72,10 +76,26 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
           ...form,
           businessType: form.businessType || null,
           estimatedVolume: Number(form.estimatedVolume),
+          customFields,
           force,
         }),
       })
       if (res.ok) {
+        const data = await res.json()
+        const tasksToCreate = tasks.filter((t) => t.title.trim())
+        if (tasksToCreate.length > 0) {
+          // Best-effort — the lead is already saved; a failed task shouldn't
+          // undo it or block closing the dialog.
+          await Promise.all(
+            tasksToCreate.map((t) =>
+              fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ leadId: data.lead.id, title: t.title.trim(), dueDate: t.dueDate || null }),
+              }).catch(() => {})
+            )
+          )
+        }
         setOpen(false)
         setForm({
           poc: '',
@@ -91,6 +111,8 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
           estimatedVolume: '5000',
           notes: '',
         })
+        setCustomFields({})
+        setTasks([])
         router.refresh()
         return
       }
@@ -213,13 +235,13 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
             </div>
             <div className="space-y-1.5">
               <Label>Stage</Label>
-              <Select value={form.stage} onValueChange={(v) => setForm({ ...form, stage: v as Stage })}>
+              <Select value={form.stage} onValueChange={(v) => setForm({ ...form, stage: v })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STAGES.map((s) => (
-                    <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>
+                  {stages.map((s) => (
+                    <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -238,6 +260,12 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
             <Label htmlFor="notes">Notes</Label>
             <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
+          <CustomFieldsSection
+            fields={customFieldDefs}
+            values={customFields}
+            onChange={(key, value) => setCustomFields((prev) => ({ ...prev, [key]: value }))}
+          />
+          <TasksToCreateField tasks={tasks} onChange={setTasks} />
         </div>
         {duplicateError && (
           <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">

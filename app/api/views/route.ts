@@ -9,7 +9,7 @@ export async function GET() {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
   const views = await prisma.savedView.findMany({
-    where: { userId: user.id },
+    where: { orgId: user.orgId, userId: user.id },
     orderBy: { createdAt: 'desc' },
   })
   return NextResponse.json({
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'filters must be an object' }, { status: 400 })
   }
   const view = await prisma.savedView.create({
-    data: { userId: user.id, name, filtersJson: JSON.stringify(body.filters) },
+    data: { orgId: user.orgId, userId: user.id, name, filtersJson: JSON.stringify(body.filters) },
   })
   return NextResponse.json({ view: { id: view.id, name: view.name, filters: body.filters, createdAt: view.createdAt } })
 }

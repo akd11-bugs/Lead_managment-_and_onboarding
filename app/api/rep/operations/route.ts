@@ -10,7 +10,7 @@ export async function GET() {
   const user = await getRepSessionUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const operationsUsers = await prisma.user.findMany({
-    where: { role: 'operations', isActive: true },
+    where: { orgId: { in: user.visibleOrgIds }, role: 'operations', isActive: true },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })

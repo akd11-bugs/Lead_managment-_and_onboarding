@@ -4,6 +4,7 @@ import { getSheetRows } from '@/lib/googleSheets'
 import { autoMapHeaders, normalizeHeader, FIELDS } from '@/lib/headerMapping'
 import { importLeadRows, type ImportOwner } from '@/lib/leadImport'
 import { safeEqual } from '@/lib/http'
+import { recordJobRun } from '@/lib/jobRun'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
   }
   const defaultOwnerRow = await prisma.user.findUnique({
     where: { email: defaultOwnerEmail.toLowerCase() },
-    select: { id: true, name: true },
+    select: { id: true, name: true, orgId: true },
   })
   if (!defaultOwnerRow) {
     return NextResponse.json(
@@ -43,6 +44,11 @@ export async function POST(req: Request) {
     )
   }
   const defaultOwner: ImportOwner = defaultOwnerRow
+  // Imported leads land in the default owner's own org — this sync isn't
+  // yet per-org configurable (see the plan's deferred "per-org configuration"
+  // phase), so today there's exactly one sheet/org pairing per deployment.
+  const orgId = defaultOwnerRow.orgId
+  const startedAt = new Date()
 
   const allRows = await getSheetRows(spreadsheetId, range)
   if (allRows.length < 2) {
@@ -104,22 +110,29 @@ export async function POST(req: Request) {
 
   let created = 0
   const skipped: { row: number; reason: string }[] = []
-  for (const { owner, rows, rowNumbers } of buckets.values()) {
-    const result = await importLeadRows(rows, owner)
-    created += result.created
-    // importLeadRows numbers rows 1-based within its own input array — remap
-    // back to the row's real position in the sheet using rowNumbers.
-    for (const s of result.skipped) {
-      skipped.push({ row: rowNumbers[s.row - 1] ?? s.row, reason: s.reason })
+  try {
+    for (const { owner, rows, rowNumbers } of buckets.values()) {
+      const result = await importLeadRows(rows, owner, orgId)
+      created += result.created
+      // importLeadRows numbers rows 1-based within its own input array — remap
+      // back to the row's real position in the sheet using rowNumbers.
+      for (const s of result.skipped) {
+        skipped.push({ row: rowNumbers[s.row - 1] ?? s.row, reason: s.reason })
+      }
     }
+
+    await prisma.syncCursor.upsert({
+      where: { key: cursorKey },
+      create: { key: cursorKey, value: String(dataRows.length) },
+      update: { value: String(dataRows.length) },
+    })
+  } catch (err) {
+    await recordJobRun({ orgId, jobKey: 'sync-leads-sheet', status: 'failure', startedAt, error: String(err) })
+    console.error('sync-leads-sheet failed', err)
+    return NextResponse.json({ error: 'Sync failed partway through — check logs' }, { status: 500 })
   }
 
-  await prisma.syncCursor.upsert({
-    where: { key: cursorKey },
-    create: { key: cursorKey, value: String(dataRows.length) },
-    update: { value: String(dataRows.length) },
-  })
-
+  await recordJobRun({ orgId, jobKey: 'sync-leads-sheet', status: 'success', startedAt })
   skipped.sort((a, b) => a.row - b.row)
   return NextResponse.json({ created, skipped })
 }

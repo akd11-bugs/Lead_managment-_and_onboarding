@@ -44,37 +44,44 @@ export default async function LoginPage({
           <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={login} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required autoFocus />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
-            </div>
-            {redeemed && !error && (
-              <p className="text-sm text-emerald-600">Account created — log in with your new password.</p>
-            )}
-            {error && <p className="text-sm text-rose-600">Invalid email or password.</p>}
-            <Button type="submit" className="w-full">
-              Sign in
-            </Button>
-          </form>
-          {googleEnabled && (
-            <>
-              <div className="my-3 flex items-center gap-2 text-xs text-muted-foreground">
-                <div className="h-px flex-1 bg-border" />
-                or
-                <div className="h-px flex-1 bg-border" />
-              </div>
-              <form action={loginWithGoogle}>
-                <Button type="submit" variant="outline" className="w-full">
-                  Sign in with Google
-                </Button>
-              </form>
-            </>
+          {redeemed && !error && (
+            <p className="mb-3 text-sm text-emerald-600">Account created — log in with your new password.</p>
           )}
+          {error && <p className="mb-3 text-sm text-rose-600">Invalid email or password.</p>}
+
+          {googleEnabled && (
+            <form action={loginWithGoogle}>
+              <Button type="submit" className="w-full">
+                Sign in with Google
+              </Button>
+            </form>
+          )}
+
+          {/* Opens by default without Google, or when a password attempt just
+              failed (error=1 only ever comes from the credentials path below —
+              see the `login` action's catch) so the error isn't hidden behind
+              a collapsed disclosure. */}
+          <details className={googleEnabled ? 'mt-4 group' : 'group'} open={!googleEnabled || !!error}>
+            {googleEnabled && (
+              <summary className="cursor-pointer list-none text-center text-sm text-muted-foreground underline underline-offset-2">
+                Use a password instead
+              </summary>
+            )}
+            <form action={login} className={googleEnabled ? 'mt-3 space-y-3' : 'space-y-3'}>
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" name="email" type="email" required autoFocus={!googleEnabled} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input id="password" name="password" type="password" required />
+              </div>
+              <Button type="submit" variant={googleEnabled ? 'outline' : 'default'} className="w-full">
+                Sign in
+              </Button>
+            </form>
+          </details>
+
           <p className="mt-4 text-center text-sm text-muted-foreground">
             New here?{' '}
             <Link href="/signup" className="underline underline-offset-2">

@@ -35,22 +35,24 @@ export interface DailyReportResult {
 }
 
 // Rep-wise activity for a single calendar day, emailed to every active
-// admin — every call, email, meeting, note, and stage move (e.g.
-// "New → Pending — Our Side") each rep logged, not just a count. Defaults
-// to yesterday so a morning cron run reports on the day that just finished.
-export async function sendDailyActivityReportEmail(date: Date = yesterday()): Promise<DailyReportResult> {
+// admin within `orgIds` (that org's own admins, plus — for a rollup-capable
+// caller — its descendants') — every call, email, meeting, note, and stage
+// move (e.g. "New → Pending — Our Side") each rep logged, not just a count.
+// Defaults to yesterday so a morning cron run reports on the day that just
+// finished.
+export async function sendDailyActivityReportEmail(orgIds: string[], date: Date = yesterday()): Promise<DailyReportResult> {
   const { start, end } = dayRange(date)
   const reportDate = start.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
 
   const [admins, createdLeads, wonLeads, activities] = await Promise.all([
     prisma.user.findMany({
-      where: { role: 'admin', isActive: true },
+      where: { orgId: { in: orgIds }, role: 'admin', isActive: true },
       select: { email: true },
     }),
-    prisma.lead.count({ where: { createdAt: { gte: start, lte: end } } }),
-    prisma.lead.count({ where: { wonAt: { gte: start, lte: end } } }),
+    prisma.lead.count({ where: { orgId: { in: orgIds }, createdAt: { gte: start, lte: end } } }),
+    prisma.lead.count({ where: { orgId: { in: orgIds }, wonAt: { gte: start, lte: end } } }),
     prisma.activity.findMany({
-      where: { date: { gte: start, lte: end }, authorName: { not: 'System' }, type: { in: ACTOR_ACTIVITY_TYPES } },
+      where: { orgId: { in: orgIds }, date: { gte: start, lte: end }, authorName: { not: 'System' }, type: { in: ACTOR_ACTIVITY_TYPES } },
       select: { type: true, description: true, authorName: true, date: true, lead: { select: { company: true } } },
       orderBy: { date: 'asc' },
     }),

@@ -19,6 +19,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Max 2000 rows per import' }, { status: 400 })
   }
 
-  const result = await importLeadRows(rows, { id: user.id, name: user.name })
+  const result = await importLeadRows(rows, { id: user.id, name: user.name }, user.orgId)
   return NextResponse.json(result)
 }

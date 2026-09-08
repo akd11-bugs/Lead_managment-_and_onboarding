@@ -12,7 +12,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
 
-  const existing = await prisma.workflowRule.findFirst({ where: { id, ownerId: user.id }, select: { id: true } })
+  const existing = await prisma.workflowRule.findFirst({ where: { id, orgId: user.orgId, ownerId: user.id }, select: { id: true } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (typeof body.active !== 'boolean') {
@@ -26,7 +26,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
   const { id } = await params
-  const existing = await prisma.workflowRule.findFirst({ where: { id, ownerId: user.id }, select: { id: true } })
+  const existing = await prisma.workflowRule.findFirst({ where: { id, orgId: user.orgId, ownerId: user.id }, select: { id: true } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   await prisma.workflowRule.delete({ where: { id } })
   return NextResponse.json({ ok: true })

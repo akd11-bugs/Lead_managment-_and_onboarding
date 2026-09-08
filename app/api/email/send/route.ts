@@ -55,6 +55,7 @@ export async function POST(req: Request) {
 
       const activity = await prisma.activity.create({
         data: {
+          orgId: lead.orgId,
           leadId,
           type: 'email',
           description: `Sent: "${subject}"\n\n${emailBody}`,

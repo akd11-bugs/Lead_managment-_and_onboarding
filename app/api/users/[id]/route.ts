@@ -15,7 +15,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params
   if (id === user.id) return NextResponse.json({ error: "You can't change your own account here" }, { status: 400 })
 
-  const existing = await prisma.user.findUnique({ where: { id } })
+  const existing = await prisma.user.findFirst({ where: { id, orgId: { in: user.visibleOrgIds } } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await readJsonBody(req)
@@ -62,7 +62,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params
   if (id === user.id) return NextResponse.json({ error: "You can't delete your own account" }, { status: 400 })
 
-  const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } })
+  const existing = await prisma.user.findFirst({ where: { id, orgId: { in: user.visibleOrgIds } }, select: { id: true } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await prisma.user.delete({ where: { id } })

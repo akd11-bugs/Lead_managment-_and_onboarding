@@ -11,8 +11,11 @@ export interface StageChangeActor {
 // that can move a lead into onboarding, so "must be a real, active operations
 // user" can't drift between them. Returns null for an invalid id (caller
 // turns that into a 400).
-export async function resolveOpsAssignment(assignedOpsId: string): Promise<{ id: string; name: string } | null> {
-  const opsUser = await prisma.user.findUnique({ where: { id: assignedOpsId }, select: { id: true, name: true, role: true, isActive: true } })
+export async function resolveOpsAssignment(assignedOpsId: string, orgIds: string[]): Promise<{ id: string; name: string } | null> {
+  const opsUser = await prisma.user.findFirst({
+    where: { id: assignedOpsId, orgId: { in: orgIds } },
+    select: { id: true, name: true, role: true, isActive: true },
+  })
   if (!opsUser || !opsUser.isActive || opsUser.role !== 'operations') return null
   return { id: opsUser.id, name: opsUser.name }
 }
@@ -33,7 +36,7 @@ export interface StageChangeInput {
   assignedOpsName?: string
 }
 
-type ExistingLead = Pick<Lead, 'stage' | 'wonAt' | 'onboardedAt' | 'onboardingSubStage' | 'pendingSubStatus'>
+type ExistingLead = Pick<Lead, 'orgId' | 'stage' | 'wonAt' | 'onboardedAt' | 'onboardingSubStage' | 'pendingSubStatus'>
 
 // The stage / pendingSubStatus transition core shared by every entry point
 // (the dashboard's PATCH /api/leads/[id], the bulk PATCH, Kanban drag, the
@@ -119,6 +122,7 @@ export async function applyStageChange(
 
   await prisma.activity.create({
     data: {
+      orgId: existing.orgId,
       leadId,
       type: 'stage_change',
       description,

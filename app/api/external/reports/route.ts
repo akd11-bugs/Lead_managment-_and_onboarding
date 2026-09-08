@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { parseRangeKey } from '@/lib/reportRange'
 import { getReportsData } from '@/lib/reportsData'
 import { safeEqual } from '@/lib/http'
+import { getDefaultOrgId } from '@/lib/org'
+import { resolveVisibleOrgIds } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +25,11 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const range = parseRangeKey(url.searchParams.get('range') ?? undefined)
-  const data = await getReportsData(range)
+  // No user session on this cross-domain route — reports on the default
+  // org's full tree (self + descendants), same rollup an admin gets.
+  const defaultOrgId = await getDefaultOrgId()
+  const orgIds = await resolveVisibleOrgIds(defaultOrgId, 'admin')
+  const data = await getReportsData(range, orgIds)
 
   return NextResponse.json(data)
 }

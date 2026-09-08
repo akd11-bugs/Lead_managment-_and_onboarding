@@ -18,7 +18,9 @@ import { LeadCard } from './LeadCard'
 import { LeadDetailDialog } from '@/components/leads/LeadDetailDialog'
 import { StageChangeDialog } from '@/components/leads/StageChangeDialog'
 import type { Lead, BoardColumnKey } from '@/lib/types'
-import { BOARD_COLUMNS, boardColumnFor } from '@/lib/types'
+import { boardColumnFor } from '@/lib/types'
+import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
+import { Loader2 } from 'lucide-react'
 
 interface KanbanBoardProps {
   initialLeads: Lead[]
@@ -29,7 +31,8 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads)
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
   const [detailLead, setDetailLead] = useState<Lead | null>(null)
-  const [stageChange, setStageChange] = useState<{ leadId: string; target: BoardColumnKey } | null>(null)
+  const [stageChange, setStageChange] = useState<{ leadId: string; target: BoardColumnKey; targetLabel: string } | null>(null)
+  const { columns, loading: columnsLoading } = usePipelineConfig()
 
   function applyUpdatedLead(updated: Lead) {
     setLeads((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)))
@@ -47,8 +50,8 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
 
   const leadsByColumn = useMemo(() => {
     const map = new Map<BoardColumnKey, Lead[]>()
-    for (const column of BOARD_COLUMNS) {
-      map.set(column, [])
+    for (const column of columns) {
+      map.set(column.key, [])
     }
     for (const lead of leads) {
       const list = map.get(boardColumnFor(lead))
@@ -59,7 +62,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
       list.sort((a, b) => a.position - b.position)
     }
     return map
-  }, [leads])
+  }, [leads, columns])
 
   function handleDragStart(e: DragStartEvent) {
     const lead = leads.find((l) => l.id === e.active.id)
@@ -87,7 +90,16 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
     // every stage/sub-status change, so this just opens the same dialog the
     // detail form uses. The card only actually moves once that's confirmed
     // (onDone).
-    setStageChange({ leadId, target: targetColumn })
+    const targetLabel = columns.find((c) => c.key === targetColumn)?.label ?? targetColumn
+    setStageChange({ leadId, target: targetColumn, targetLabel })
+  }
+
+  if (columnsLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading pipeline…
+      </div>
+    )
   }
 
   return (
@@ -95,11 +107,11 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="kanban-scroll overflow-x-auto pb-4">
           <div className="flex gap-3 min-w-max">
-            {BOARD_COLUMNS.map((column) => {
-              const columnLeads = leadsByColumn.get(column) ?? []
+            {columns.map((column) => {
+              const columnLeads = leadsByColumn.get(column.key) ?? []
               return (
-                <SortableContext key={column} items={columnLeads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-                  <KanbanColumn columnKey={column} leads={columnLeads} onCardClick={setDetailLead} />
+                <SortableContext key={column.key} items={columnLeads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                  <KanbanColumn column={column} leads={columnLeads} onCardClick={setDetailLead} />
                 </SortableContext>
               )
             })}
@@ -129,6 +141,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
           open
           onOpenChange={(open) => !open && setStageChange(null)}
           target={stageChange.target}
+          targetLabel={stageChange.targetLabel}
           onDone={applyUpdatedLead}
         />
       )}

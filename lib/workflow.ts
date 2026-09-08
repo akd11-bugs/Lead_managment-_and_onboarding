@@ -32,7 +32,7 @@ function parseJson<T>(value: string): T | null {
  */
 export async function evaluateStageRules(lead: Lead, newStage: string): Promise<void> {
   const rules = await prisma.workflowRule.findMany({
-    where: { ownerId: lead.ownerId, triggerType: 'stage_changed', active: true },
+    where: { orgId: lead.orgId, ownerId: lead.ownerId, triggerType: 'stage_changed', active: true },
   })
 
   for (const rule of rules) {
@@ -48,6 +48,7 @@ async function runAction(rule: WorkflowRule, lead: Lead): Promise<void> {
     if (!config?.title) return
     await prisma.task.create({
       data: {
+        orgId: lead.orgId,
         leadId: lead.id,
         title: config.title,
         dueDate: config.dueInDays ? new Date(Date.now() + config.dueInDays * 24 * 60 * 60 * 1000) : null,
@@ -78,6 +79,7 @@ async function runAction(rule: WorkflowRule, lead: Lead): Promise<void> {
     const descriptionPrefix = sentToOwner ? 'Notified owner: ' : 'Sent: '
     const activity = await prisma.activity.create({
       data: {
+        orgId: lead.orgId,
         leadId: lead.id,
         type: 'email',
         description: `${descriptionPrefix}"${config.subject}"\n\n${config.body}`,

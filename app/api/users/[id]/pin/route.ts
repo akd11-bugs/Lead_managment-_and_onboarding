@@ -13,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!isAdmin(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 
-  const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } })
+  const existing = await prisma.user.findFirst({ where: { id, orgId: { in: user.visibleOrgIds } }, select: { id: true } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await readJsonBody(req)

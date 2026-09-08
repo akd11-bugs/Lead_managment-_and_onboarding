@@ -4,6 +4,7 @@ import { requireApiUser, leadScope, isAdmin } from '@/lib/session'
 import { validateLeadFields, PENDING_SUB_STATUSES, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
+import { getStageDefinitions } from '@/lib/pipelineConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,11 @@ export async function PATCH(req: Request) {
   }
 
   if (action === 'stage') {
-    const validationError = validateLeadFields({ stage: body.stage, pendingSubStatus: body.pendingSubStatus })
+    const stageDefs = await getStageDefinitions(user.orgId)
+    const validationError = validateLeadFields(
+      { stage: body.stage, pendingSubStatus: body.pendingSubStatus },
+      { validStageKeys: stageDefs.map((s) => s.key) }
+    )
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
     const remark = typeof body.remark === 'string' ? body.remark.trim() : ''
     if (!remark) {
@@ -49,7 +54,7 @@ export async function PATCH(req: Request) {
 
     const scopedLeads = await prisma.lead.findMany({
       where: { id: { in: scopedIds } },
-      select: { id: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
+      select: { id: true, orgId: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
     })
 
     let assignedOps: { id: string; name: string } | undefined
@@ -58,7 +63,7 @@ export async function PATCH(req: Request) {
       if (!assignedOpsId) {
         return NextResponse.json({ error: 'An operations person must be assigned to move leads to Onboarding' }, { status: 400 })
       }
-      const resolved = await resolveOpsAssignment(assignedOpsId)
+      const resolved = await resolveOpsAssignment(assignedOpsId, user.visibleOrgIds)
       if (!resolved) {
         return NextResponse.json({ error: 'assignedOpsId must be an active operations user' }, { status: 400 })
       }
@@ -86,7 +91,10 @@ export async function PATCH(req: Request) {
 
   const ownerId = String(body.ownerId ?? '')
   if (!ownerId) return NextResponse.json({ error: 'ownerId is required' }, { status: 400 })
-  const targetUser = await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true, isActive: true } })
+  const targetUser = await prisma.user.findFirst({
+    where: { id: ownerId, orgId: { in: user.visibleOrgIds } },
+    select: { id: true, name: true, isActive: true },
+  })
   if (!targetUser || !targetUser.isActive) {
     return NextResponse.json({ error: 'Target owner must be an active user' }, { status: 400 })
   }

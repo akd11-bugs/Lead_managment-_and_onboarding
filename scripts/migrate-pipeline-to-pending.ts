@@ -22,11 +22,11 @@ const TO_PENDING = ['contacted', 'follow_up', 'qualified', 'proposal']
 async function main() {
   const toPending = await prisma.lead.findMany({
     where: { stage: { in: TO_PENDING } },
-    select: { id: true, stage: true },
+    select: { id: true, stage: true, orgId: true },
   })
   const toNotInterested = await prisma.lead.findMany({
     where: { stage: 'lost' },
-    select: { id: true },
+    select: { id: true, orgId: true },
   })
 
   console.log(`Found ${toPending.length} lead(s) to migrate to 'pending', ${toNotInterested.length} to 'not_interested'.`)
@@ -38,6 +38,7 @@ async function main() {
     })
     await prisma.activity.create({
       data: {
+        orgId: lead.orgId,
         leadId: lead.id,
         type: 'note',
         authorName: 'System',
@@ -53,6 +54,7 @@ async function main() {
     })
     await prisma.activity.create({
       data: {
+        orgId: lead.orgId,
         leadId: lead.id,
         type: 'note',
         authorName: 'System',

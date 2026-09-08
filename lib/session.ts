@@ -1,19 +1,40 @@
 import { redirect } from 'next/navigation'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/db'
 
 export interface SessionUser {
   id: string
   name: string
   email: string
   role: string
+  orgId: string
+  // Self + every descendant org (materialized-path rollup) for admin/operations;
+  // just [orgId] for everyone else. Resolved once per request below so
+  // leadScope() itself can stay a plain synchronous object builder.
+  visibleOrgIds: string[]
+}
+
+export async function resolveVisibleOrgIds(orgId: string, role: string): Promise<string[]> {
+  if (role !== 'admin' && role !== 'operations') return [orgId]
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT o.id FROM "Organization" o
+    JOIN "Organization" self ON self.id = ${orgId}
+    WHERE o.path LIKE self.path || '%'
+  `
+  return rows.map((r) => r.id)
+}
+
+async function hydrate(user: { id: string; name: string; email: string; role: string; orgId: string }): Promise<SessionUser> {
+  const visibleOrgIds = await resolveVisibleOrgIds(user.orgId, user.role)
+  return { ...user, visibleOrgIds }
 }
 
 // For Server Components/pages — sends anonymous visitors to /login.
 export async function requireUser(): Promise<SessionUser> {
   const session = await auth()
   if (!session?.user) redirect('/login')
-  return session.user as SessionUser
+  return hydrate(session.user as SessionUser)
 }
 
 // For Route Handlers — a redirect would break `res.json()` on the client, so
@@ -22,7 +43,7 @@ export async function requireUser(): Promise<SessionUser> {
 export async function requireApiUser(): Promise<SessionUser | NextResponse> {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  return session.user as SessionUser
+  return hydrate(session.user as SessionUser)
 }
 
 export function isAdmin(user: SessionUser) {
@@ -39,11 +60,15 @@ export function isPending(user: SessionUser) {
   return user.role === 'pending'
 }
 
-// Admin sees the whole portfolio; Sales sees only leads they own; Operations
-// sees every lead too (they manage onboarding across all reps' merchants).
-// Spread this into any `prisma.lead.findMany`/`findUnique` where clause.
+// Admin/Operations see every lead in their org tree (self + descendant orgs
+// via visibleOrgIds); Sales sees only leads they own, within their own org.
+// The orgId filter applies to every role — it's the tenant boundary, never
+// bypassed by role. Spread this into any `prisma.lead.findMany`/`findUnique`
+// where clause.
 export function leadScope(user: SessionUser) {
-  return isAdmin(user) || isOperations(user) ? {} : { ownerId: user.id }
+  return isAdmin(user) || isOperations(user)
+    ? { orgId: { in: user.visibleOrgIds } }
+    : { orgId: { in: user.visibleOrgIds }, ownerId: user.id }
 }
 
 // Where a role lands right after login / when hitting "/" directly.

@@ -74,6 +74,12 @@ export async function sendEmailAs(userId: string, input: SendEmailInput): Promis
     port: 465,
     secure: true,
     auth: { user: user.emailFromAddress, pass: appPassword },
+    // Same fix as the settings verify call (ea5f8d1) — without this, a slow
+    // Gmail response or a blocked outbound port hangs for nodemailer's
+    // default (up to 10 min), well past any serverless function timeout.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 10_000,
   })
   const info = await personalTransporter.sendMail({
     from: user.emailFromAddress,

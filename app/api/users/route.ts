@@ -11,8 +11,9 @@ export async function GET() {
   if (user instanceof NextResponse) return user
   if (!isAdmin(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const users = await prisma.user.findMany({
+    where: { orgId: { in: user.visibleOrgIds } },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true, orgId: true },
   })
   return NextResponse.json({ users })
 }
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
 
   const passwordHash = await bcrypt.hash(password, 10)
   const created = await prisma.user.create({
-    data: { name, email, passwordHash, role },
+    data: { orgId: user.orgId, name, email, passwordHash, role },
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   })
   return NextResponse.json({ user: created })

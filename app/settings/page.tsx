@@ -9,9 +9,13 @@ import { ScrollText } from 'lucide-react'
 import { requireUser, isAdmin } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import { OrganisationPanel } from '@/components/settings/OrganisationPanel'
+import { OrgHierarchyPanel } from '@/components/settings/OrgHierarchyPanel'
 import { EmailSettingsCard } from '@/components/settings/EmailSettingsCard'
 import { WorkflowRulesCard } from '@/components/settings/WorkflowRulesCard'
+import { PipelineConfigCard } from '@/components/settings/PipelineConfigCard'
+import { CustomFieldsCard } from '@/components/settings/CustomFieldsCard'
 import { Button } from '@/components/ui/button'
+import { getStageDefinitions, getOnboardingStepDefinitions } from '@/lib/pipelineConfig'
 
 async function checkSkillLibrary() {
   const libPath = process.env.SKILL_LIBRARY_PATH || path.join(process.cwd(), 'skills-library')
@@ -27,13 +31,24 @@ export default async function SettingsPage() {
   const skillLibrary = await checkSkillLibrary()
   const users = isAdmin(user)
     ? await prisma.user.findMany({
+        where: { orgId: { in: user.visibleOrgIds } },
         orderBy: { createdAt: 'asc' },
         select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
       })
     : []
   const invites = isAdmin(user)
-    ? await prisma.invite.findMany({ orderBy: { createdAt: 'desc' } })
+    ? await prisma.invite.findMany({ where: { orgId: { in: user.visibleOrgIds } }, orderBy: { createdAt: 'desc' } })
     : []
+  const organizations = isAdmin(user)
+    ? await prisma.organization.findMany({ where: { id: { in: user.visibleOrgIds } }, orderBy: { createdAt: 'asc' } })
+    : []
+  const [stageDefs, stepDefs, fieldDefs] = isAdmin(user)
+    ? await Promise.all([
+        getStageDefinitions(user.orgId),
+        getOnboardingStepDefinitions(user.orgId),
+        prisma.leadFieldDefinition.findMany({ where: { orgId: user.orgId }, orderBy: { position: 'asc' } }),
+      ])
+    : [[], [], []]
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-start justify-between gap-3">
@@ -42,38 +57,70 @@ export default async function SettingsPage() {
           <p className="text-sm text-muted-foreground">Pipeline stages, sources, and skill library status.</p>
         </div>
         {isAdmin(user) && (
-          <Link href="/settings/audit-log">
-            <Button variant="outline" size="sm">
-              <ScrollText className="h-4 w-4" />
-              Audit log
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/settings/ops">
+              <Button variant="outline" size="sm">
+                Operations
+              </Button>
+            </Link>
+            <Link href="/settings/audit-log">
+              <Button variant="outline" size="sm">
+                <ScrollText className="h-4 w-4" />
+                Audit log
+              </Button>
+            </Link>
+          </div>
         )}
       </div>
 
       <EmailSettingsCard />
       <WorkflowRulesCard />
 
+      {isAdmin(user) && (
+        <OrgHierarchyPanel
+          currentOrgId={user.orgId}
+          initialOrganizations={organizations.map((o) => ({ id: o.id, name: o.name, parentOrgId: o.parentOrgId }))}
+        />
+      )}
       {isAdmin(user) && <OrganisationPanel initialUsers={users as never} initialInvites={invites as never} />}
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Pipeline stages</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          {STAGES.map((s) => (
-            <div key={s} className="flex items-start justify-between gap-3 py-1.5">
-              <div>
-                <p className="text-sm font-medium">{STAGE_LABELS[s]}</p>
-                <p className="text-xs text-muted-foreground">{STAGE_DESCRIPTIONS[s]}</p>
+      {isAdmin(user) ? (
+        <>
+          <PipelineConfigCard
+            initialStages={stageDefs.map((s) => ({ id: s.id, key: s.key, label: s.label, isCore: s.isCore }))}
+            initialSteps={stepDefs.map((s) => ({ id: s.id, key: s.key, label: s.label, isCore: s.isCore }))}
+          />
+          <CustomFieldsCard
+            initialFields={fieldDefs.map((f) => ({
+              id: f.id,
+              key: f.key,
+              label: f.label,
+              type: f.type as 'text' | 'number' | 'date' | 'select',
+              options: f.options ? (JSON.parse(f.options) as string[]) : null,
+              required: f.required,
+            }))}
+          />
+        </>
+      ) : (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Pipeline stages</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {STAGES.map((s) => (
+              <div key={s} className="flex items-start justify-between gap-3 py-1.5">
+                <div>
+                  <p className="text-sm font-medium">{STAGE_LABELS[s]}</p>
+                  <p className="text-xs text-muted-foreground">{STAGE_DESCRIPTIONS[s]}</p>
+                </div>
+                <Badge variant="outline" className="font-mono text-[10px]">
+                  {s}
+                </Badge>
               </div>
-              <Badge variant="outline" className="font-mono text-[10px]">
-                {s}
-              </Badge>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">

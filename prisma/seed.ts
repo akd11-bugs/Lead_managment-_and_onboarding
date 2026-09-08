@@ -4,6 +4,7 @@
 
 import { PrismaClient } from '@prisma/client'
 import { clearAllLeadData } from './seed-helpers'
+import { getDefaultOrgId, createRootOrganization } from '@/lib/org'
 
 const prisma = new PrismaClient()
 
@@ -63,6 +64,14 @@ async function main() {
   console.log('🧹 Clearing existing data...')
   await clearAllLeadData(prisma)
 
+  let orgId: string
+  try {
+    orgId = await getDefaultOrgId()
+  } catch {
+    const org = await createRootOrganization('Default Organization')
+    orgId = org.id
+  }
+
   console.log('🌱 Seeding 25 leads...')
   const now = new Date()
   const leads = []
@@ -110,6 +119,7 @@ async function main() {
 
     const lead = await prisma.lead.create({
       data: {
+        orgId,
         poc: `${firstName} ${lastName}`,
         company,
         email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${company.split(' ')[0].toLowerCase()}.com`,
@@ -160,6 +170,7 @@ async function main() {
       const activityDate = new Date(now.getTime() - (j * 7 + 5) * 86400000)
       await prisma.activity.create({
         data: {
+          orgId,
           leadId: lead.id,
           type: pick(['call', 'email', 'meeting', 'note'] as const, j + i),
           description:

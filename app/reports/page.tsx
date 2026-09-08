@@ -30,7 +30,7 @@ export default async function ReportsPage({
     funnel,
     dailyActivityByRep,
     range: rangeInfo,
-  } = await getReportsData(range)
+  } = await getReportsData(range, user.visibleOrgIds)
   const { label } = rangeInfo
 
   const maxCreated = Math.max(1, ...repRows.map((r) => r.created))

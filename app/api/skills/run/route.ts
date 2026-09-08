@@ -49,6 +49,7 @@ export async function POST(req: Request) {
   try {
     const run = await prisma.skillRun.create({
       data: {
+        orgId: user.orgId,
         skillId: result.skillId,
         skillName: result.skillName,
         scope,

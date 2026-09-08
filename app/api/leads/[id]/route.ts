@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope } from '@/lib/session'
-import { validateLeadFields, ONBOARDING_SUB_STAGE_LABELS, type OnboardingSubStage } from '@/lib/types'
+import { validateLeadFields, ONBOARDING_SUB_STAGE_LABELS } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
+import { mergeCustomFields } from '@/lib/leadCustomFields'
+import { getStageDefinitions, getOnboardingStepDefinitions } from '@/lib/pipelineConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,12 +31,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
 
-  const validationError = validateLeadFields(body)
+  const [stageDefs, onboardingStepDefs] = await Promise.all([
+    getStageDefinitions(user.orgId),
+    getOnboardingStepDefinitions(user.orgId),
+  ])
+  const validationError = validateLeadFields(body, {
+    validStageKeys: stageDefs.map((s) => s.key),
+    validOnboardingStepKeys: onboardingStepDefs.map((s) => s.key),
+  })
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
+  const onboardingStepLabels = Object.fromEntries(onboardingStepDefs.map((s) => [s.key, s.label]))
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    select: { stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
+    select: { orgId: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true, customFieldsJson: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -59,7 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (!assignedOpsId) {
         return NextResponse.json({ error: 'An operations person must be assigned to move a lead to Onboarding' }, { status: 400 })
       }
-      const resolved = await resolveOpsAssignment(assignedOpsId)
+      const resolved = await resolveOpsAssignment(assignedOpsId, user.visibleOrgIds)
       if (!resolved) {
         return NextResponse.json({ error: 'assignedOpsId must be an active operations user' }, { status: 400 })
       }
@@ -96,13 +106,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (nextSubStage !== undefined && nextSubStage !== existing.onboardingSubStage) {
     const fromLabel = existing.onboardingSubStage
-      ? ONBOARDING_SUB_STAGE_LABELS[existing.onboardingSubStage as OnboardingSubStage]
+      ? (onboardingStepLabels[existing.onboardingSubStage] ?? ONBOARDING_SUB_STAGE_LABELS[existing.onboardingSubStage as keyof typeof ONBOARDING_SUB_STAGE_LABELS] ?? existing.onboardingSubStage)
       : 'Started'
-    const toLabel = nextSubStage ? ONBOARDING_SUB_STAGE_LABELS[nextSubStage as OnboardingSubStage] : 'Removed from onboarding'
+    const toLabel = nextSubStage
+      ? (onboardingStepLabels[nextSubStage] ?? ONBOARDING_SUB_STAGE_LABELS[nextSubStage as keyof typeof ONBOARDING_SUB_STAGE_LABELS] ?? nextSubStage)
+      : 'Removed from onboarding'
     // description always ends with `(<subStageValue>)` — the Reports page's
     // "Onboarded" metric depends on this exact suffix, see lib/types.ts.
     await prisma.activity.create({
       data: {
+        orgId: existing.orgId,
         leadId: id,
         type: 'onboarding_step',
         description: `Onboarding step: ${fromLabel} → ${toLabel} (${nextSubStage ?? 'none'})`,
@@ -111,9 +124,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     })
   }
 
+  let customFieldsJson: string | undefined
+  if (body.customFields !== undefined) {
+    try {
+      customFieldsJson = await mergeCustomFields(existing.orgId, existing.customFieldsJson, body.customFields)
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid customFields' }, { status: 400 })
+    }
+  }
+
   const lead = await prisma.lead.update({
     where: { id },
     data: {
+      ...(customFieldsJson !== undefined && { customFieldsJson }),
       ...(body.poc !== undefined && { poc: body.poc }),
       ...(body.company !== undefined && { company: body.company }),
       ...(body.email !== undefined && { email: body.email }),

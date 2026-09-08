@@ -12,7 +12,7 @@ export async function GET() {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
   const operationsUsers = await prisma.user.findMany({
-    where: { role: 'operations', isActive: true },
+    where: { orgId: { in: user.visibleOrgIds }, role: 'operations', isActive: true },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })

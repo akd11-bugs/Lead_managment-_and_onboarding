@@ -15,8 +15,6 @@ import {
 } from '@/components/ui/select'
 import { Loader2, LogOut, Search, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import {
-  BOARD_COLUMNS,
-  BOARD_COLUMN_LABELS,
   boardColumnFor,
   boardColumnToInput,
   SOURCE_LABELS,
@@ -33,6 +31,7 @@ import {
   type Stage,
 } from '@/lib/types'
 import { PipelineProgressBar } from '@/components/leads/PipelineProgressBar'
+import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
 
 interface LeadSummary {
   id: string
@@ -74,6 +73,8 @@ function formatCurrency(n: number) {
 }
 
 export function RepForm() {
+  const { columns } = usePipelineConfig()
+  const columnLabels = Object.fromEntries(columns.map((c) => [c.key, c.label]))
   const [loggedIn, setLoggedIn] = useState(false)
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
@@ -384,9 +385,9 @@ export function RepForm() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {BOARD_COLUMNS.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {BOARD_COLUMN_LABELS[c]}
+              {columns.map((c) => (
+                <SelectItem key={c.key} value={c.key}>
+                  {c.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -500,7 +501,7 @@ export function RepForm() {
           >
             <p className="font-medium">{lead.company}</p>
             <p className="text-xs text-muted-foreground">
-              {lead.poc || '—'} · <Badge variant="outline" className="text-[10px]">{BOARD_COLUMN_LABELS[boardColumnFor(lead)]}</Badge>
+              {lead.poc || '—'} · <Badge variant="outline" className="text-[10px]">{columnLabels[boardColumnFor(lead)] ?? boardColumnFor(lead)}</Badge>
             </p>
           </button>
         ))}

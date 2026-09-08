@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
+import { getDefaultOrgId, createRootOrganization } from '@/lib/org'
 
 const VALID_ROLES = ['admin', 'sales', 'operations']
 
@@ -25,8 +26,18 @@ async function main() {
     process.exit(1)
   }
 
+  // Bootstraps the very first (root) org if none exists yet — this script is
+  // typically the first thing run against a fresh database.
+  let orgId: string
+  try {
+    orgId = await getDefaultOrgId()
+  } catch {
+    const org = await createRootOrganization(process.env.ADMIN_ORG_NAME || 'Default Organization')
+    orgId = org.id
+  }
+
   const passwordHash = await bcrypt.hash(password, 10)
-  const user = await prisma.user.create({ data: { name, email, passwordHash, role } })
+  const user = await prisma.user.create({ data: { orgId, name, email, passwordHash, role } })
   console.log(`✅ Created ${user.role} user ${user.email} (id: ${user.id}). Log in and rotate the password if desired.`)
 }
 

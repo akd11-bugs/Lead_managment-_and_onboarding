@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
 import { readJsonBody } from '@/lib/http'
+import { getDefaultOrgId } from '@/lib/org'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,10 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10)
+  // TODO(Phase 2 / Neon Auth): once "create your organization" exists, a
+  // brand-new signup should create its own org here instead of joining the
+  // single default one — see lib/org.ts's getDefaultOrgId() doc comment.
+  const orgId = await getDefaultOrgId()
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -43,7 +48,7 @@ export async function POST(req: Request) {
       if (existingUser) return 'already-registered' as const
 
       const user = await tx.user.create({
-        data: { name, email: signupToken.email, passwordHash, role: 'pending', isActive: true },
+        data: { orgId, name, email: signupToken.email, passwordHash, role: 'pending', isActive: true },
       })
 
       return { user }

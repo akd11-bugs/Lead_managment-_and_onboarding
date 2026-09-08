@@ -10,8 +10,85 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// An organization is a customer/company workspace. Nested via parentOrgId so
+// a holding company can roll up its divisions' data. `path` is a materialized
+// path (e.g. "/root/child/") set once at creation from the parent's path —
+// "self + all descendants" is then a single indexed `path LIKE '<path>%'`
+// query instead of a recursive CTE, which Prisma can't express natively.
+model Organization {
+  id           String         @id @default(cuid())
+  name         String
+  parentOrgId  String?
+  parent       Organization?  @relation("OrgHierarchy", fields: [parentOrgId], references: [id])
+  children     Organization[] @relation("OrgHierarchy")
+  path         String
+  createdAt    DateTime       @default(now())
+
+  @@index([path])
+  @@index([parentOrgId])
+}
+
+// Per-org pipeline stage configuration. `key` is what Lead.stage actually
+// stores — the 5 built-in stages (isCore: true) keep a locked key/position
+// because business logic in lib/leadStage.ts, lib/alerts.ts, and
+// lib/reportsData.ts branches on those literal string values; only their
+// label/description/color are admin-editable. Custom (isCore: false) stages
+// are purely decorative extra Kanban columns with no attached automation.
+model StageDefinition {
+  id          String   @id @default(cuid())
+  orgId       String
+  key         String
+  label       String
+  description String?
+  color       String?
+  position    Int
+  isCore      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@unique([orgId, key])
+  @@index([orgId, position])
+}
+
+// Per-org onboarding sub-pipeline configuration. Lead.onboardingSubStage
+// stores `key` directly. Whichever row is `isCore: true` represents the
+// final/complete step — its key is what lib/leadStage.ts checks to set
+// onboardedAt, and lib/reportsData.ts depends on the Activity description
+// convention `(<key>)` for that same row. Only that row's key/position are
+// locked; intermediate steps are fully admin add/remove/reorder/rename-able.
+model OnboardingStepDefinition {
+  id        String   @id @default(cuid())
+  orgId     String
+  key       String
+  label     String
+  position  Int
+  isCore    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([orgId, key])
+  @@index([orgId, position])
+}
+
+// Per-org custom fields on a Lead. `key` is immutable after creation —
+// stored values in Lead.customFieldsJson are keyed by it, so renaming would
+// orphan data (label is the editable, user-facing name instead).
+model LeadFieldDefinition {
+  id        String   @id @default(cuid())
+  orgId     String
+  key       String
+  label     String
+  type      String   // "text" | "number" | "date" | "select"
+  options   String?  // JSON-stringified string array — only meaningful when type = "select"
+  required  Boolean  @default(false)
+  position  Int
+  createdAt DateTime @default(now())
+
+  @@unique([orgId, key])
+  @@index([orgId, position])
+}
+
 model Lead {
   id              String       @id @default(cuid())
+  orgId           String
   poc             String?      // point of contact at the company — optional, not the primary identifier
   company         String
   email           String
@@ -38,6 +115,7 @@ model Lead {
   painPoints      String       @default("") // discovery: what's hurting them today
   whatTheyWant    String       @default("") // discovery: what they're actually asking for
   notes           String       @default("")
+  customFieldsJson String      @default("{}") // JSON.stringify(Record<LeadFieldDefinition.key, value>) — same serialized-JSON-in-a-String convention as WorkflowRule.triggerConfig
   position        Int          @default(0)  // ordering within a kanban column
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -46,6 +124,7 @@ model Lead {
   skillRuns       SkillRun[]
   tasks           Task[]
 
+  @@index([orgId])
   @@index([stage, position])
   @@index([ownerId])
   @@index([source])
@@ -59,6 +138,7 @@ model Lead {
 
 model User {
   id                  String    @id @default(cuid())
+  orgId               String
   name                String
   email               String    @unique
   passwordHash        String?   // null for Google-only accounts — no password was ever set
@@ -83,10 +163,13 @@ model User {
 
   // No hard FK from Lead.ownerId — kept a plain string (like stage/source) so
   // imported/legacy leads with an unrecognized owner never fail to save.
+
+  @@index([orgId])
 }
 
 model WorkflowRule {
   id            String   @id @default(cuid())
+  orgId         String
   name          String
   triggerType   String   // "stage_changed"
   triggerConfig String   // JSON.stringify, e.g. {"toStage":"won"}
@@ -96,21 +179,23 @@ model WorkflowRule {
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())
 
-  @@index([ownerId, triggerType, active])
+  @@index([orgId, ownerId, triggerType, active])
 }
 
 model SavedView {
   id          String   @id @default(cuid())
+  orgId       String
   userId      String   // plain string, same convention as Task.ownerId — no hard FK to User
   name        String
   filtersJson String   // JSON.stringify of the leads-table filter/sort state
   createdAt   DateTime @default(now())
 
-  @@index([userId])
+  @@index([orgId, userId])
 }
 
 model Task {
   id        String    @id @default(cuid())
+  orgId     String
   leadId    String?
   lead      Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   title     String
@@ -122,11 +207,12 @@ model Task {
 
   @@index([leadId])
   @@index([done, dueDate])
-  @@index([ownerId])
+  @@index([orgId, ownerId])
 }
 
 model Activity {
   id          String   @id @default(cuid())
+  orgId       String
   leadId      String
   lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   type        String   // call | email | meeting | note | onboarding_step | stage_change
@@ -135,10 +221,12 @@ model Activity {
   date        DateTime @default(now())
 
   @@index([leadId, date])
+  @@index([orgId, date])
 }
 
 model Invite {
   id               String    @id @default(cuid())
+  orgId            String
   name             String
   role             String    // admin | sales | operations
   code             String    @unique
@@ -148,7 +236,7 @@ model Invite {
   redeemedAt       DateTime?
   redeemedByUserId String?
 
-  @@index([status])
+  @@index([orgId, status])
 }
 
 model SignupToken {
@@ -162,8 +250,13 @@ model SignupToken {
   @@index([email])
 }
 
+// Note: SignupToken deliberately has no orgId — Phase 2's "create your
+// organization" flow issues the org only once the token is completed
+// (there is no org yet at request time).
+
 model AuditLog {
   id             String   @id @default(cuid())
+  orgId          String?  // null for pre-signup events with no org yet (e.g. login_failed on an unknown email)
   action         String   // login_success | login_failed | login_locked | invite_created | invite_redeemed | invite_revoked | user_role_changed | user_deactivated | user_activated | user_deleted
   actorUserId    String?  // null for anonymous/failed-login events
   targetUserId   String?
@@ -174,6 +267,7 @@ model AuditLog {
   @@index([action, createdAt])
   @@index([actorUserId])
   @@index([targetUserId])
+  @@index([orgId, createdAt])
 }
 
 // Small general-purpose key-value cursor store — currently just tracks how
@@ -186,8 +280,25 @@ model SyncCursor {
   updatedAt DateTime @updatedAt
 }
 
+// One row per cron-route invocation, written at the end of the handler —
+// backs the operations dashboard's "last run" health view without depending
+// on GitHub Actions API access (not reliably available to the app itself).
+model JobRun {
+  id         String    @id @default(cuid())
+  orgId      String?   // null for jobs that aren't org-scoped (e.g. today's single global sheet sync)
+  jobKey     String    // e.g. "sync-leads-sheet" | "daily-activity-report"
+  status     String    // "success" | "failure"
+  startedAt  DateTime
+  finishedAt DateTime
+  error      String?
+
+  @@index([jobKey, finishedAt])
+  @@index([orgId, finishedAt])
+}
+
 model SkillRun {
   id               String   @id @default(cuid())
+  orgId            String
   skillId          String   // e.g. 'pipeline-hygiene-audit'
   skillName        String   // display name
   scope            String   // 'portfolio' | 'lead:<id>'
@@ -202,4 +313,5 @@ model SkillRun {
   @@index([skillId])
   @@index([leadId])
   @@index([createdAt])
+  @@index([orgId, createdAt])
 }

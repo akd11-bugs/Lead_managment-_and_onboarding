@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { leadScope } from '@/lib/session'
 import { getRepSessionUser } from '@/lib/repSession'
-import { STAGES, PENDING_SUB_STATUSES, type Stage, type PendingSubStatus } from '@/lib/types'
+import { PENDING_SUB_STATUSES, type Stage, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
+import { getStageDefinitions } from '@/lib/pipelineConfig'
 import { checkRateLimit } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
@@ -42,8 +43,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body instanceof NextResponse) return body
 
   const nextStage = body?.stage
-  if (nextStage !== undefined && (typeof nextStage !== 'string' || !STAGES.includes(nextStage as Stage))) {
-    return NextResponse.json({ error: `Invalid stage: ${nextStage}` }, { status: 400 })
+  if (nextStage !== undefined) {
+    if (typeof nextStage !== 'string') {
+      return NextResponse.json({ error: `Invalid stage: ${nextStage}` }, { status: 400 })
+    }
+    const stageDefs = await getStageDefinitions(user.orgId)
+    if (!stageDefs.some((s) => s.key === nextStage)) {
+      return NextResponse.json({ error: `Invalid stage: ${nextStage}` }, { status: 400 })
+    }
   }
   const nextPendingSubStatus = body?.pendingSubStatus
   if (
@@ -62,7 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    select: { stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
+    select: { orgId: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -72,7 +79,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!assignedOpsId) {
       return NextResponse.json({ error: 'An operations person must be assigned to move a lead to Onboarding' }, { status: 400 })
     }
-    const resolved = await resolveOpsAssignment(assignedOpsId)
+    const resolved = await resolveOpsAssignment(assignedOpsId, user.visibleOrgIds)
     if (!resolved) {
       return NextResponse.json({ error: 'assignedOpsId must be an active operations user' }, { status: 400 })
     }
