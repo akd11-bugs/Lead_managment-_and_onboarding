@@ -35,8 +35,8 @@ import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
 
 interface LeadSummary {
   id: string
-  company: string
-  poc: string | null
+  company: { name: string }
+  person: { name: string } | null
   stage: string
   pendingSubStatus: PendingSubStatus | null
 }
@@ -293,8 +293,8 @@ export function RepForm() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold">{selected.company}</h2>
-          <p className="text-sm text-muted-foreground">{selected.poc || '—'} · {selected.email}</p>
+          <h2 className="text-lg font-semibold">{selected.company.name}</h2>
+          <p className="text-sm text-muted-foreground">{selected.person?.name || '—'} · {selected.email}</p>
           {selected.phone && <p className="text-sm text-muted-foreground">{selected.phone}</p>}
           {selected.website && (
             <a href={selected.website} target="_blank" rel="noreferrer" className="text-sm text-primary underline underline-offset-2">
@@ -499,9 +499,9 @@ export function RepForm() {
             className="w-full text-left rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
             onClick={() => selectLead(lead.id)}
           >
-            <p className="font-medium">{lead.company}</p>
+            <p className="font-medium">{lead.company.name}</p>
             <p className="text-xs text-muted-foreground">
-              {lead.poc || '—'} · <Badge variant="outline" className="text-[10px]">{columnLabels[boardColumnFor(lead)] ?? boardColumnFor(lead)}</Badge>
+              {lead.person?.name || '—'} · <Badge variant="outline" className="text-[10px]">{columnLabels[boardColumnFor(lead)] ?? boardColumnFor(lead)}</Badge>
             </p>
           </button>
         ))}

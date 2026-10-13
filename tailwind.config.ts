@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import defaultTheme from 'tailwindcss/defaultTheme'
 
 const config: Config = {
   darkMode: ['class'],
@@ -15,6 +16,9 @@ const config: Config = {
       screens: { '2xl': '1400px' },
     },
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', ...defaultTheme.fontFamily.sans],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -48,16 +52,6 @@ const config: Config = {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
-        },
-        // Stage colors (kanban columns)
-        stage: {
-          new: { DEFAULT: '#64748b', foreground: '#f8fafc' },        // slate
-          contacted: { DEFAULT: '#3b82f6', foreground: '#ffffff' }, // blue
-          follow_up: { DEFAULT: '#f59e0b', foreground: '#ffffff' }, // amber
-          qualified: { DEFAULT: '#8b5cf6', foreground: '#ffffff' }, // violet
-          proposal: { DEFAULT: '#ec4899', foreground: '#ffffff' },  // pink
-          won: { DEFAULT: '#10b981', foreground: '#ffffff' },       // emerald
-          lost: { DEFAULT: '#f43f5e', foreground: '#ffffff' },      // rose
         },
       },
       borderRadius: {

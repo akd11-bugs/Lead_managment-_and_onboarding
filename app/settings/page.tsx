@@ -9,8 +9,9 @@ import { ScrollText } from 'lucide-react'
 import { requireUser, isAdmin } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import { OrganisationPanel } from '@/components/settings/OrganisationPanel'
-import { OrgHierarchyPanel } from '@/components/settings/OrgHierarchyPanel'
 import { EmailSettingsCard } from '@/components/settings/EmailSettingsCard'
+import { OrgEmailSettingsCard } from '@/components/settings/OrgEmailSettingsCard'
+import { OrgSheetConnectorCard } from '@/components/settings/OrgSheetConnectorCard'
 import { WorkflowRulesCard } from '@/components/settings/WorkflowRulesCard'
 import { PipelineConfigCard } from '@/components/settings/PipelineConfigCard'
 import { CustomFieldsCard } from '@/components/settings/CustomFieldsCard'
@@ -39,8 +40,8 @@ export default async function SettingsPage() {
   const invites = isAdmin(user)
     ? await prisma.invite.findMany({ where: { orgId: { in: user.visibleOrgIds } }, orderBy: { createdAt: 'desc' } })
     : []
-  const organizations = isAdmin(user)
-    ? await prisma.organization.findMany({ where: { id: { in: user.visibleOrgIds } }, orderBy: { createdAt: 'asc' } })
+  const joinRequests = isAdmin(user)
+    ? await prisma.joinRequest.findMany({ where: { orgId: { in: user.visibleOrgIds }, status: 'pending' }, orderBy: { createdAt: 'desc' } })
     : []
   const [stageDefs, stepDefs, fieldDefs] = isAdmin(user)
     ? await Promise.all([
@@ -74,15 +75,13 @@ export default async function SettingsPage() {
       </div>
 
       <EmailSettingsCard />
+      {isAdmin(user) && <OrgEmailSettingsCard />}
+      {isAdmin(user) && <OrgSheetConnectorCard />}
       <WorkflowRulesCard />
 
       {isAdmin(user) && (
-        <OrgHierarchyPanel
-          currentOrgId={user.orgId}
-          initialOrganizations={organizations.map((o) => ({ id: o.id, name: o.name, parentOrgId: o.parentOrgId }))}
-        />
+        <OrganisationPanel initialUsers={users as never} initialInvites={invites as never} initialJoinRequests={joinRequests as never} />
       )}
-      {isAdmin(user) && <OrganisationPanel initialUsers={users as never} initialInvites={invites as never} />}
 
       {isAdmin(user) ? (
         <>

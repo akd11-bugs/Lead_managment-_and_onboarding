@@ -40,7 +40,7 @@ export default async function ReportActivitiesPage({
       ...(kind === 'actor' ? { type: { in: ACTOR_ACTIVITY_TYPES } } : { type: 'onboarding_step' }),
     },
     orderBy: { date: 'desc' },
-    include: { lead: { select: { id: true, company: true } } },
+    include: { lead: { select: { id: true, company: { select: { name: true } } } } },
   })
 
   const items =
@@ -83,7 +83,7 @@ export default async function ReportActivitiesPage({
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{a.authorName}</span>
                   <span className="text-muted-foreground">on</span>
-                  <span className="font-medium">{a.lead.company}</span>
+                  <span className="font-medium">{a.lead.company?.name ?? 'Unknown company'}</span>
                   <span className="text-xs text-muted-foreground">{formatDateTime(a.date)}</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-0.5">{a.description}</p>

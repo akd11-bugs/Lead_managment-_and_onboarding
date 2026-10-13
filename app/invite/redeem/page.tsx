@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,7 +10,8 @@ import { Loader2 } from 'lucide-react'
 
 export default function RedeemInvitePage() {
   const router = useRouter()
-  const [form, setForm] = useState({ code: '', email: '', password: '', confirm: '' })
+  const searchParams = useSearchParams()
+  const [form, setForm] = useState({ code: searchParams.get('code') ?? '', name: '', email: '', password: '', confirm: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -25,7 +26,7 @@ export default function RedeemInvitePage() {
       const res = await fetch('/api/invites/redeem', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code: form.code.trim(), email: form.email, password: form.password }),
+        body: JSON.stringify({ code: form.code.trim(), name: form.name, email: form.email, password: form.password }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -51,10 +52,19 @@ export default function RedeemInvitePage() {
               <Label htmlFor="code">Invite code</Label>
               <Input
                 id="code"
-                autoFocus
+                autoFocus={!form.code}
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
                 placeholder="e.g. aB3xQ9zK"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Your name</Label>
+              <Input
+                id="name"
+                autoFocus={!!form.code}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">

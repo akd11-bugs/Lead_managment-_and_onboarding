@@ -101,6 +101,7 @@ export default async function LeadsPage({
       ...stageWhere,
     },
     orderBy: { updatedAt: 'desc' },
+    include: { company: true, person: true },
   })
 
   const admin = isAdmin(user)

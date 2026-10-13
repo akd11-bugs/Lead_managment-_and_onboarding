@@ -8,10 +8,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, Copy } from 'lucide-react'
 import { STAGES, STAGE_LABELS, type Stage } from '@/lib/types'
 
-type ActionType = 'create_task' | 'send_email'
+type ActionType = 'create_task' | 'send_email' | 'call_webhook'
 
 interface WorkflowRule {
   id: string
@@ -22,13 +22,19 @@ interface WorkflowRule {
   active: boolean
 }
 
+// One entry per action type instead of a matching three-way if/else chain
+// repeated at every call site (the Select options list, the rule-list
+// description, the create-form's config builder, and its validity check) —
+// adding a 4th action type only means adding a row here.
+const ACTION_TYPE_META: Record<ActionType, { label: string; describe: (config: Record<string, unknown>) => string }> = {
+  create_task: { label: 'Create a task', describe: (c) => `create task "${c.title}"` },
+  send_email: { label: 'Send an email', describe: (c) => `send email "${c.subject}"` },
+  call_webhook: { label: 'Call a webhook', describe: (c) => `call webhook ${c.url}` },
+}
+
 function describeRule(rule: WorkflowRule): string {
   const stageLabel = STAGE_LABELS[rule.triggerConfig.toStage as Stage] ?? rule.triggerConfig.toStage
-  const action =
-    rule.actionType === 'create_task'
-      ? `create task "${rule.actionConfig.title}"`
-      : `send email "${rule.actionConfig.subject}"`
-  return `When stage changes to ${stageLabel} → ${action}`
+  return `When stage changes to ${stageLabel} → ${ACTION_TYPE_META[rule.actionType].describe(rule.actionConfig)}`
 }
 
 export function WorkflowRulesCard() {
@@ -45,6 +51,26 @@ export function WorkflowRulesCard() {
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailTo, setEmailTo] = useState<'lead' | 'owner'>('lead')
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [newSigningSecret, setNewSigningSecret] = useState<string | null>(null)
+
+  // Same reasoning as ACTION_TYPE_META above, but these two depend on the
+  // form's current state, so they're built per-render inside the component
+  // instead of living at module scope.
+  const actionForms: Record<ActionType, { buildConfig: () => Record<string, unknown>; isValid: boolean }> = {
+    create_task: {
+      buildConfig: () => ({ title: taskTitle, dueInDays: Number(dueInDays) || undefined }),
+      isValid: !!taskTitle.trim(),
+    },
+    send_email: {
+      buildConfig: () => ({ subject: emailSubject, body: emailBody, to: emailTo }),
+      isValid: !!(emailSubject.trim() && emailBody.trim()),
+    },
+    call_webhook: {
+      buildConfig: () => ({ url: webhookUrl }),
+      isValid: !!webhookUrl.trim(),
+    },
+  }
 
   function loadRules() {
     fetch('/api/workflow-rules')
@@ -60,6 +86,7 @@ export function WorkflowRulesCard() {
     setDueInDays('2')
     setEmailSubject('')
     setEmailBody('')
+    setWebhookUrl('')
     setShowForm(false)
     setError(null)
   }
@@ -68,10 +95,7 @@ export function WorkflowRulesCard() {
     setSaving(true)
     setError(null)
     try {
-      const actionConfig =
-        actionType === 'create_task'
-          ? { title: taskTitle, dueInDays: Number(dueInDays) || undefined }
-          : { subject: emailSubject, body: emailBody, to: emailTo }
+      const actionConfig = actionForms[actionType].buildConfig()
       const res = await fetch('/api/workflow-rules', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -89,6 +113,7 @@ export function WorkflowRulesCard() {
         return
       }
       setRules((prev) => [data.rule, ...prev])
+      if (data.signingSecret) setNewSigningSecret(data.signingSecret)
       resetForm()
     } finally {
       setSaving(false)
@@ -109,9 +134,7 @@ export function WorkflowRulesCard() {
     await fetch(`/api/workflow-rules/${id}`, { method: 'DELETE' })
   }
 
-  const canSubmit =
-    name.trim() &&
-    (actionType === 'create_task' ? taskTitle.trim() : emailSubject.trim() && emailBody.trim())
+  const canSubmit = name.trim() && actionForms[actionType].isValid
 
   return (
     <Card>
@@ -120,8 +143,38 @@ export function WorkflowRulesCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
-          When a lead you own changes stage, automatically create a task or send an email.
+          When a lead you own changes stage, automatically create a task, send an email, or call a webhook.
         </p>
+
+        {newSigningSecret && (
+          <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900 dark:bg-amber-950">
+            <p className="font-medium text-amber-900 dark:text-amber-300">
+              Signing secret — shown once, copy it now
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded bg-background px-2 py-1 text-xs">{newSigningSecret}</code>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(newSigningSecret)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Copy signing secret"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewSigningSecret(null)}
+                className="text-xs text-muted-foreground underline underline-offset-2"
+              >
+                Dismiss
+              </button>
+            </div>
+            <p className="text-xs text-amber-800 dark:text-amber-400">
+              Use this to verify the <code>x-webhook-signature</code> header (HMAC-SHA256 of the raw request body) on
+              requests this rule sends. It won&apos;t be shown again.
+            </p>
+          </div>
+        )}
 
         {rules.length === 0 && !showForm && <p className="text-sm text-muted-foreground">No rules yet.</p>}
 
@@ -180,8 +233,11 @@ export function WorkflowRulesCard() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="create_task">Create a task</SelectItem>
-                    <SelectItem value="send_email">Send an email</SelectItem>
+                    {(Object.keys(ACTION_TYPE_META) as ActionType[]).map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {ACTION_TYPE_META[type].label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -198,7 +254,7 @@ export function WorkflowRulesCard() {
                   <Input id="dueInDays" type="number" min="0" value={dueInDays} onChange={(e) => setDueInDays(e.target.value)} />
                 </div>
               </div>
-            ) : (
+            ) : actionType === 'send_email' ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -222,6 +278,20 @@ export function WorkflowRulesCard() {
                   <Label htmlFor="emailBody">Body</Label>
                   <Textarea id="emailBody" rows={3} value={emailBody} onChange={(e) => setEmailBody(e.target.value)} />
                 </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="webhookUrl">Webhook URL</Label>
+                <Input
+                  id="webhookUrl"
+                  type="url"
+                  placeholder="https://your-system.example.com/hooks/lead-stage"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  We&apos;ll POST a JSON payload, signed with a secret you&apos;ll get once the rule is created.
+                </p>
               </div>
             )}
 

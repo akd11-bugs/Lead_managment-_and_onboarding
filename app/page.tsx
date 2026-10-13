@@ -7,6 +7,7 @@ import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
 import { RepPerformance, type RepPerformanceRow } from '@/components/dashboard/RepPerformance'
 import { SourceROI, type SourceROIRow } from '@/components/dashboard/SourceROI'
 import { BDSummary, type BDSummaryData } from '@/components/dashboard/BDSummary'
+import { GettingStartedCard } from '@/components/dashboard/GettingStartedCard'
 import { Users, DollarSign, Target, TrendingUp, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,16 @@ export default async function DashboardPage() {
   })
 
   const alerts = computeAlerts(leads as any)
+
+  // Getting-started steps, derived live from data that already exists.
+  // Sample leads seeded for brand-new orgs (lib/org.ts's seedSampleLeads)
+  // all use @example.com addresses — that's the one signal distinguishing
+  // them from real leads without a new tracking column.
+  const realLeadCount = leads.filter((l) => !l.email.endsWith('@example.com')).length
+  const [teamMemberCount, sheetConnector] = await Promise.all([
+    prisma.user.count({ where: { orgId: { in: user.visibleOrgIds } } }),
+    prisma.orgSheetConnector.findUnique({ where: { orgId: user.orgId } }),
+  ])
 
   const totalLeads = leads.length
   const wonThisMonth = leads.filter((l) => {
@@ -175,6 +186,12 @@ export default async function DashboardPage() {
           href="/leads?filter=won"
         />
       </div>
+
+      <GettingStartedCard
+        realLeadCount={realLeadCount}
+        teamMemberCount={teamMemberCount}
+        sheetConnected={!!sheetConnector}
+      />
 
       {/* BD summary */}
       <BDSummary data={bdSummary} />

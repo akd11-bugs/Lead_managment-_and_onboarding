@@ -18,6 +18,7 @@ export default async function OnboardingQueuePage() {
   const leads = await prisma.lead.findMany({
     where: { stage: 'onboarding', ...leadScope(user) },
     orderBy: { updatedAt: 'desc' },
+    include: { company: true },
   })
 
   const bySubStage = new Map<OnboardingSubStage, typeof leads>()
@@ -38,7 +39,7 @@ export default async function OnboardingQueuePage() {
 
       <div className="grid gap-3 md:grid-cols-4">
         {ONBOARDING_SUB_STAGES.map((stage) => (
-          <Card key={stage} className="clay-card">
+          <Card key={stage}>
             <CardContent className="p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {ONBOARDING_SUB_STAGE_LABELS[stage]}
@@ -66,7 +67,7 @@ export default async function OnboardingQueuePage() {
                   className="block rounded-md border p-2.5 text-sm hover:bg-accent"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium truncate">{lead.company}</span>
+                    <span className="font-medium truncate">{lead.company?.name ?? 'Unknown company'}</span>
                     <Badge variant="outline" className="text-[10px] shrink-0">
                       {onboardingProgressPercent(lead.onboardingSubStage as OnboardingSubStage | null)}%
                     </Badge>

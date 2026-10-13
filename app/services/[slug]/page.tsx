@@ -14,11 +14,13 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
   const user = await requireUser()
   const leads =
     service.leadSkillIds.length > 0
-      ? await prisma.lead.findMany({
-          where: leadScope(user),
-          select: { id: true, poc: true, company: true, stage: true },
-          orderBy: { updatedAt: 'desc' },
-        })
+      ? (
+          await prisma.lead.findMany({
+            where: leadScope(user),
+            select: { id: true, person: { select: { name: true } }, company: { select: { name: true } }, stage: true },
+            orderBy: { updatedAt: 'desc' },
+          })
+        ).map((l) => ({ id: l.id, poc: l.person?.name ?? null, company: l.company?.name ?? 'Unknown company', stage: l.stage }))
       : []
 
   return (

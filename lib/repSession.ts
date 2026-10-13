@@ -76,6 +76,6 @@ export async function getRepSessionUser(): Promise<SessionUser | null> {
   })
   if (!user || !user.isActive || !user.pinHash) return null
 
-  const visibleOrgIds = await resolveVisibleOrgIds(user.orgId, user.role)
+  const visibleOrgIds = resolveVisibleOrgIds(user.orgId)
   return { id: user.id, name: user.name, email: user.email, role: user.role, orgId: user.orgId, visibleOrgIds }
 }

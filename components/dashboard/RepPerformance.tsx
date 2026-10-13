@@ -1,12 +1,10 @@
 'use client'
 
-import { useId } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, LabelList } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
-import { claymorphicBar } from './ClayBar'
 
 // Categorical palette slots 1–3 (blue, orange, aqua) — validated for CVD + contrast
 // via the dataviz skill's validate_palette.js, adjacent pairlist, light + dark.
@@ -20,10 +18,9 @@ export interface RepPerformanceRow {
 }
 
 export function RepPerformance({ rows }: { rows: RepPerformanceRow[] }) {
-  const uid = useId().replace(/:/g, '')
   const router = useRouter()
   return (
-    <Card className="clay-card">
+    <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Rep performance</CardTitle>
       </CardHeader>
@@ -52,7 +49,7 @@ export function RepPerformance({ rows }: { rows: RepPerformanceRow[] }) {
               />
               <Bar
                 dataKey="openValue"
-                shape={claymorphicBar(uid)}
+                radius={[4, 4, 0, 0]}
                 cursor="pointer"
                 onClick={(d) => router.push(`/leads?owner=${encodeURIComponent(d.payload.ownerName)}`)}
               >

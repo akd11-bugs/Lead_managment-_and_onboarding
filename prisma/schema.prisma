@@ -10,22 +10,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// An organization is a customer/company workspace. Nested via parentOrgId so
-// a holding company can roll up its divisions' data. `path` is a materialized
-// path (e.g. "/root/child/") set once at creation from the parent's path —
-// "self + all descendants" is then a single indexed `path LIKE '<path>%'`
-// query instead of a recursive CTE, which Prisma can't express natively.
+// An organization is one customer company — flat, isolated, no nesting.
+// Every org-scoped model's `orgId` is the sole tenant boundary; there is no
+// cross-org visibility by design (see lib/session.ts's visibleOrgIds).
 model Organization {
-  id           String         @id @default(cuid())
-  name         String
-  parentOrgId  String?
-  parent       Organization?  @relation("OrgHierarchy", fields: [parentOrgId], references: [id])
-  children     Organization[] @relation("OrgHierarchy")
-  path         String
-  createdAt    DateTime       @default(now())
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
 
-  @@index([path])
-  @@index([parentOrgId])
+  emailConfig    OrgEmailConfig?
+  sheetConnector OrgSheetConnector?
+  companies      Company[]
+  people         Person[]
+}
+
+// An org's own outbound mailbox — lets an org bring its own SMTP instead of
+// the global env-configured shared mailbox (lib/email.ts's sendEmail()
+// fallback) or a single user's personal Gmail (User.emailAppPasswordEnc).
+// Precedence at send time: the sending user's personal Gmail config, then
+// this org config, then the global env fallback — see lib/email.ts.
+model OrgEmailConfig {
+  id          String   @id @default(cuid())
+  orgId       String   @unique
+  org         Organization @relation(fields: [orgId], references: [id])
+  smtpHost    String
+  smtpPort    Int
+  smtpSecure  Boolean  @default(true)
+  smtpUser    String
+  smtpPassEnc String   // AES-256-GCM ciphertext, same format as User.emailAppPasswordEnc
+  fromAddress String
+  fromName    String?
+  configuredAt       DateTime @default(now())
+  configuredByUserId String?
+}
+
+// An org's own Google Sheet lead source — lets an org configure its own
+// sheet from Settings instead of the single global env-configured sheet
+// (LEADS_SHEET_ID) that app/api/cron/sync-leads-sheet/route.ts used to be
+// hardcoded to. That global sheet keeps syncing alongside any configured
+// connectors here — this is additive, not a replacement, until it's
+// explicitly removed.
+//
+// No per-org service account here on purpose: every org shares the one
+// deployment-wide service account (GOOGLE_SERVICE_ACCOUNT_EMAIL/
+// GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY in .env, see lib/googleSheets.ts). An
+// org admin's whole setup is: share their sheet with that one email, then
+// paste the sheet ID here — no GCP project or credentials of their own.
+model OrgSheetConnector {
+  id                 String    @id @default(cuid())
+  orgId              String    @unique
+  org                Organization @relation(fields: [orgId], references: [id])
+  // Unique across ALL orgs, not just per-org — a sheet connected by one
+  // org must not be claimable by a second org, which would let that org's
+  // sync cron read a stranger's sheet (sheet IDs are often shared/pasted
+  // into chat, not secret).
+  sheetId            String    @unique
+  sheetRange         String    @default("Sheet1")
+  defaultOwnerUserId String
+  enabled            Boolean   @default(true)
+  lastSyncedAt       DateTime?
+  configuredAt         DateTime  @default(now())
+  configuredByUserId   String?
 }
 
 // Per-org pipeline stage configuration. `key` is what Lead.stage actually
@@ -86,11 +131,61 @@ model LeadFieldDefinition {
   @@index([orgId, position])
 }
 
+// A company is shared across every Lead/Person that belongs to it — normal
+// for many contacts/deals to share one Company, so there is deliberately no
+// per-Lead duplicate string anymore (see Person/Lead below).
+model Company {
+  id             String   @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id])
+  name           String
+  // lowercase + trimmed + collapsed whitespace — the actual dedup key.
+  // Enforced as a real DB constraint (@@unique) instead of the old
+  // application-level findFirst check, which could race under concurrent
+  // writes (two simultaneous imports both "finding no match" and creating
+  // two rows for the same company).
+  normalizedName String
+  website        String?
+  industry       String?  // the company's own profile value — independent of any one Lead's industry/businessType, which stay per-deal on Lead itself (a company's profile and one specific deal's details are different things, not a duplicate of the same fact)
+  businessType   String?  // b2b | b2c — company profile default, same independence as industry above
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  people         Person[]
+  leads          Lead[]
+
+  @@unique([orgId, normalizedName])
+  @@index([orgId, name])
+}
+
+// A point of contact at a Company. Optional on Lead — not every lead has an
+// identified contact yet — but when set, always belongs to that lead's
+// Company (enforced in application code at the two write sites, not the DB,
+// since Prisma has no cross-field constraint).
+model Person {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+  name      String
+  email     String?
+  phone     String?
+  jobTitle  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  leads     Lead[]
+
+  @@index([orgId, companyId])
+  @@index([orgId, name])
+}
+
 model Lead {
   id              String       @id @default(cuid())
   orgId           String
-  poc             String?      // point of contact at the company — optional, not the primary identifier
-  company         String
+  companyId       String
+  company         Company      @relation(fields: [companyId], references: [id])
+  personId        String?
+  person          Person?      @relation(fields: [personId], references: [id])
   email           String
   phone           String?
   website         String?
@@ -187,10 +282,15 @@ model SavedView {
   orgId       String
   userId      String   // plain string, same convention as Task.ownerId — no hard FK to User
   name        String
-  filtersJson String   // JSON.stringify of the leads-table filter/sort state
+  // "leads" | "companies" — one model serves both table types rather than a
+  // parallel CompanySavedView; the stored shape differs (see filtersJson)
+  // but the CRUD/ownership semantics are identical.
+  viewType    String   @default("leads")
+  filtersJson String   // JSON.stringify of the table's filter/sort/column state — shape depends on viewType
   createdAt   DateTime @default(now())
 
   @@index([orgId, userId])
+  @@index([orgId, userId, viewType])
 }
 
 model Task {
@@ -227,14 +327,35 @@ model Activity {
 model Invite {
   id               String    @id @default(cuid())
   orgId            String
-  name             String
+  name             String?   // optional for a reusable link — it isn't naming one person in advance
   role             String    // admin | sales | operations
   code             String    @unique
   status           String    @default("pending") // pending | redeemed | revoked
+  // When true, redemption never flips status to "redeemed" — the same link
+  // stays usable by any number of different people until an admin revokes
+  // it, instead of being one-code-per-person like a regular invite.
+  isReusable       Boolean   @default(false)
   createdById      String
   createdAt        DateTime  @default(now())
   redeemedAt       DateTime?
   redeemedByUserId String?
+
+  @@index([orgId, status])
+}
+
+// Tracks a request to join an existing org — created when someone signs in
+// with an email whose domain matches an org that already exists (see
+// app/account-not-found/page.tsx), not by an admin inviting a known person
+// (that's what Invite is for). Approving one just creates a real Invite
+// (role: 'sales') and emails the requester a redeem link — this model only
+// ever tracks the request itself, never the account creation.
+model JoinRequest {
+  id              String   @id @default(cuid())
+  orgId           String
+  requesterName   String
+  requesterEmail  String
+  status          String   @default("pending") // pending | approved | rejected
+  createdAt       DateTime @default(now())
 
   @@index([orgId, status])
 }

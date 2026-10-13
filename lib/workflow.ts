@@ -1,6 +1,10 @@
-import type { Lead, WorkflowRule } from '@prisma/client'
+import crypto from 'crypto'
+import type { WorkflowRule } from '@prisma/client'
+import type { LeadWithRelations as Lead } from '@/lib/leadStage'
 import { prisma } from '@/lib/db'
 import { sendEmailAs } from '@/lib/email'
+import { tryDecrypt } from '@/lib/crypto'
+import { assertSafeWebhookUrl } from '@/lib/ssrfGuard'
 
 interface StageChangedTrigger {
   toStage: string
@@ -17,12 +21,31 @@ interface SendEmailAction {
   to?: 'lead' | 'owner'
 }
 
+interface CallWebhookAction {
+  url: string
+  signingSecretEnc: string // AES-256-GCM ciphertext — see app/api/workflow-rules/route.ts
+}
+
 function parseJson<T>(value: string): T | null {
   try {
     return JSON.parse(value) as T
   } catch {
     return null
   }
+}
+
+// Shared by send_email and call_webhook below — both log their result to
+// the lead's activity feed and bump lastActivityAt the same way, only the
+// type/description differ.
+async function logAutomationActivity(
+  lead: Lead,
+  rule: WorkflowRule,
+  entry: { type: string; description: string },
+): Promise<void> {
+  const activity = await prisma.activity.create({
+    data: { orgId: lead.orgId, leadId: lead.id, type: entry.type, description: entry.description, authorName: `Automation — ${rule.name}` },
+  })
+  await prisma.lead.update({ where: { id: lead.id }, data: { lastActivityAt: activity.date } })
 }
 
 /**
@@ -77,15 +100,53 @@ async function runAction(rule: WorkflowRule, lead: Lead): Promise<void> {
     await sendEmailAs(rule.ownerId, { to, subject: config.subject, body: config.body })
 
     const descriptionPrefix = sentToOwner ? 'Notified owner: ' : 'Sent: '
-    const activity = await prisma.activity.create({
-      data: {
-        orgId: lead.orgId,
-        leadId: lead.id,
-        type: 'email',
-        description: `${descriptionPrefix}"${config.subject}"\n\n${config.body}`,
-        authorName: `Automation — ${rule.name}`,
-      },
+    await logAutomationActivity(lead, rule, { type: 'email', description: `${descriptionPrefix}"${config.subject}"\n\n${config.body}` })
+    return
+  }
+
+  if (rule.actionType === 'call_webhook') {
+    const config = parseJson<CallWebhookAction>(rule.actionConfig)
+    if (!config?.url || !config.signingSecretEnc) return
+
+    const signingSecret = tryDecrypt(config.signingSecretEnc)
+    if (!signingSecret) return // key rotated since — skip rather than throw
+
+    const payload = JSON.stringify({
+      event: 'lead.stage_changed',
+      ruleId: rule.id,
+      ruleName: rule.name,
+      lead: { id: lead.id, company: lead.company?.name ?? 'Unknown company', email: lead.email, stage: lead.stage },
+      timestamp: new Date().toISOString(),
     })
-    await prisma.lead.update({ where: { id: lead.id }, data: { lastActivityAt: activity.date } })
+    const signature = crypto.createHmac('sha256', signingSecret).update(payload).digest('hex')
+
+    // Unlike send_email above, a failure here does NOT propagate — an
+    // external endpoint being slow, down, or never built is the normal case
+    // for a webhook, and shouldn't block the stage change that triggered it
+    // (the caller, lib/leadStage.ts, has already committed the stage change
+    // by the time this runs). Logged to console for operator visibility;
+    // see the enterprise-roadmap note about a real delivery log/retry.
+    try {
+      // Re-validated here, not just at save time in the route handler — a
+      // hostname that resolved to a public IP when the rule was saved can be
+      // re-pointed at an internal address by the time it actually fires
+      // (DNS rebinding), so this is the enforcement point that actually matters.
+      await assertSafeWebhookUrl(config.url)
+      const res = await fetch(config.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-webhook-signature': `sha256=${signature}` },
+        body: payload,
+        signal: AbortSignal.timeout(5_000),
+      })
+      if (!res.ok) {
+        console.error(`workflow webhook call failed (rule ${rule.id}): HTTP ${res.status}`)
+        return
+      }
+    } catch (err) {
+      console.error(`workflow webhook call failed (rule ${rule.id}):`, err)
+      return
+    }
+
+    await logAutomationActivity(lead, rule, { type: 'note', description: `Webhook delivered to ${new URL(config.url).hostname}` })
   }
 }

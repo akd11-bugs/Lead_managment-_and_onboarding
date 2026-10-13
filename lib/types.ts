@@ -35,10 +35,28 @@ export type PendingSubStatus = 'pending_ours' | 'pending_merchant' | 'pending_ps
 // state. Operated by the sales team for now; ops-team access comes later.
 export type OnboardingSubStage = 'document_submission' | 'document_verification' | 'psp_verification' | 'final_onboarded'
 
+export interface LeadCompany {
+  id: string
+  name: string
+  website: string | null
+  industry: string | null
+  businessType: BusinessType | null
+}
+
+export interface LeadPerson {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  jobTitle: string | null
+}
+
 export interface Lead {
   id: string
-  poc: string | null
-  company: string
+  companyId: string
+  company: LeadCompany
+  personId: string | null
+  person: LeadPerson | null
   email: string
   phone: string | null
   website: string | null
@@ -62,6 +80,7 @@ export interface Lead {
   painPoints: string
   whatTheyWant: string
   notes: string
+  customFieldsJson?: string
   position: number
   createdAt: Date | string
   updatedAt: Date | string
@@ -214,6 +233,22 @@ export const BOARD_COLUMN_DESCRIPTIONS: Record<BoardColumnKey, string> = {
   proposal: 'Proposal sent, awaiting a decision',
   onboarding: 'Closed-won — document & PSP verification in progress',
   not_interested: 'Closed-lost, with a stated reason',
+}
+
+// Single source of truth for board-column color — a graduated neutral-to-blue
+// ramp for the in-flight stages, with saturated color reserved for the two
+// terminal states (green for won, rust for lost) so hue carries meaning
+// instead of a different color per column. Used as the default wherever a
+// column has no admin-set StageDefinition.color (lib/hooks/usePipelineConfig.ts)
+// and directly by the dashboard charts (components/dashboard/*).
+export const BOARD_COLUMN_COLORS: Record<BoardColumnKey, string> = {
+  new: '#94a3b8',
+  pending_ours: '#7f93c2',
+  pending_merchant: '#7f93c2',
+  pending_psp: '#7f93c2',
+  proposal: '#3f67c0',
+  onboarding: '#16794f',
+  not_interested: '#a93226',
 }
 
 // Where a lead currently sits, expanded to sub-column granularity.

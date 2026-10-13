@@ -6,6 +6,7 @@ import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
 import { mergeCustomFields } from '@/lib/leadCustomFields'
 import { getStageDefinitions, getOnboardingStepDefinitions } from '@/lib/pipelineConfig'
+import { findOrCreateCompany, findOrCreatePerson } from '@/lib/company'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     include: {
       activities: { orderBy: { date: 'desc' } },
       skillRuns: { orderBy: { createdAt: 'desc' }, take: 20 },
+      company: true,
+      person: true,
     },
   })
   if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -44,7 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    select: { orgId: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true, customFieldsJson: true },
+    select: { orgId: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true, customFieldsJson: true, companyId: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -133,12 +136,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
+  // Renaming the company a lead belongs to, or re-pointing it at a different
+  // company entirely, both resolve through the same find-or-create helper
+  // every other company entry point uses (app/api/leads/route.ts, bulk
+  // import) — never a direct string write to the relation.
+  let nextCompanyId: string | undefined
+  if (body.company !== undefined) {
+    const company = await findOrCreateCompany(existing.orgId, String(body.company))
+    nextCompanyId = company.id
+  }
+  let nextPersonId: string | undefined | null
+  if (body.poc !== undefined) {
+    const pocName = body.poc ? String(body.poc).trim() : ''
+    nextPersonId = pocName ? (await findOrCreatePerson(existing.orgId, nextCompanyId ?? existing.companyId!, pocName)).id : null
+  }
+
   const lead = await prisma.lead.update({
     where: { id },
     data: {
       ...(customFieldsJson !== undefined && { customFieldsJson }),
-      ...(body.poc !== undefined && { poc: body.poc }),
-      ...(body.company !== undefined && { company: body.company }),
+      ...(nextPersonId !== undefined && { personId: nextPersonId }),
+      ...(nextCompanyId !== undefined && { companyId: nextCompanyId }),
       ...(body.email !== undefined && { email: body.email }),
       ...(body.phone !== undefined && { phone: body.phone }),
       ...(body.website !== undefined && { website: body.website }),
@@ -161,6 +179,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.position !== undefined && { position: Number(body.position) }),
       ...(nextSubStage !== undefined && nextSubStage !== existing.onboardingSubStage && { lastActivityAt: new Date() }),
     },
+    include: { company: true, person: true },
   })
 
   return NextResponse.json({ lead })

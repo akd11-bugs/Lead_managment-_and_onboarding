@@ -1,4 +1,5 @@
-import { signOut } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import { neonAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { LogOut } from 'lucide-react'
 
@@ -7,7 +8,8 @@ export function SignOutButton() {
     <form
       action={async () => {
         'use server'
-        await signOut({ redirectTo: '/login' })
+        await neonAuth.signOut()
+        redirect('/login')
       }}
     >
       <Button type="submit" variant="ghost" size="icon" aria-label="Sign out">

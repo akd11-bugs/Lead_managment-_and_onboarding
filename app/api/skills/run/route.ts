@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   // Load data the skill needs — scoped to what this user is allowed to see
   const leads = await prisma.lead.findMany({
     where: leadScope(user),
-    include: { activities: { orderBy: { date: 'desc' } } },
+    include: { activities: { orderBy: { date: 'desc' } }, company: true, person: true },
     orderBy: { updatedAt: 'desc' },
   })
 

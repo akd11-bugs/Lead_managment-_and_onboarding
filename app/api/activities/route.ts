@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     where: { lead: leadScope(user), ...(leadId ? { leadId } : {}) },
     orderBy: { date: 'desc' },
     take: limit,
-    include: { lead: { select: { company: true, id: true } } },
+    include: { lead: { select: { company: { select: { name: true } }, id: true } } },
   })
   const items = activities.map((a) => ({
     id: a.id,
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     date: a.date,
     authorName: a.authorName,
     leadId: a.leadId,
-    leadName: a.lead.company,
+    leadName: a.lead.company?.name ?? 'Unknown company',
   }))
   return NextResponse.json({ activities: items })
 }

@@ -12,7 +12,7 @@ export default function CompleteSignupPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token') ?? ''
-  const [form, setForm] = useState({ name: '', password: '', confirm: '' })
+  const [form, setForm] = useState({ name: '', companyName: '', password: '', confirm: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,7 +27,7 @@ export default function CompleteSignupPage() {
       const res = await fetch('/api/signup/complete', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token, name: form.name, password: form.password }),
+        body: JSON.stringify({ token, name: form.name, companyName: form.companyName, password: form.password }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -57,21 +57,27 @@ export default function CompleteSignupPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Finish setting up your account</CardTitle>
+          <CardTitle className="text-xl">Create your company</CardTitle>
           <CardDescription>
-            An admin will still need to approve your account and assign your role before you can log in.
+            This creates a brand-new, fully private workspace — you&apos;ll be its first admin. Teammates join later
+            via an invite you send them, not by signing up here.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="name">Full name</Label>
+              <Label htmlFor="companyName">Company name</Label>
               <Input
-                id="name"
+                id="companyName"
                 autoFocus
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                value={form.companyName}
+                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+                placeholder="Acme Corp"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Your full name</Label>
+              <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
@@ -96,10 +102,10 @@ export default function CompleteSignupPage() {
             <Button
               className="w-full"
               onClick={complete}
-              disabled={saving || !form.name || !form.password}
+              disabled={saving || !form.name || !form.companyName || !form.password}
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Create my account
+              Create my company
             </Button>
           </div>
         </CardContent>

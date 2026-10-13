@@ -218,7 +218,7 @@ function leadsToCsv(leads: Lead[]): string {
     'source',
   ]
   const rows = leads.map((l) => [
-    escapeCsv(l.poc ? `${l.company} (${l.poc})` : l.company),
+    escapeCsv(l.person?.name ? `${l.company.name} (${l.person.name})` : l.company.name),
     l.stage,
     String(l.estimatedVolume),
     formatDateForCsv(l.createdAt),

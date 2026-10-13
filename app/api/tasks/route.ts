@@ -17,10 +17,10 @@ export async function GET(req: Request) {
       ...(leadId ? { leadId } : {}),
     },
     orderBy: [{ done: 'asc' }, { dueDate: 'asc' }],
-    include: { lead: { select: { company: true } } },
+    include: { lead: { select: { company: { select: { name: true } } } } },
   })
   return NextResponse.json({
-    tasks: tasks.map((t) => ({ ...t, leadCompany: t.lead?.company ?? null, lead: undefined })),
+    tasks: tasks.map((t) => ({ ...t, leadCompany: t.lead?.company?.name ?? null, lead: undefined })),
   })
 }
 

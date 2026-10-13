@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const lead = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    include: { activities: { orderBy: { date: 'desc' }, take: 20 } },
+    include: { activities: { orderBy: { date: 'desc' }, take: 20 }, company: true, person: true },
   })
   if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ lead })

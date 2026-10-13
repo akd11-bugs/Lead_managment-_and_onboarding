@@ -1,40 +1,39 @@
 import { NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
 import { readJsonBody } from '@/lib/http'
-import { getDefaultOrgId } from '@/lib/org'
+import { createOrganization, seedSampleLeads } from '@/lib/org'
+import { signUpNeonAuthAccount } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 // Public route — no requireApiUser(). Finishes account creation for a
 // signup link requested via /api/signup/request. Excluded from proxy.ts's
-// auth wall. Always creates a 'pending' account — an admin must still
-// assign a real role from Organisation before the account can do anything.
+// auth wall. Always creates a brand-new, fully isolated org — this is how
+// a company's founding admin gets onboarded; everyone else at that company
+// joins via that admin's invite (app/api/invites/redeem), not this route.
 export async function POST(req: Request) {
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
   const token = String(body.token ?? '').trim()
   const name = String(body.name ?? '').trim()
+  const companyName = String(body.companyName ?? '').trim()
   const password = String(body.password ?? '')
 
-  if (!token || !name || !password) {
-    return NextResponse.json({ error: 'token, name, and password are required' }, { status: 400 })
+  if (!token || !name || !companyName || !password) {
+    return NextResponse.json({ error: 'token, name, companyName, and password are required' }, { status: 400 })
   }
   if (password.length < 8) {
     return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
   }
 
-  const passwordHash = await bcrypt.hash(password, 10)
-  // TODO(Phase 2 / Neon Auth): once "create your organization" exists, a
-  // brand-new signup should create its own org here instead of joining the
-  // single default one — see lib/org.ts's getDefaultOrgId() doc comment.
-  const orgId = await getDefaultOrgId()
-
+  // Claims the token atomically (closes the race where two requests complete
+  // the same link at once) and reserves the email. The actual account —
+  // the Neon Auth credential identity, then our own org + User row — is
+  // created below, outside this transaction, since signUp is a network call.
+  let signupEmail: string
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      // Atomically claim the token — closes the race where two requests
-      // complete the same link at once.
+    const claimed = await prisma.$transaction(async (tx) => {
       const claim = await tx.signupToken.updateMany({
         where: { token, usedAt: null, expiresAt: { gt: new Date() } },
         data: { usedAt: new Date() },
@@ -47,28 +46,44 @@ export async function POST(req: Request) {
       const existingUser = await tx.user.findUnique({ where: { email: signupToken.email } })
       if (existingUser) return 'already-registered' as const
 
-      const user = await tx.user.create({
-        data: { orgId, name, email: signupToken.email, passwordHash, role: 'pending', isActive: true },
-      })
-
-      return { user }
+      return signupToken.email
     })
 
-    if (result === null) {
+    if (claimed === null) {
       return NextResponse.json({ error: 'This link is invalid or has expired' }, { status: 410 })
     }
-    if (result === 'already-registered') {
+    if (claimed === 'already-registered') {
       return NextResponse.json({ error: 'That email is already registered — log in instead' }, { status: 409 })
     }
-
-    await logAudit({
-      action: 'signup_pending',
-      actorUserId: result.user.id,
-      targetUserId: result.user.id,
-    })
-
-    return NextResponse.json({ ok: true })
+    signupEmail = claimed
   } catch {
-    return NextResponse.json({ error: 'That email is already registered — log in instead' }, { status: 409 })
+    return NextResponse.json({ error: 'This link is invalid or has expired' }, { status: 410 })
   }
+
+  // Creates the actual credential identity in Neon Auth — /login's
+  // email/password sign-in checks against this, not our own passwordHash
+  // column (kept null from here on; Neon Auth owns password verification).
+  const signUp = await signUpNeonAuthAccount({ email: signupEmail, password, name })
+  if (!signUp.ok) {
+    // The token was already atomically claimed above, but no account got
+    // created — release it so the same link can be retried instead of
+    // being silently burned.
+    await prisma.signupToken.update({ where: { token }, data: { usedAt: null } })
+    return NextResponse.json({ error: signUp.message }, { status: 409 })
+  }
+
+  const org = await createOrganization(companyName)
+  const user = await prisma.user.create({
+    data: { orgId: org.id, name, email: signupEmail, passwordHash: null, role: 'admin', isActive: true },
+  })
+  await seedSampleLeads(org.id)
+
+  await logAudit({
+    action: 'org_created',
+    actorUserId: user.id,
+    targetUserId: user.id,
+    metadata: { orgId: org.id, companyName },
+  })
+
+  return NextResponse.json({ ok: true })
 }

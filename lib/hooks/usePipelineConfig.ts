@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BOARD_COLUMN_LABELS, BOARD_COLUMN_DESCRIPTIONS, PENDING_SUB_STATUSES } from '@/lib/types'
+import { BOARD_COLUMN_LABELS, BOARD_COLUMN_DESCRIPTIONS, BOARD_COLUMN_COLORS, PENDING_SUB_STATUSES } from '@/lib/types'
 
 export interface StageOption {
   id: string
@@ -26,6 +26,14 @@ export interface BoardColumn {
   color: string | null
 }
 
+// A column's `color` comes from its org-customizable StageDefinition row
+// when an admin has set one (see components/settings/PipelineConfigCard.tsx)
+// — every core stage seeds with `color: null` (lib/pipelineConfig.ts), so it
+// falls back to BOARD_COLUMN_COLORS (lib/types.ts — shared with the
+// dashboard charts, so the Kanban board and the charts never disagree on
+// what a stage's color means). A custom (non-core) stage with no color set
+// falls back to BOARD_COLUMN_COLORS.new — the same neutral 'new' uses.
+
 // Pending's 3 sub-statuses aren't part of this round's per-org
 // configuration (only stages/onboarding-steps/custom-fields were asked
 // for) — they stay the static values already in lib/types.ts. A custom
@@ -34,16 +42,19 @@ const PENDING_SUB_COLUMNS: BoardColumn[] = PENDING_SUB_STATUSES.map((key) => ({
   key,
   label: BOARD_COLUMN_LABELS[key],
   description: BOARD_COLUMN_DESCRIPTIONS[key],
-  color: null,
+  color: BOARD_COLUMN_COLORS[key],
 }))
-
-const DEFAULT_STAGE_COLOR = '#64748b'
 
 function buildBoardColumns(stages: StageOption[]): BoardColumn[] {
   return stages.flatMap((s) =>
     s.key === 'pending'
       ? PENDING_SUB_COLUMNS
-      : [{ key: s.key, label: s.label, description: s.description, color: s.color ?? DEFAULT_STAGE_COLOR }]
+      : [{
+          key: s.key,
+          label: s.label,
+          description: s.description,
+          color: s.color ?? BOARD_COLUMN_COLORS[s.key] ?? BOARD_COLUMN_COLORS.new,
+        }]
   )
 }
 

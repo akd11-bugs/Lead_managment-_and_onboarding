@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
+import { getAllOrgIds } from '@/lib/org'
 import { safeEqual } from '@/lib/http'
 import { sendDailyActivityReportEmail } from '@/lib/dailyReportEmail'
-import { getDefaultOrgId } from '@/lib/org'
-import { resolveVisibleOrgIds } from '@/lib/session'
 import { recordJobRun } from '@/lib/jobRun'
 
 export const dynamic = 'force-dynamic'
@@ -21,18 +20,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const startedAt = new Date()
-  try {
-    // No user session on this cron route — reports on the default org's
-    // full tree (self + descendants), same rollup an admin gets.
-    const defaultOrgId = await getDefaultOrgId()
-    const orgIds = await resolveVisibleOrgIds(defaultOrgId, 'admin')
-    const result = await sendDailyActivityReportEmail(orgIds)
-    await recordJobRun({ orgId: defaultOrgId, jobKey: 'daily-activity-report', status: 'success', startedAt })
-    return NextResponse.json(result)
-  } catch (err) {
-    await recordJobRun({ jobKey: 'daily-activity-report', status: 'failure', startedAt, error: String(err) })
-    console.error('daily-activity-report failed', err)
-    return NextResponse.json({ error: 'Failed to send the daily activity report' }, { status: 500 })
-  }
+  // Orgs are flat and isolated — each one gets its own report, sent only to
+  // its own admins, not a blended cross-company one.
+  const orgIds = await getAllOrgIds()
+  const results = await Promise.all(
+    orgIds.map(async (orgId) => {
+      const startedAt = new Date()
+      try {
+        const result = await sendDailyActivityReportEmail(orgId)
+        await recordJobRun({ orgId, jobKey: 'daily-activity-report', status: 'success', startedAt })
+        return { orgId, ...result }
+      } catch (err) {
+        await recordJobRun({ orgId, jobKey: 'daily-activity-report', status: 'failure', startedAt, error: String(err) })
+        console.error(`daily-activity-report failed (org ${orgId})`, err)
+        return { orgId, error: String(err) }
+      }
+    }),
+  )
+
+  return NextResponse.json({ results })
 }

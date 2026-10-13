@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   if (q.length < 2) {
     const leads = await prisma.lead.findMany({
       where: { ...leadScope(user), stage: 'new' },
-      select: { id: true, company: true, poc: true, stage: true, pendingSubStatus: true },
+      select: { id: true, stage: true, pendingSubStatus: true, company: { select: { name: true } }, person: { select: { name: true } } },
       take: 30,
       orderBy: { createdAt: 'desc' },
     })
@@ -39,12 +39,12 @@ export async function GET(req: Request) {
     where: {
       ...leadScope(user),
       OR: [
-        { company: { contains: q, mode: 'insensitive' } },
-        { poc: { contains: q, mode: 'insensitive' } },
+        { company: { is: { name: { contains: q, mode: 'insensitive' } } } },
+        { person: { is: { name: { contains: q, mode: 'insensitive' } } } },
         { email: { contains: q, mode: 'insensitive' } },
       ],
     },
-    select: { id: true, company: true, poc: true, stage: true, pendingSubStatus: true },
+    select: { id: true, stage: true, pendingSubStatus: true, company: { select: { name: true } }, person: { select: { name: true } } },
     take: 20,
     orderBy: { lastActivityAt: 'desc' },
   })

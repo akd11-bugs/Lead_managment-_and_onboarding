@@ -9,6 +9,7 @@ export default async function PipelinePage() {
   const leads = await prisma.lead.findMany({
     where: leadScope(user),
     orderBy: [{ stage: 'asc' }, { position: 'asc' }],
+    include: { company: true, person: true },
   })
   return (
     <div className="space-y-4 -mx-4 md:-mx-6 px-4 md:px-6">

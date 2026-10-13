@@ -6,11 +6,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function EmailServicePage() {
   const user = await requireUser()
-  const leads = await prisma.lead.findMany({
+  const rawLeads = await prisma.lead.findMany({
     where: leadScope(user),
     orderBy: { updatedAt: 'desc' },
-    select: { id: true, poc: true, company: true, email: true, stage: true },
+    select: { id: true, person: { select: { name: true } }, company: { select: { name: true } }, email: true, stage: true },
   })
+  const leads = rawLeads.map((l) => ({ id: l.id, poc: l.person?.name ?? null, company: l.company?.name ?? 'Unknown company', email: l.email, stage: l.stage }))
 
   return (
     <div className="space-y-6">

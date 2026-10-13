@@ -1,0 +1,56 @@
+import dns from 'dns/promises'
+import net from 'net'
+
+// Loopback, RFC1918 private ranges, and link-local (which covers the
+// 169.254.169.254 cloud-metadata address on AWS/GCP/Azure-style platforms)
+// — the targets a server-side fetch to a user-supplied URL must never reach.
+function isPrivateOrReservedIp(ip: string): boolean {
+  const type = net.isIP(ip)
+  if (type === 4) {
+    const [a, b] = ip.split('.').map(Number)
+    if (a === 127) return true // loopback
+    if (a === 10) return true // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true // 172.16.0.0/12
+    if (a === 192 && b === 168) return true // 192.168.0.0/16
+    if (a === 169 && b === 254) return true // link-local, incl. cloud metadata
+    if (a === 0) return true // 0.0.0.0/8
+    return false
+  }
+  if (type === 6) {
+    const lower = ip.toLowerCase()
+    if (lower === '::1') return true // loopback
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true // unique local fc00::/7
+    if (/^fe[89ab]/.test(lower)) return true // link-local fe80::/10
+    if (lower.startsWith('::ffff:')) {
+      const v4 = lower.split(':').pop()!
+      if (net.isIP(v4) === 4) return isPrivateOrReservedIp(v4)
+    }
+    return false
+  }
+  return true // unparseable — fail closed
+}
+
+/**
+ * Throws unless `rawUrl` is a plain http(s) URL whose hostname resolves to a
+ * public IP. Re-resolves DNS on every call rather than caching — a hostname
+ * that resolved to a public IP when a workflow rule was saved could be
+ * re-pointed at an internal address by the time it actually fires (DNS
+ * rebinding), so this must run again immediately before every fetch, not
+ * just once at config-save time.
+ */
+export async function assertSafeWebhookUrl(rawUrl: string): Promise<void> {
+  const url = new URL(rawUrl)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('URL must be http or https')
+  }
+  const hostname = url.hostname.toLowerCase()
+  if (hostname === 'localhost' || hostname === '0.0.0.0') {
+    throw new Error('That host is not allowed')
+  }
+  if (net.isIP(hostname)) {
+    if (isPrivateOrReservedIp(hostname)) throw new Error('That host is not allowed')
+    return
+  }
+  const { address } = await dns.lookup(hostname)
+  if (isPrivateOrReservedIp(address)) throw new Error('That host is not allowed')
+}

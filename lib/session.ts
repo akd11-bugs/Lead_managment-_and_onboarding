@@ -1,7 +1,9 @@
+import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { neonAuth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import type { User } from '@prisma/client'
 
 export interface SessionUser {
   id: string
@@ -9,41 +11,96 @@ export interface SessionUser {
   email: string
   role: string
   orgId: string
-  // Self + every descendant org (materialized-path rollup) for admin/operations;
-  // just [orgId] for everyone else. Resolved once per request below so
-  // leadScope() itself can stay a plain synchronous object builder.
+  // Always exactly [orgId] — orgs are flat, no cross-org visibility exists.
+  // Kept as an array (rather than inlining orgId everywhere) so leadScope()
+  // below didn't need to change shape when hierarchy was removed.
   visibleOrgIds: string[]
 }
 
-export async function resolveVisibleOrgIds(orgId: string, role: string): Promise<string[]> {
-  if (role !== 'admin' && role !== 'operations') return [orgId]
-  const rows = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT o.id FROM "Organization" o
-    JOIN "Organization" self ON self.id = ${orgId}
-    WHERE o.path LIKE self.path || '%'
-  `
-  return rows.map((r) => r.id)
+export function resolveVisibleOrgIds(orgId: string): string[] {
+  return [orgId]
 }
 
-async function hydrate(user: { id: string; name: string; email: string; role: string; orgId: string }): Promise<SessionUser> {
-  const visibleOrgIds = await resolveVisibleOrgIds(user.orgId, user.role)
-  return { ...user, visibleOrgIds }
+const hydrate = cache(async (user: Pick<User, 'id' | 'name' | 'email' | 'role' | 'orgId'>): Promise<SessionUser> => {
+  return { ...user, visibleOrgIds: resolveVisibleOrgIds(user.orgId) }
+})
+
+type SessionResolution =
+  | { kind: 'no-session' }
+  | { kind: 'no-app-user' }
+  | { kind: 'inactive' }
+  | { kind: 'ok'; user: User }
+
+// Neon Auth owns identity only (email/password, Google, ...) — it knows
+// nothing about role/orgId/isActive, which are our own business logic on the
+// `User` table. This looks up that row by email; it does NOT create one —
+// every account is created explicitly, either by self-serve signup (which
+// creates its own brand-new org, see app/api/signup/complete/route.ts) or
+// by an existing admin's invite/user-creation (app/api/invites/redeem,
+// app/api/users). A Neon Auth identity with no matching row means "no
+// account for this email yet," not "silently join someone else's org."
+// Exported for app/login/page.tsx, which needs to tell 'ok' apart from
+// 'inactive'/'no-app-user' for its own "already signed in?" check — unlike
+// requireUser()/requireAnyUser() below, it must render the login form
+// rather than redirect for 'no-session'.
+export const resolveSession = cache(async (): Promise<SessionResolution> => {
+  const { data } = await neonAuth.getSession()
+  if (!data?.user?.email) return { kind: 'no-session' }
+
+  const email = data.user.email.trim().toLowerCase()
+  const appUser = await prisma.user.findUnique({ where: { email } })
+  if (!appUser) return { kind: 'no-app-user' }
+  if (!appUser.isActive) return { kind: 'inactive' }
+  return { kind: 'ok', user: appUser }
+})
+
+// Shared by requireUser()/requireAnyUser() below — every non-'ok' state
+// has exactly one redirect target, and app/login/page.tsx's own "already
+// signed in?" check (which only has a raw Neon Auth session to go on, not
+// a resolved SessionResolution) redirects to the same /account-disabled
+// target for 'inactive', so a deactivated account can't loop between here
+// and /login.
+function redirectForUnresolved(resolution: Exclude<SessionResolution, { kind: 'ok' }>): never {
+  if (resolution.kind === 'inactive') redirect('/account-disabled')
+  if (resolution.kind === 'no-app-user') redirect('/account-not-found')
+  redirect('/login')
 }
 
-// For Server Components/pages — sends anonymous visitors to /login.
+// For Server Components/pages — sends anonymous visitors to /login, sends
+// an authenticated-but-unregistered identity to /account-not-found (see
+// that page for why it's not auto-provisioned), a deactivated account to
+// /account-disabled, and gates `pending`-role users to /pending.
 export async function requireUser(): Promise<SessionUser> {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
-  return hydrate(session.user as SessionUser)
+  const resolution = await resolveSession()
+  if (resolution.kind !== 'ok') redirectForUnresolved(resolution)
+  const user = await hydrate(resolution.user)
+  if (isPending(user)) redirect('/pending')
+  return user
+}
+
+// Same as requireUser(), but doesn't bounce a pending user away — for
+// app/pending/page.tsx itself, which would otherwise redirect-loop.
+export async function requireAnyUser(): Promise<SessionUser> {
+  const resolution = await resolveSession()
+  if (resolution.kind !== 'ok') redirectForUnresolved(resolution)
+  return hydrate(resolution.user)
+}
+
+// For the root layout, which must render for logged-out visitors too
+// (e.g. /login, /signup, /account-not-found itself) — never redirects,
+// just null for any non-'ok' state.
+export async function getOptionalUser(): Promise<SessionUser | null> {
+  const resolution = await resolveSession()
+  return resolution.kind === 'ok' ? hydrate(resolution.user) : null
 }
 
 // For Route Handlers — a redirect would break `res.json()` on the client, so
 // this returns a 401 instead. Callers must check `instanceof NextResponse`
 // and return it directly.
 export async function requireApiUser(): Promise<SessionUser | NextResponse> {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  return hydrate(session.user as SessionUser)
+  const resolution = await resolveSession()
+  if (resolution.kind !== 'ok') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  return hydrate(resolution.user)
 }
 
 export function isAdmin(user: SessionUser) {
@@ -54,17 +111,17 @@ export function isOperations(user: SessionUser) {
   return user.role === 'operations'
 }
 
-// True for a first-time Google sign-in with no role assigned yet — blocked
-// from the app entirely (see proxy.ts) until an admin approves them.
+// True for a user with no real role assigned — nothing currently creates
+// one this way (self-serve signup assigns 'admin' to the founding user,
+// invite/admin-create assign a real role), kept only in case that changes.
 export function isPending(user: SessionUser) {
   return user.role === 'pending'
 }
 
-// Admin/Operations see every lead in their org tree (self + descendant orgs
-// via visibleOrgIds); Sales sees only leads they own, within their own org.
-// The orgId filter applies to every role — it's the tenant boundary, never
-// bypassed by role. Spread this into any `prisma.lead.findMany`/`findUnique`
-// where clause.
+// Admin/Operations see every lead in their own org (no ownerId restriction);
+// Sales sees only leads they own, within their own org. The orgId filter
+// applies to every role — it's the tenant boundary, never bypassed by role.
+// Spread this into any `prisma.lead.findMany`/`findUnique` where clause.
 export function leadScope(user: SessionUser) {
   return isAdmin(user) || isOperations(user)
     ? { orgId: { in: user.visibleOrgIds } }

@@ -1,13 +1,15 @@
-import NextAuth from 'next-auth'
-import { NextResponse } from 'next/server'
-import { authConfig } from '@/lib/auth.config'
+import { NextResponse, type NextRequest } from 'next/server'
+import { neonAuth } from '@/lib/auth'
 
-const { auth } = NextAuth(authConfig)
+// Reads/validates the session cookie straight from the request — unlike
+// neonAuth.getSession() (ambient next/headers-based), which only works in
+// Server Components/Route Handlers, not here. Redirects to /login when
+// there's no valid session.
+const protect = neonAuth.middleware({ loginUrl: '/login' })
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth
+export default async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname
-  const isLoginPage = pathname === '/login'
+
   // Where an invited person redeems their one-time code and sets their own
   // password — must be reachable while logged out, like /login.
   const isInviteRedeemPage = pathname === '/invite/redeem'
@@ -18,11 +20,7 @@ export default auth((req) => {
   // The lightweight rep-facing form — its own PIN-based auth lives entirely
   // inside app/api/rep/* route handlers (the rep_session cookie), never here.
   const isRepPage = pathname === '/rep'
-  const isPublicPage = isLoginPage || isInviteRedeemPage || isSignupPage || isRepPage
-  const isPendingPage = pathname === '/pending'
-  // First-time Google sign-in with no role assigned yet — blocked from
-  // everything except this one page until an admin approves them.
-  const isPending = req.auth?.user?.role === 'pending'
+  const isPublicPage = pathname === '/login' || isInviteRedeemPage || isSignupPage || isRepPage
 
   // Defense-in-depth beyond the session cookie's own sameSite=lax setting
   // (which already blocks the cookie from riding along on a genuine
@@ -34,11 +32,10 @@ export default auth((req) => {
   //
   // req.nextUrl.host reflects the raw Host header, which on Render (and
   // most non-Vercel hosts) is an internal address behind the reverse
-  // proxy, not the public domain the browser's Origin actually sends —
-  // same reason lib/auth.config.ts sets trustHost: true. Compare against
-  // x-forwarded-host (what the proxy says the public host really is)
-  // first, falling back to nextUrl.host for direct/local requests where
-  // no proxy is in front of it.
+  // proxy, not the public domain the browser's Origin actually sends.
+  // Compare against x-forwarded-host (what the proxy says the public host
+  // really is) first, falling back to nextUrl.host for direct/local
+  // requests where no proxy is in front of it.
   const isStateChangingApiCall =
     pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
   if (isStateChangingApiCall) {
@@ -49,33 +46,26 @@ export default auth((req) => {
     }
   }
 
-  if (!isLoggedIn && !isPublicPage) {
-    const url = new URL('/login', req.nextUrl.origin)
-    url.searchParams.set('from', pathname)
-    return NextResponse.redirect(url)
-  }
-  if (isLoggedIn && isLoginPage) {
-    return NextResponse.redirect(new URL('/', req.nextUrl.origin))
-  }
-  if (isLoggedIn && isPending && !isPendingPage) {
-    return NextResponse.redirect(new URL('/pending', req.nextUrl.origin))
-  }
-  if (isLoggedIn && !isPending && isPendingPage) {
-    return NextResponse.redirect(new URL('/', req.nextUrl.origin))
-  }
-  return NextResponse.next()
-})
+  if (isPublicPage) return NextResponse.next()
+
+  // Pending-role gating and "redirect away from /login when already
+  // authenticated" used to live here too. They moved to lib/session.ts
+  // (requireUser()) and app/login/page.tsx respectively — role/orgId aren't
+  // part of Neon Auth's own session, they're our own Prisma `User` fields,
+  // and Edge middleware can't reach Prisma.
+  return protect(req)
+}
 
 export const config = {
   // Skip static assets (both /_next's own and anything served straight out
   // of /public, e.g. the logo — matched by file extension since /login,
-  // /signup, and /rep must be able to load it while logged out), the
-  // NextAuth API routes, the invite-redemption and signup APIs (must be
+  // /signup, and /rep must be able to load it while logged out), the Neon
+  // Auth API routes, the invite-redemption and signup APIs (must be
   // callable while logged out), the external reports API + the
   // leads-sheet sync cron route (both authenticate callers with their own
   // API key, not a browser session), and the rep-form API (its own
   // rep_session cookie) — everything else (pages and our own /api/*
-  // routes) requires a NextAuth session.
+  // routes) requires a Neon Auth session.
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/rep).*)',
   ],

@@ -47,3 +47,29 @@ export function decrypt(payload: string): string {
     throw new DecryptionError('Failed to decrypt payload — wrong key or corrupted data')
   }
 }
+
+/**
+ * Like decrypt(), but a bad payload (wrong key, rotated key, corrupted data)
+ * returns null instead of throwing — every caller storing an optional
+ * credential (org SMTP password, sheet service-account key, workflow webhook
+ * secret, personal Gmail app password) wants exactly this "treat as
+ * unconfigured" behavior, so they can use this instead of each writing their
+ * own try/catch around decrypt().
+ */
+export function tryDecrypt(payload: string): string | null {
+  try {
+    return decrypt(payload)
+  } catch (err) {
+    if (err instanceof DecryptionError) return null
+    throw err
+  }
+}
+
+/**
+ * A random, URL-safe token/secret/code — shared by every call site that
+ * needs one (invite codes, signup-link tokens, webhook signing secrets),
+ * so the byte count is the only thing that varies between them.
+ */
+export function generateRandomToken(bytes: number): string {
+  return crypto.randomBytes(bytes).toString('base64url')
+}

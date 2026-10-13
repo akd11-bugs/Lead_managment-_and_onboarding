@@ -13,37 +13,48 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+// LeadViewFilters kept as the concrete shape the Leads table actually saves
+// (search/stageFilter/sourceFilter/sortKey, now also columns/calculations —
+// see LeadsTable.tsx) — SavedViewsMenu itself is generic (see below) so the
+// same component also serves the Companies list with its own filter shape.
 export interface LeadViewFilters {
   search: string
   stageFilter: string
   sourceFilter: string
   sortKey: string
+  columns?: string[]
+  calculations?: Record<string, string>
 }
 
-interface SavedView {
+interface SavedView<TFilters> {
   id: string
   name: string
-  filters: LeadViewFilters
+  filters: TFilters
 }
 
-export function SavedViewsMenu({
+export function SavedViewsMenu<TFilters>({
+  viewType,
   filters,
   onApply,
 }: {
-  filters: LeadViewFilters
-  onApply: (filters: LeadViewFilters) => void
+  // "leads" | "companies" — see SavedView.viewType in prisma/schema.prisma;
+  // one model, one component, scoped by this so each table's saved views
+  // never leak into the other's list.
+  viewType: string
+  filters: TFilters
+  onApply: (filters: TFilters) => void
 }) {
-  const [views, setViews] = useState<SavedView[]>([])
+  const [views, setViews] = useState<SavedView<TFilters>[]>([])
   const [showSaveForm, setShowSaveForm] = useState(false)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch('/api/views')
+    fetch(`/api/views?type=${viewType}`)
       .then((res) => (res.ok ? res.json() : { views: [] }))
       .then((data) => setViews(data.views ?? []))
       .catch(() => {})
-  }, [])
+  }, [viewType])
 
   async function saveCurrentView() {
     const trimmed = name.trim()
@@ -53,7 +64,7 @@ export function SavedViewsMenu({
       const res = await fetch('/api/views', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: trimmed, filters }),
+        body: JSON.stringify({ name: trimmed, filters, viewType }),
       })
       if (res.ok) {
         const { view } = await res.json()

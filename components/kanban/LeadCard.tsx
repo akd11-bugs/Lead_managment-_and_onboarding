@@ -43,14 +43,14 @@ export function LeadCard({ lead, onClick, isDragging }: LeadCardProps) {
       <div className="flex items-start gap-2 p-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-medium leading-tight truncate">{lead.company}</p>
+            <p className="text-sm font-medium leading-tight truncate">{lead.company.name}</p>
             <p className="text-xs font-semibold tabular-nums text-muted-foreground shrink-0">
               {formatCurrency(lead.estimatedVolume)}
             </p>
           </div>
           <p className="text-xs text-muted-foreground truncate">
             {lead.industry || 'Industry not set'}
-            {lead.poc && <span> · {lead.poc}</span>}
+            {lead.person?.name && <span> · {lead.person.name}</span>}
           </p>
           <div className="mt-2 flex items-center gap-1.5 flex-wrap">
             <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">

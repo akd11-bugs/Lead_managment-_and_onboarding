@@ -18,6 +18,7 @@ export default async function OnboardingDetailPage({ params }: { params: Promise
   const { id } = await params
   const lead = await prisma.lead.findFirst({
     where: { id, ...(isAdmin(user) || isOperations(user) ? {} : { ownerId: user.id }) },
+    include: { company: true, person: true },
   })
   if (!lead) notFound()
 
@@ -32,10 +33,10 @@ export default async function OnboardingDetailPage({ params }: { params: Promise
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <Building2 className="h-5 w-5 text-muted-foreground" />
-            {lead.company}
+            {lead.company?.name ?? 'Unknown company'}
           </h1>
           <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-            {lead.poc && <span>{lead.poc}</span>}
+            {lead.person?.name && <span>{lead.person.name}</span>}
             <Badge variant="outline" className="text-[10px]">
               {LEAD_TYPE_LABELS[lead.type as LeadType] ?? lead.type}
             </Badge>

@@ -36,6 +36,7 @@ import {
 } from '@/lib/types'
 import { usePipelineConfig, useLeadFieldDefinitions } from '@/lib/hooks/usePipelineConfig'
 import { CustomFieldsSection } from './CustomFieldsSection'
+import { CompanyPicker } from './CompanyPicker'
 import { TasksToCreateField, type DraftTask } from './TasksToCreateField'
 
 const NONE = '__none__'
@@ -150,7 +151,7 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="company">Company</Label>
-              <Input id="company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+              <CompanyPicker id="company" value={form.company} onChange={(name) => setForm({ ...form, company: name })} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>

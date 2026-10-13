@@ -1,10 +1,10 @@
-import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import { readJsonBody } from '@/lib/http'
 import { isValidEmail } from '@/lib/types'
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
+import { generateRandomToken } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'A signup link was already sent — check your inbox, or wait a couple of minutes to request another' }, { status: 429 })
   }
 
-  const token = crypto.randomBytes(32).toString('base64url')
+  const token = generateRandomToken(32)
   await prisma.signupToken.create({
     data: { email, token, expiresAt: new Date(Date.now() + TOKEN_TTL_MS) },
   })

@@ -3,6 +3,7 @@ import Image from 'next/image'
 import {
   LayoutDashboard,
   KanbanSquare,
+  Building2,
   Users,
   Sparkles,
   Settings,
@@ -59,6 +60,9 @@ export function Sidebar({ user }: { user: SessionUser }) {
               </NavItem>
               <NavItem href="/leads" icon={<Users className="h-4 w-4" />}>
                 Leads
+              </NavItem>
+              <NavItem href="/companies" icon={<Building2 className="h-4 w-4" />}>
+                Companies
               </NavItem>
               <NavItem href="/tasks" icon={<ListChecks className="h-4 w-4" />}>
                 Tasks

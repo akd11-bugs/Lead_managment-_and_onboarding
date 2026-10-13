@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { SOURCES, LEAD_TYPES, BUSINESS_TYPES, isValidWebsite, type LeadSource, type LeadType, type BusinessType } from '@/lib/types'
+import { normalizeCompanyName, findOrCreateCompany, findOrCreatePerson } from '@/lib/company'
 
 export interface ImportRow {
   poc?: string
@@ -99,45 +100,77 @@ export async function importLeadRows(rows: unknown[], owner: ImportOwner, orgId:
     })
   })
 
-  // Dedupe against existing leads (case-insensitive email/company match) and
-  // within the batch itself.
-  const emails = [...new Set(toCreate.filter((r) => r.email).map((r) => r.email.toLowerCase()))]
-  const companies = [...new Set(toCreate.map((r) => r.company.toLowerCase()))]
-  const existing = await prisma.lead.findMany({
-    where: {
-      orgId,
-      OR: [
-        ...(emails.length ? [{ email: { in: emails, mode: 'insensitive' as const } }] : []),
-        { company: { in: companies, mode: 'insensitive' as const } },
-      ],
-    },
-    select: { email: true, company: true },
-  })
-  const existingEmails = new Set(existing.filter((e) => e.email).map((e) => e.email.toLowerCase()))
-  const existingCompanies = new Set(existing.map((e) => e.company.toLowerCase()))
-  const seenEmails = new Set<string>()
-  const seenCompanies = new Set<string>()
+  // Resolve each distinct company name in the batch to a real Company row
+  // once (shared across however many rows reference it), not per-row.
+  const companyNames = [...new Set(toCreate.map((r) => r.company))]
+  const companiesByNormalizedName = new Map<string, { id: string; name: string }>()
+  for (const name of companyNames) {
+    const company = await findOrCreateCompany(orgId, name)
+    companiesByNormalizedName.set(normalizeCompanyName(name), company)
+  }
 
-  const finalRows = toCreate.filter((r) => {
+  const resolvedRows = toCreate.map((r) => ({ ...r, companyId: companiesByNormalizedName.get(normalizeCompanyName(r.company))!.id }))
+
+  // Dedupe: same company is normal (many leads can share one company) — a
+  // duplicate is an email match, or the same Person (by name) already
+  // existing at that same company, either in the DB or earlier in this file.
+  const emails = [...new Set(resolvedRows.filter((r) => r.email).map((r) => r.email.toLowerCase()))]
+  const companyIds = [...new Set(resolvedRows.map((r) => r.companyId))]
+
+  const existingLeads = emails.length
+    ? await prisma.lead.findMany({ where: { orgId, email: { in: emails, mode: 'insensitive' } }, select: { email: true } })
+    : []
+  const existingEmails = new Set(existingLeads.map((e) => e.email.toLowerCase()))
+
+  const existingPeople = await prisma.person.findMany({ where: { orgId, companyId: { in: companyIds } }, select: { companyId: true, name: true } })
+  const existingPersonKeys = new Set(existingPeople.map((p) => `${p.companyId}::${p.name.toLowerCase()}`))
+
+  const seenEmails = new Set<string>()
+  const seenPersonKeys = new Set<string>()
+
+  const finalRows = resolvedRows.filter((r) => {
     const email = r.email.toLowerCase()
-    const company = r.company.toLowerCase()
-    if ((email && existingEmails.has(email)) || existingCompanies.has(company)) {
-      skipped.push({ row: r.row, reason: `Duplicate of an existing lead: ${r.company}` })
+    const personKey = r.poc ? `${r.companyId}::${r.poc.toLowerCase()}` : null
+
+    if (email && existingEmails.has(email)) {
+      skipped.push({ row: r.row, reason: `Duplicate of an existing lead: ${r.email}` })
       return false
     }
-    if ((email && seenEmails.has(email)) || seenCompanies.has(company)) {
-      skipped.push({ row: r.row, reason: `Duplicate within this file: ${r.company}` })
+    if (personKey && existingPersonKeys.has(personKey)) {
+      skipped.push({ row: r.row, reason: `Duplicate of an existing contact: ${r.poc} at ${r.company}` })
+      return false
+    }
+    if (email && seenEmails.has(email)) {
+      skipped.push({ row: r.row, reason: `Duplicate within this file: ${r.email}` })
+      return false
+    }
+    if (personKey && seenPersonKeys.has(personKey)) {
+      skipped.push({ row: r.row, reason: `Duplicate within this file: ${r.poc} at ${r.company}` })
       return false
     }
     if (email) seenEmails.add(email)
-    seenCompanies.add(company)
+    if (personKey) seenPersonKeys.add(personKey)
     return true
   })
 
   if (finalRows.length > 0) {
-    await prisma.lead.createMany({
-      data: finalRows.map(({ row: _row, ...r }) => ({ ...r, orgId, stage: 'new', ownerId: owner.id, ownerName: owner.name })),
-    })
+    // One row at a time (not createMany) — each new Person must be
+    // find-or-created, which createMany can't do inline.
+    for (const r of finalRows) {
+      const { row: _row, company: _companyName, poc, companyId, ...rest } = r
+      const person = poc ? await findOrCreatePerson(orgId, companyId, poc) : null
+      await prisma.lead.create({
+        data: {
+          ...rest,
+          orgId,
+          stage: 'new',
+          ownerId: owner.id,
+          ownerName: owner.name,
+          companyId,
+          personId: person?.id ?? null,
+        },
+      })
+    }
   }
 
   skipped.sort((a, b) => a.row - b.row)

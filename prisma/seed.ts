@@ -4,7 +4,8 @@
 
 import { PrismaClient } from '@prisma/client'
 import { clearAllLeadData } from './seed-helpers'
-import { getDefaultOrgId, createRootOrganization } from '@/lib/org'
+import { createOrganization } from '@/lib/org'
+import { findOrCreateCompany, findOrCreatePerson } from '@/lib/company'
 
 const prisma = new PrismaClient()
 
@@ -64,13 +65,8 @@ async function main() {
   console.log('🧹 Clearing existing data...')
   await clearAllLeadData(prisma)
 
-  let orgId: string
-  try {
-    orgId = await getDefaultOrgId()
-  } catch {
-    const org = await createRootOrganization('Default Organization')
-    orgId = org.id
-  }
+  const existingOrg = await prisma.organization.findFirst({ select: { id: true } })
+  const orgId = existingOrg?.id ?? (await createOrganization('Demo Organization')).id
 
   console.log('🌱 Seeding 25 leads...')
   const now = new Date()
@@ -117,11 +113,15 @@ async function main() {
         ? new Date(now.getFullYear(), now.getMonth() + (i % 3 === 0 ? 1 : 0), 5 + (i % 20))
         : null
 
+    const companyRecord = await findOrCreateCompany(orgId, company)
+    const personName = `${firstName} ${lastName}`
+    const person = await findOrCreatePerson(orgId, companyRecord.id, personName)
+
     const lead = await prisma.lead.create({
       data: {
         orgId,
-        poc: `${firstName} ${lastName}`,
-        company,
+        companyId: companyRecord.id,
+        personId: person.id,
         email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${company.split(' ')[0].toLowerCase()}.com`,
         phone: `+91-9${(100000000 + i * 1234567).toString().slice(0, 9)}`,
         website: `https://${company.split(' ')[0].toLowerCase()}.com`,

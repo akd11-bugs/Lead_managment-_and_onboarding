@@ -1,37 +1,34 @@
-'use client'
-
-import { useState } from 'react'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { neonAuth } from '@/lib/auth'
+import { resolveSession } from '@/lib/session'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Loader2, MailCheck } from 'lucide-react'
+import { SignupEmailForm } from '@/components/auth/SignupEmailForm'
 
-export default function SignupPage() {
-  const [email, setEmail] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [sent, setSent] = useState(false)
+// Google-first, mirroring app/login/page.tsx — Google sign-in already proves
+// email ownership, so a brand-new identity lands on /account-not-found which
+// handles org creation / join-request directly. The email+password path
+// below is the de-emphasized fallback, still gated behind its own
+// SignupToken link-verification step since typing an email proves nothing.
+export default async function SignupPage() {
+  const googleEnabled = !!process.env.GOOGLE_CLIENT_ID
 
-  async function requestLink() {
-    setError(null)
-    setSaving(true)
-    try {
-      const res = await fetch('/api/signup/request', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error ?? 'Failed to send the link')
-        return
-      }
-      setSent(true)
-    } finally {
-      setSaving(false)
+  const resolution = await resolveSession()
+  if (resolution.kind === 'ok') redirect('/')
+  if (resolution.kind === 'inactive') redirect('/account-disabled')
+  if (resolution.kind === 'no-app-user') redirect('/account-not-found')
+
+  async function signUpWithGoogle() {
+    'use server'
+    const { data, error: signInError } = await neonAuth.signIn.social({
+      provider: 'google',
+      callbackURL: '/',
+    })
+    if (signInError || !data?.url) {
+      redirect('/signup?error=1')
     }
+    redirect(data.url)
   }
 
   return (
@@ -39,38 +36,28 @@ export default function SignupPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-xl">Join bluSwap</CardTitle>
-          <CardDescription>
-            {sent
-              ? 'Check your inbox for a link to finish creating your account.'
-              : "Enter your email and we'll send you a link to set up your account."}
-          </CardDescription>
+          <CardDescription>Create your account to get started.</CardDescription>
         </CardHeader>
         <CardContent>
-          {sent ? (
-            <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-muted-foreground">
-              <MailCheck className="h-8 w-8 text-emerald-600" />
-              <p>Sent to {email}. The link expires in 30 minutes.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoFocus
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && requestLink()}
-                />
-              </div>
-              {error && <p className="text-sm text-rose-600">{error}</p>}
-              <Button className="w-full" onClick={requestLink} disabled={saving || !email}>
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Send me a signup link
+          {googleEnabled && (
+            <form action={signUpWithGoogle}>
+              <Button type="submit" className="w-full">
+                Sign up with Google
               </Button>
-            </div>
+            </form>
           )}
+
+          <details className={googleEnabled ? 'mt-4 group' : 'group'} open={!googleEnabled}>
+            {googleEnabled && (
+              <summary className="cursor-pointer list-none text-center text-sm text-muted-foreground underline underline-offset-2">
+                Use email instead
+              </summary>
+            )}
+            <div className={googleEnabled ? 'mt-3' : ''}>
+              <SignupEmailForm />
+            </div>
+          </details>
+
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Already have an account?{' '}
             <Link href="/login" className="underline underline-offset-2">

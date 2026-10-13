@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # JS/TS dependencies — weekly, grouped so routine patch/minor bumps land as
+  # one PR instead of a flood, and real security advisories still get their
+  # own PR immediately regardless of this schedule (Dependabot always opens
+  # security-update PRs out-of-band, not on the cron below).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 10
+
+  # The two existing cron-trigger workflows (.github/workflows/*.yml) pin
+  # action versions too — keep those current the same way.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

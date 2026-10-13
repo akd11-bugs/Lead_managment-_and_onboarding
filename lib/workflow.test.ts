@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Lead, WorkflowRule } from '@prisma/client'
+import type { WorkflowRule } from '@prisma/client'
+import type { LeadWithRelations as Lead } from '@/lib/leadStage'
 
 const findManyMock = vi.fn()
 const taskCreateMock = vi.fn()
@@ -7,6 +8,7 @@ const userFindUniqueMock = vi.fn()
 const activityCreateMock = vi.fn()
 const leadUpdateMock = vi.fn()
 const sendEmailAsMock = vi.fn()
+const tryDecryptMock = vi.fn()
 
 vi.mock('@/lib/db', () => ({
   prisma: {
@@ -20,6 +22,10 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/email', () => ({
   sendEmailAs: (...args: unknown[]) => sendEmailAsMock(...args),
+}))
+
+vi.mock('@/lib/crypto', () => ({
+  tryDecrypt: (...args: unknown[]) => tryDecryptMock(...args),
 }))
 
 const { evaluateStageRules } = await import('@/lib/workflow')
@@ -56,7 +62,10 @@ beforeEach(() => {
   activityCreateMock.mockReset()
   leadUpdateMock.mockReset()
   sendEmailAsMock.mockReset()
+  tryDecryptMock.mockReset()
   activityCreateMock.mockResolvedValue({ date: new Date('2026-02-02') })
+  tryDecryptMock.mockReturnValue('plain-signing-secret')
+  vi.stubGlobal('fetch', vi.fn())
 })
 
 describe('evaluateStageRules', () => {
@@ -179,6 +188,67 @@ describe('evaluateStageRules', () => {
       await expect(evaluateStageRules(makeLead(), 'qualified')).rejects.toThrow('SMTP auth failed')
       expect(activityCreateMock).not.toHaveBeenCalled()
       expect(leadUpdateMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('call_webhook action', () => {
+    function webhookRule(overrides: Partial<WorkflowRule> = {}) {
+      return makeRule({
+        actionType: 'call_webhook',
+        actionConfig: JSON.stringify({ url: 'https://example.com/hook', signingSecretEnc: 'encrypted-secret' }),
+        ...overrides,
+      })
+    }
+
+    it('POSTs a signed payload, logs the activity, and updates lastActivityAt on a 2xx response', async () => {
+      findManyMock.mockResolvedValue([webhookRule()])
+      ;(fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, status: 200 })
+
+      const lead = makeLead({ company: { id: 'company-1', name: 'Acme' } as Lead['company'], stage: 'qualified' })
+      await evaluateStageRules(lead, 'qualified')
+
+      expect(fetch).toHaveBeenCalledTimes(1)
+      const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect(url).toBe('https://example.com/hook')
+      expect(init.method).toBe('POST')
+      expect(init.headers['x-webhook-signature']).toMatch(/^sha256=[0-9a-f]{64}$/)
+      const payload = JSON.parse(init.body)
+      expect(payload).toMatchObject({ event: 'lead.stage_changed', lead: { id: 'lead-1', company: 'Acme', stage: 'qualified' } }) // payload still flattens to company's name string — see lib/workflow.ts
+
+      expect(activityCreateMock).toHaveBeenCalledWith({
+        data: expect.objectContaining({ leadId: 'lead-1', type: 'note', description: expect.stringContaining('example.com') }),
+      })
+      expect(leadUpdateMock).toHaveBeenCalledWith({ where: { id: 'lead-1' }, data: { lastActivityAt: new Date('2026-02-02') } })
+    })
+
+    it('does not propagate and does not log an activity when the endpoint returns a non-2xx status', async () => {
+      findManyMock.mockResolvedValue([webhookRule()])
+      ;(fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, status: 500 })
+
+      await expect(evaluateStageRules(makeLead(), 'qualified')).resolves.toBeUndefined()
+      expect(activityCreateMock).not.toHaveBeenCalled()
+      expect(leadUpdateMock).not.toHaveBeenCalled()
+    })
+
+    it('does not propagate when the fetch itself throws (endpoint down/unreachable)', async () => {
+      findManyMock.mockResolvedValue([webhookRule()])
+      ;(fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('ECONNREFUSED'))
+
+      await expect(evaluateStageRules(makeLead(), 'qualified')).resolves.toBeUndefined()
+      expect(activityCreateMock).not.toHaveBeenCalled()
+    })
+
+    it('skips without calling fetch when actionConfig is missing url or signingSecretEnc', async () => {
+      findManyMock.mockResolvedValue([webhookRule({ actionConfig: JSON.stringify({ url: 'https://example.com/hook' }) })])
+      await evaluateStageRules(makeLead(), 'qualified')
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it('skips without throwing when the signing secret fails to decrypt (key rotated)', async () => {
+      tryDecryptMock.mockReturnValue(null)
+      findManyMock.mockResolvedValue([webhookRule()])
+      await expect(evaluateStageRules(makeLead(), 'qualified')).resolves.toBeUndefined()
+      expect(fetch).not.toHaveBeenCalled()
     })
   })
 })

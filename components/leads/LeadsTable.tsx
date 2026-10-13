@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { Search, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -24,20 +22,21 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { SavedViewsMenu, type LeadViewFilters } from '@/components/leads/SavedViewsMenu'
-import { formatCurrency, formatRelative, cn } from '@/lib/utils'
+import { DataTable, type Calculation } from '@/components/shared/DataTable'
+import { getLeadColumns } from '@/lib/tableColumns'
 import {
   boardColumnFor,
   boardColumnToInput,
   SOURCES,
   SOURCE_LABELS,
-  QUALITY_LABELS,
   QUALITY_RANK,
   type Lead,
   type BoardColumnKey,
   type LeadSource,
-  type QualityLevel,
 } from '@/lib/types'
-import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
+import { usePipelineConfig, useLeadFieldDefinitions } from '@/lib/hooks/usePipelineConfig'
+
+const DEFAULT_COLUMNS = ['company', 'person', 'stage', 'source', 'quality', 'estimatedVolume', 'lastActivityAt', 'ownerName']
 
 interface OwnerOption {
   id: string
@@ -50,12 +49,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   date: 'Date (newest first)',
   quality: 'Quality (best first)',
   stage: 'Stage (pipeline order)',
-}
-
-const QUALITY_BADGE_CLASS: Record<QualityLevel, string> = {
-  high: 'border-emerald-300 text-emerald-700 bg-emerald-50',
-  medium: 'border-amber-300 text-amber-700 bg-amber-50',
-  low: 'border-slate-300 text-slate-600 bg-slate-50',
 }
 
 export function LeadsTable({
@@ -84,13 +77,17 @@ export function LeadsTable({
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
   const [bulkRemarkOpen, setBulkRemarkOpen] = useState(false)
   const [bulkRemark, setBulkRemark] = useState('')
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS)
+  const [calculations, setCalculations] = useState<Record<string, Calculation>>({})
+  const { fields: customFieldDefs } = useLeadFieldDefinitions()
+  const allColumns = useMemo(() => getLeadColumns(customFieldDefs ?? []), [customFieldDefs])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const rows = initialLeads.filter((l) => {
       if (stageFilter !== 'all' && boardColumnFor(l) !== stageFilter) return false
       if (sourceFilter !== 'all' && l.source !== sourceFilter) return false
-      if (q && !(`${l.company} ${l.poc ?? ''} ${l.email} ${l.industry ?? ''}`.toLowerCase().includes(q))) return false
+      if (q && !(`${l.company.name} ${l.person?.name ?? ''} ${l.email} ${l.industry ?? ''}`.toLowerCase().includes(q))) return false
       return true
     })
 
@@ -220,13 +217,16 @@ export function LeadsTable({
             ))}
           </SelectContent>
         </Select>
-        <SavedViewsMenu
-          filters={{ search, stageFilter, sourceFilter, sortKey }}
-          onApply={(v: LeadViewFilters) => {
+        <SavedViewsMenu<LeadViewFilters>
+          viewType="leads"
+          filters={{ search, stageFilter, sourceFilter, sortKey, columns: visibleColumns, calculations }}
+          onApply={(v) => {
             setSearch(v.search)
             setStageFilter(columnKeys.includes(v.stageFilter) ? (v.stageFilter as BoardColumnKey) : 'all')
             setSourceFilter((SOURCES as string[]).includes(v.sourceFilter) ? (v.sourceFilter as LeadSource) : 'all')
             setSortKey((Object.keys(SORT_LABELS) as string[]).includes(v.sortKey) ? (v.sortKey as SortKey) : 'date')
+            if (v.columns?.length) setVisibleColumns(v.columns)
+            if (v.calculations) setCalculations(v.calculations as Record<string, Calculation>)
           }}
         />
         <span className="ml-auto text-sm text-muted-foreground">
@@ -280,72 +280,23 @@ export function LeadsTable({
         </div>
       )}
 
-      <div className="rounded-md border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-xs uppercase tracking-wide">
-            <tr className="text-left">
-              <th className="px-3 py-2 font-medium w-8">
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible leads" />
-              </th>
-              <th className="px-3 py-2 font-medium">Company / POC</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell">Stage</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell">Source</th>
-              <th className="px-3 py-2 font-medium">Quality / Effort</th>
-              <th className="px-3 py-2 font-medium">Est. Volume</th>
-              <th className="px-3 py-2 font-medium hidden lg:table-cell">Last activity</th>
-              <th className="px-3 py-2 font-medium hidden lg:table-cell">Owner</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
-                  No leads match the current filters.
-                </td>
-              </tr>
-            )}
-            {filtered.map((l) => (
-              <tr key={l.id} className="hover:bg-muted/40">
-                <td className="px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(l.id)}
-                    onChange={() => toggleOne(l.id)}
-                    aria-label={`Select ${l.company}`}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <Link href={`/leads/${l.id}`} className="block">
-                    <p className="font-medium">{l.company}</p>
-                    <p className="text-xs text-muted-foreground">{l.poc || l.industry || '—'}</p>
-                  </Link>
-                </td>
-                <td className="px-3 py-2 hidden md:table-cell">
-                  <Badge variant="outline">{columnLabels[boardColumnFor(l)]}</Badge>
-                </td>
-                <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">
-                  {SOURCE_LABELS[l.source as LeadSource] ?? l.source}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-1">
-                    <Badge variant="outline" className={cn('text-[10px]', QUALITY_BADGE_CLASS[l.quality])}>
-                      {QUALITY_LABELS[l.quality]}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground">
-                      {QUALITY_LABELS[l.effort]} effort
-                    </span>
-                  </div>
-                </td>
-                <td className="px-3 py-2 tabular-nums">{formatCurrency(l.estimatedVolume)}</td>
-                <td className={cn('px-3 py-2 hidden lg:table-cell text-muted-foreground')}>
-                  {formatRelative(l.lastActivityAt)}
-                </td>
-                <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">{l.ownerName}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        tableId="leads-table"
+        rows={filtered}
+        rowKey={(l) => l.id}
+        rowHref={(l) => `/leads/${l.id}`}
+        allColumns={allColumns}
+        visibleColumnKeys={visibleColumns}
+        calculations={calculations}
+        onColumnsChange={setVisibleColumns}
+        onCalculationsChange={setCalculations}
+        selection={{
+          selectedKeys: selected,
+          onToggleOne: toggleOne,
+          onToggleAll: toggleAllVisible,
+          allSelected: allVisibleSelected,
+        }}
+      />
 
       <Dialog open={bulkRemarkOpen} onOpenChange={(o) => { setBulkRemarkOpen(o); if (!o) setBulkRemark('') }}>
         <DialogContent className="max-w-md">

@@ -9,12 +9,12 @@ export default async function TasksPage() {
   const tasks = await prisma.task.findMany({
     where: isAdmin(user) ? {} : { ownerId: user.id },
     orderBy: [{ done: 'asc' }, { dueDate: 'asc' }],
-    include: { lead: { select: { id: true, company: true } } },
+    include: { lead: { select: { id: true, company: { select: { name: true } } } } },
   })
   const serialized = tasks.map((t) => ({
     id: t.id,
     leadId: t.leadId,
-    leadCompany: t.lead?.company ?? null,
+    leadCompany: t.lead?.company?.name ?? null,
     title: t.title,
     dueDate: t.dueDate,
     done: t.done,

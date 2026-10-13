@@ -1,5 +1,11 @@
-import type { Lead } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
+
+// evaluateStageRules (and the workflow actions it runs) need the lead's
+// company/person name, so every lead fetched/updated in this file carries
+// those relations — see lib/workflow.ts, which shares this same payload type.
+export type LeadWithRelations = Prisma.LeadGetPayload<{ include: { company: true; person: true } }>
+type Lead = LeadWithRelations
 import { boardColumnFor, BOARD_COLUMN_LABELS, type OnboardingSubStage, type PendingSubStatus, type Stage } from '@/lib/types'
 import { evaluateStageRules } from '@/lib/workflow'
 
@@ -105,7 +111,7 @@ export async function applyStageChange(
   if (nextAssignedOpsId !== undefined) data.assignedOpsId = nextAssignedOpsId
   if (nextAssignedOpsName !== undefined) data.assignedOpsName = nextAssignedOpsName
 
-  const lead = await prisma.lead.update({ where: { id: leadId }, data })
+  const lead = await prisma.lead.update({ where: { id: leadId }, data, include: { company: true, person: true } })
 
   // Prefix the remark with the actual movement (e.g. "New → Pending — Our
   // Side") so the Activity timeline and the daily report both show what

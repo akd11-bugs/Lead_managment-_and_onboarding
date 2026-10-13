@@ -44,7 +44,7 @@ export default async function CalendarPage({
       dueDate: { gte: gridStart, lte: gridEnd },
     },
     orderBy: { dueDate: 'asc' },
-    include: { lead: { select: { id: true, company: true } } },
+    include: { lead: { select: { id: true, company: { select: { name: true } } } } },
   })
 
   const days: CalendarDay[] = eachDayOfInterval({ start: gridStart, end: gridEnd }).map((date) => ({
@@ -59,7 +59,7 @@ export default async function CalendarPage({
         title: t.title,
         done: t.done,
         leadId: t.leadId,
-        leadCompany: t.lead?.company ?? null,
+        leadCompany: t.lead?.company?.name ?? null,
       })),
   }))
 

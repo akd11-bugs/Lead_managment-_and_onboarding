@@ -1,10 +1,12 @@
+import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { SignOutButton } from '@/components/layout/SignOutButton'
-import { requireUser } from '@/lib/session'
+import { requireAnyUser, isPending, roleHome } from '@/lib/session'
 import { Clock } from 'lucide-react'
 
 export default async function PendingApprovalPage() {
-  const user = await requireUser()
+  const user = await requireAnyUser()
+  if (!isPending(user)) redirect(roleHome(user))
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">

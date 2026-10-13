@@ -1,24 +1,12 @@
 'use client'
 
-import { useId } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, LabelList } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, cn } from '@/lib/utils'
-import { claymorphicBar } from './ClayBar'
 import type { BoardColumnKey } from '@/lib/types'
-import { BOARD_COLUMNS, BOARD_COLUMN_LABELS } from '@/lib/types'
-
-const BOARD_COLUMN_HEX: Record<BoardColumnKey, string> = {
-  new: '#64748b',
-  pending_ours: '#f59e0b',
-  pending_merchant: '#f97316',
-  pending_psp: '#eab308',
-  proposal: '#8b5cf6',
-  onboarding: '#10b981',
-  not_interested: '#f43f5e',
-}
+import { BOARD_COLUMNS, BOARD_COLUMN_LABELS, BOARD_COLUMN_COLORS } from '@/lib/types'
 
 interface PipelineData {
   stage: BoardColumnKey
@@ -27,7 +15,6 @@ interface PipelineData {
 }
 
 export function PipelineFunnel({ data }: { data: PipelineData[] }) {
-  const uid = useId().replace(/:/g, '')
   const router = useRouter()
   const byStage = new Map(data.map((d) => [d.stage, d]))
   const rows = BOARD_COLUMNS.map((s) => ({
@@ -39,7 +26,7 @@ export function PipelineFunnel({ data }: { data: PipelineData[] }) {
   const totalLeads = rows.reduce((sum, r) => sum + r.count, 0)
 
   return (
-    <Card className="clay-card">
+    <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Pipeline by stage</CardTitle>
       </CardHeader>
@@ -72,9 +59,9 @@ export function PipelineFunnel({ data }: { data: PipelineData[] }) {
                   )
                 }}
               />
-              <Bar dataKey="count" shape={claymorphicBar(uid)} cursor="pointer" onClick={(d) => router.push(`/leads?stage=${d.payload.stage}`)}>
+              <Bar dataKey="count" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d) => router.push(`/leads?stage=${d.payload.stage}`)}>
                 {rows.map((r) => (
-                  <Cell key={r.stage} fill={BOARD_COLUMN_HEX[r.stage]} />
+                  <Cell key={r.stage} fill={BOARD_COLUMN_COLORS[r.stage]} />
                 ))}
                 <LabelList dataKey="count" position="top" style={{ fontSize: 11, fontWeight: 600 }} />
               </Bar>

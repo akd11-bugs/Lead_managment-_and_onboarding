@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { requireApiUser, isAdmin } from '@/lib/session'
 import { readJsonBody } from '@/lib/http'
+import { createNeonAuthIdentity } from '@/lib/auth'
+import { logAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,10 +41,18 @@ export async function POST(req: Request) {
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) return NextResponse.json({ error: 'Email already in use' }, { status: 409 })
 
-  const passwordHash = await bcrypt.hash(password, 10)
+  // See lib/auth.ts's createNeonAuthIdentity doc comment for why this can't
+  // just use the `neonAuth` instance here. The request's own origin is
+  // already trusted, since the admin reached this route through the app.
+  const signUp = await createNeonAuthIdentity({ email, password, name, origin: new URL(req.url).origin })
+  if (!signUp.ok) {
+    return NextResponse.json({ error: signUp.message }, { status: signUp.reason === 'not_configured' ? 500 : 409 })
+  }
+
   const created = await prisma.user.create({
-    data: { orgId: user.orgId, name, email, passwordHash, role },
+    data: { orgId: user.orgId, name, email, passwordHash: null, role },
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   })
+  await logAudit({ action: 'user_created', actorUserId: user.id, targetUserId: created.id, metadata: { email, role } })
   return NextResponse.json({ user: created })
 }

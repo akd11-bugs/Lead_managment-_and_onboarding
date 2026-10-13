@@ -1,11 +1,9 @@
 'use client'
 
-import { useId } from 'react'
 import { useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, LabelList } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
-import { claymorphicBar } from './ClayBar'
 import { SOURCE_LABELS, type LeadSource } from '@/lib/types'
 
 // Categorical palette slots 1–6 — validated for CVD + contrast via the dataviz
@@ -27,12 +25,11 @@ export interface SourceROIRow {
 }
 
 export function SourceROI({ rows }: { rows: SourceROIRow[] }) {
-  const uid = useId().replace(/:/g, '')
   const router = useRouter()
   const data = rows.map((r) => ({ ...r, label: SOURCE_LABELS[r.source] }))
 
   return (
-    <Card className="clay-card">
+    <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Source ROI</CardTitle>
       </CardHeader>
@@ -70,7 +67,7 @@ export function SourceROI({ rows }: { rows: SourceROIRow[] }) {
               />
               <Bar
                 dataKey="value"
-                shape={claymorphicBar(uid)}
+                radius={[4, 4, 0, 0]}
                 cursor="pointer"
                 onClick={(d) => router.push(`/leads?source=${d.payload.source}`)}
               >

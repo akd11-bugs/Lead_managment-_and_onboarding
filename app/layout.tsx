@@ -1,9 +1,11 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { auth } from '@/lib/auth'
+import { Inter } from 'next/font/google'
+import { getOptionalUser } from '@/lib/session'
 import { AppShell } from '@/components/layout/AppShell'
 import { SignOutButton } from '@/components/layout/SignOutButton'
-import type { SessionUser } from '@/lib/session'
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
   title: 'bluSwap — Lead Management',
@@ -11,12 +13,11 @@ export const metadata: Metadata = {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth()
-  const user = (session?.user as SessionUser | undefined) ?? null
+  const user = await getOptionalUser()
 
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={`dark ${inter.variable}`}>
+      <body className="font-sans">
         <AppShell user={user} signOutButton={<SignOutButton />}>
           {children}
         </AppShell>

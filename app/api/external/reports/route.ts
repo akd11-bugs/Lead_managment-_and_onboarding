@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
+import { getAllOrgIds } from '@/lib/org'
 import { parseRangeKey } from '@/lib/reportRange'
 import { getReportsData } from '@/lib/reportsData'
 import { safeEqual } from '@/lib/http'
-import { getDefaultOrgId } from '@/lib/org'
-import { resolveVisibleOrgIds } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +10,10 @@ export const dynamic = 'force-dynamic'
 // no browser session exists here, so access is controlled by a static API
 // key instead of requireApiUser(). No caching: every call re-runs the same
 // live queries /reports itself uses, via the shared getReportsData().
+//
+// This is a platform-level view across every company's org (the caller is
+// a static API key, not a per-company login) — explicitly every org that
+// exists, not inferred from any one org's visibility.
 export async function GET(req: Request) {
   const expectedKey = process.env.REPORTS_API_KEY
   if (!expectedKey) {
@@ -25,10 +28,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const range = parseRangeKey(url.searchParams.get('range') ?? undefined)
-  // No user session on this cross-domain route — reports on the default
-  // org's full tree (self + descendants), same rollup an admin gets.
-  const defaultOrgId = await getDefaultOrgId()
-  const orgIds = await resolveVisibleOrgIds(defaultOrgId, 'admin')
+  const orgIds = await getAllOrgIds()
   const data = await getReportsData(range, orgIds)
 
   return NextResponse.json(data)

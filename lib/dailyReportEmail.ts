@@ -34,26 +34,26 @@ export interface DailyReportResult {
   reportDate: string
 }
 
-// Rep-wise activity for a single calendar day, emailed to every active
-// admin within `orgIds` (that org's own admins, plus — for a rollup-capable
-// caller — its descendants') — every call, email, meeting, note, and stage
+// Rep-wise activity for a single calendar day in one org, emailed to every
+// active admin in that org — every call, email, meeting, note, and stage
 // move (e.g. "New → Pending — Our Side") each rep logged, not just a count.
 // Defaults to yesterday so a morning cron run reports on the day that just
-// finished.
-export async function sendDailyActivityReportEmail(orgIds: string[], date: Date = yesterday()): Promise<DailyReportResult> {
+// finished. Orgs are flat and isolated (see app/api/cron/daily-activity-report),
+// so this always reports on exactly one org, never a multi-org rollup.
+export async function sendDailyActivityReportEmail(orgId: string, date: Date = yesterday()): Promise<DailyReportResult> {
   const { start, end } = dayRange(date)
   const reportDate = start.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
 
   const [admins, createdLeads, wonLeads, activities] = await Promise.all([
     prisma.user.findMany({
-      where: { orgId: { in: orgIds }, role: 'admin', isActive: true },
+      where: { orgId, role: 'admin', isActive: true },
       select: { email: true },
     }),
-    prisma.lead.count({ where: { orgId: { in: orgIds }, createdAt: { gte: start, lte: end } } }),
-    prisma.lead.count({ where: { orgId: { in: orgIds }, wonAt: { gte: start, lte: end } } }),
+    prisma.lead.count({ where: { orgId, createdAt: { gte: start, lte: end } } }),
+    prisma.lead.count({ where: { orgId, wonAt: { gte: start, lte: end } } }),
     prisma.activity.findMany({
-      where: { orgId: { in: orgIds }, date: { gte: start, lte: end }, authorName: { not: 'System' }, type: { in: ACTOR_ACTIVITY_TYPES } },
-      select: { type: true, description: true, authorName: true, date: true, lead: { select: { company: true } } },
+      where: { orgId, date: { gte: start, lte: end }, authorName: { not: 'System' }, type: { in: ACTOR_ACTIVITY_TYPES } },
+      select: { type: true, description: true, authorName: true, date: true, lead: { select: { company: { select: { name: true } } } } },
       orderBy: { date: 'asc' },
     }),
   ])
@@ -82,19 +82,19 @@ export async function sendDailyActivityReportEmail(orgIds: string[], date: Date 
       lines.push('', `${name} (${repActivities.length}):`)
       for (const a of repActivities) {
         lines.push(
-          `  ${formatTime(a.date)} · ${TYPE_LABELS[a.type] ?? a.type} · ${a.lead.company} — ${a.description}`
+          `  ${formatTime(a.date)} · ${TYPE_LABELS[a.type] ?? a.type} · ${a.lead.company?.name ?? 'Unknown company'} — ${a.description}`
         )
       }
     }
   }
 
   const recipients = admins.map((a) => a.email)
+  const subject = `Daily activity report — ${reportDate}`
+  const body = lines.join('\n')
+  // One recipient list on a single send, rather than one connection per
+  // admin — this org's mailbox is resolved once instead of once per admin.
   if (recipients.length > 0) {
-    await Promise.all(
-      recipients.map((to) =>
-        sendEmail({ to, subject: `Daily activity report — ${reportDate}`, body: lines.join('\n') })
-      )
-    )
+    await sendEmail({ to: recipients.join(', '), subject, body }, orgId)
   }
 
   return { recipients, reportDate }

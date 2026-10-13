@@ -79,8 +79,8 @@ ${JSON.stringify(leads.map(serializeLead), null, 2)}
 function serializeLead(l: Lead) {
   return {
     id: l.id,
-    poc: l.poc,
-    company: l.company,
+    poc: l.person?.name ?? null,
+    company: l.company.name,
     industry: l.industry,
     source: l.source,
     stage: l.stage,
