@@ -92,10 +92,14 @@ export function NewLeadDialog({
       const extracted = await extractLeadFields(pasteText)
       setForm((prev) => ({
         ...prev,
-        company: prev.company || extracted.company || prev.company,
-        poc: prev.poc || extracted.poc || prev.poc,
-        email: prev.email || extracted.email || prev.email,
-        phone: prev.phone || extracted.phone || prev.phone,
+        // extracted.x comes first: when prev.x is '' (falsy) and
+        // extracted.x is undefined, "prev.x || extracted.x" would evaluate
+        // to undefined, not '' — breaking these fields' string type. Only
+        // "extracted.x || prev.x" is safe in both directions.
+        company: extracted.company || prev.company,
+        poc: extracted.poc || prev.poc,
+        email: extracted.email || prev.email,
+        phone: extracted.phone || prev.phone,
       }))
     } finally {
       setExtracting(false)

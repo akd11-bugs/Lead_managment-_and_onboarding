@@ -26,35 +26,25 @@ type FeatureExtractionPipeline = (
   options: { pooling: 'mean'; normalize: boolean },
 ) => Promise<{ data: Float32Array }>
 
-let nerPipelinePromise: Promise<TokenClassificationPipeline> | null = null
-function getNerPipeline(): Promise<TokenClassificationPipeline> {
-  if (!nerPipelinePromise) {
-    nerPipelinePromise = import('@huggingface/transformers').then(({ pipeline }) =>
-      pipeline('token-classification', 'Xenova/bert-base-NER', { dtype: 'q8' }),
-    ) as Promise<TokenClassificationPipeline>
+// Every pipeline follows the same shape: dynamic-import the library, build
+// the pipeline once, cache the in-flight/resolved promise so a second call
+// (even one racing the first, before it resolves) reuses it instead of
+// triggering a second download. One generic instead of three near-copies.
+function lazyPipeline<T>(task: string, model: string): () => Promise<T> {
+  let promise: Promise<T> | null = null
+  return () => {
+    if (!promise) {
+      promise = import('@huggingface/transformers').then(({ pipeline }) =>
+        pipeline(task as never, model, { dtype: 'q8' }),
+      ) as Promise<T>
+    }
+    return promise
   }
-  return nerPipelinePromise
 }
 
-let zeroShotPipelinePromise: Promise<ZeroShotPipeline> | null = null
-function getZeroShotPipeline(): Promise<ZeroShotPipeline> {
-  if (!zeroShotPipelinePromise) {
-    zeroShotPipelinePromise = import('@huggingface/transformers').then(({ pipeline }) =>
-      pipeline('zero-shot-classification', 'Xenova/nli-deberta-v3-xsmall', { dtype: 'q8' }),
-    ) as unknown as Promise<ZeroShotPipeline>
-  }
-  return zeroShotPipelinePromise
-}
-
-let embeddingPipelinePromise: Promise<FeatureExtractionPipeline> | null = null
-function getEmbeddingPipeline(): Promise<FeatureExtractionPipeline> {
-  if (!embeddingPipelinePromise) {
-    embeddingPipelinePromise = import('@huggingface/transformers').then(({ pipeline }) =>
-      pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { dtype: 'q8' }),
-    ) as Promise<FeatureExtractionPipeline>
-  }
-  return embeddingPipelinePromise
-}
+const getNerPipeline = lazyPipeline<TokenClassificationPipeline>('token-classification', 'Xenova/bert-base-NER')
+const getZeroShotPipeline = lazyPipeline<ZeroShotPipeline>('zero-shot-classification', 'Xenova/nli-deberta-v3-xsmall')
+const getEmbeddingPipeline = lazyPipeline<FeatureExtractionPipeline>('feature-extraction', 'Xenova/all-MiniLM-L6-v2')
 
 // Merges BERT's wordpiece-tokenized, BIO-tagged output ("B-ORG"/"I-ORG" etc,
 // continuation subwords prefixed "##") back into whole entity strings.
