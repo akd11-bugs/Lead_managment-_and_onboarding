@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const userFindUniqueMock = vi.fn()
 const userFindFirstMock = vi.fn()
 const userFindManyMock = vi.fn()
 const cursorFindUniqueMock = vi.fn()
@@ -14,7 +13,6 @@ const recordJobRunMock = vi.fn()
 vi.mock('@/lib/db', () => ({
   prisma: {
     user: {
-      findUnique: (...args: unknown[]) => userFindUniqueMock(...args),
       findFirst: (...args: unknown[]) => userFindFirstMock(...args),
       findMany: (...args: unknown[]) => userFindManyMock(...args),
     },
@@ -43,7 +41,7 @@ vi.mock('@/lib/jobRun', () => ({
 
 const { POST } = await import('./route')
 
-const ENV_KEYS = ['CRON_SYNC_API_KEY', 'LEADS_SHEET_ID', 'LEADS_SHEET_RANGE', 'SHEET_IMPORT_DEFAULT_OWNER_EMAIL'] as const
+const ENV_KEYS = ['CRON_SYNC_API_KEY'] as const
 const savedEnv: Record<string, string | undefined> = {}
 
 function req(token?: string) {
@@ -55,11 +53,7 @@ function req(token?: string) {
 beforeEach(() => {
   for (const k of ENV_KEYS) savedEnv[k] = process.env[k]
   process.env.CRON_SYNC_API_KEY = 'test-key'
-  process.env.LEADS_SHEET_ID = 'sheet-123'
-  process.env.LEADS_SHEET_RANGE = 'Sheet1'
-  process.env.SHEET_IMPORT_DEFAULT_OWNER_EMAIL = 'default@example.com'
 
-  userFindUniqueMock.mockReset()
   userFindFirstMock.mockReset()
   userFindManyMock.mockReset()
   cursorFindUniqueMock.mockReset()
@@ -70,11 +64,12 @@ beforeEach(() => {
   importLeadRowsMock.mockReset()
   recordJobRunMock.mockReset()
 
-  userFindUniqueMock.mockResolvedValue({ id: 'default-owner', name: 'Default Owner', orgId: 'default-org' })
-  userFindManyMock.mockResolvedValue([])
+  userFindManyMock.mockResolvedValue([{ id: 'org-a-owner', name: 'Org A Owner' }])
   cursorFindUniqueMock.mockResolvedValue(null)
   cursorUpsertMock.mockResolvedValue({})
-  orgSheetConnectorFindManyMock.mockResolvedValue([]) // no per-org connectors configured, by default
+  orgSheetConnectorFindManyMock.mockResolvedValue([
+    { orgId: 'org-a', sheetId: 'org-a-sheet', sheetRange: 'Leads', defaultOwnerUserId: 'org-a-owner' },
+  ])
   orgSheetConnectorUpdateMock.mockResolvedValue({})
   importLeadRowsMock.mockResolvedValue({ created: 0, skipped: [] })
   recordJobRunMock.mockResolvedValue(undefined)
@@ -104,22 +99,8 @@ describe('POST /api/cron/sync-leads-sheet', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 503 when LEADS_SHEET_ID is set but SHEET_IMPORT_DEFAULT_OWNER_EMAIL is missing', async () => {
-    delete process.env.SHEET_IMPORT_DEFAULT_OWNER_EMAIL
-    const res = await POST(req('test-key'))
-    expect(res.status).toBe(503)
-  })
-
-  it('returns 503 naming the env var when the default owner email matches no user', async () => {
-    userFindUniqueMock.mockResolvedValue(null)
-    const res = await POST(req('test-key'))
-    expect(res.status).toBe(503)
-    const body = await res.json()
-    expect(body.error).toContain('default@example.com')
-  })
-
-  it('returns an empty results array when neither the global env sheet nor any org connector is configured', async () => {
-    delete process.env.LEADS_SHEET_ID
+  it('returns an empty results array when no org has a connector configured', async () => {
+    orgSheetConnectorFindManyMock.mockResolvedValue([])
     const res = await POST(req('test-key'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ results: [] })
@@ -129,7 +110,7 @@ describe('POST /api/cron/sync-leads-sheet', () => {
     getSheetRowsMock.mockResolvedValue([['Company', 'Email']])
     const res = await POST(req('test-key'))
     const body = await res.json()
-    expect(body.results).toEqual([{ source: 'global', created: 0, skipped: [] }])
+    expect(body.results).toEqual([{ source: 'org:org-a', created: 0, skipped: [] }])
     expect(importLeadRowsMock).not.toHaveBeenCalled()
   })
 
@@ -141,7 +122,7 @@ describe('POST /api/cron/sync-leads-sheet', () => {
     cursorFindUniqueMock.mockResolvedValue({ value: '1' })
     const res = await POST(req('test-key'))
     const body = await res.json()
-    expect(body.results).toEqual([{ source: 'global', created: 0, skipped: [] }])
+    expect(body.results).toEqual([{ source: 'org:org-a', created: 0, skipped: [] }])
     expect(importLeadRowsMock).not.toHaveBeenCalled()
   })
 
@@ -163,8 +144,8 @@ describe('POST /api/cron/sync-leads-sheet', () => {
 
     expect(cursorUpsertMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { key: 'leads-sheet:sheet-123:Sheet1' },
-        create: { key: 'leads-sheet:sheet-123:Sheet1', value: '2' },
+        where: { key: 'leads-sheet:org:org-a' },
+        create: { key: 'leads-sheet:org:org-a', value: '2' },
         update: { value: '2' },
       })
     )
@@ -196,7 +177,7 @@ describe('POST /api/cron/sync-leads-sheet', () => {
     // Two distinct resolved owners -> two separate importLeadRows calls, one bucket each.
     expect(importLeadRowsMock).toHaveBeenCalledTimes(2)
     const owners = importLeadRowsMock.mock.calls.map((c) => c[1].id).sort()
-    expect(owners).toEqual(['default-owner', 'rep-1'].sort())
+    expect(owners).toEqual(['org-a-owner', 'rep-1'].sort())
   })
 
   it('treats a blank Owner cell as unresolved and falls back to the default owner without querying the DB', async () => {
@@ -206,7 +187,7 @@ describe('POST /api/cron/sync-leads-sheet', () => {
     ])
     await POST(req('test-key'))
     expect(userFindFirstMock).not.toHaveBeenCalled()
-    expect(importLeadRowsMock.mock.calls[0][1].id).toBe('default-owner')
+    expect(importLeadRowsMock.mock.calls[0][1].id).toBe('org-a-owner')
   })
 
   it('remaps skipped row numbers from the importLeadRows-local index back to real sheet row numbers', async () => {
@@ -245,14 +226,14 @@ describe('POST /api/cron/sync-leads-sheet', () => {
     expect(body.results[0].skipped).toEqual([{ row: 2, reason: 'Invalid email' }])
   })
 
-  it('records a successful JobRun scoped to the default owner\'s org after a normal sync', async () => {
+  it('records a successful JobRun scoped to the connector\'s org after a normal sync', async () => {
     getSheetRowsMock.mockResolvedValue([
       ['Company', 'Email'],
       ['Acme', 'a@acme.com'],
     ])
     await POST(req('test-key'))
     expect(recordJobRunMock).toHaveBeenCalledWith(
-      expect.objectContaining({ orgId: 'default-org', jobKey: 'sync-leads-sheet', status: 'success' })
+      expect.objectContaining({ orgId: 'org-a', jobKey: 'sync-leads-sheet', status: 'success' })
     )
   })
 
@@ -273,43 +254,52 @@ describe('POST /api/cron/sync-leads-sheet', () => {
     )
   })
 
-  describe('per-org sheet connectors', () => {
-    it('syncs a configured org connector alongside the global source, each with its own cursor', async () => {
-      orgSheetConnectorFindManyMock.mockResolvedValue([
-        { orgId: 'org-a', sheetId: 'org-a-sheet', sheetRange: 'Leads', defaultOwnerUserId: 'org-a-owner' },
-      ])
-      userFindManyMock.mockResolvedValue([{ id: 'org-a-owner', name: 'Org A Owner' }])
-      getSheetRowsMock.mockResolvedValue([
-        ['Company', 'Email'],
-        ['Acme', 'a@acme.com'],
-      ])
-      importLeadRowsMock.mockResolvedValue({ created: 1, skipped: [] })
+  it('records a failed JobRun when the configured sheet ID is wrong/inaccessible (a 404 from Google), without crashing the request', async () => {
+    getSheetRowsMock.mockRejectedValue(new Error('Google Sheets API error (404): Requested entity was not found.'))
 
-      const res = await POST(req('test-key'))
-      const body = await res.json()
+    const res = await POST(req('test-key'))
+    const body = await res.json()
 
-      expect(body.results).toHaveLength(2)
-      expect(body.results.map((r: any) => r.source).sort()).toEqual(['global', 'org:org-a'])
-      expect(orgSheetConnectorUpdateMock).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { orgId: 'org-a' } })
-      )
-    })
+    expect(res.status).toBe(200)
+    expect(body.results[0].error).toContain('404')
+    expect(recordJobRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: 'org-a', jobKey: 'sync-leads-sheet', status: 'failure' })
+    )
+  })
 
-    it('skips an org connector whose configured default owner no longer exists, without failing the whole run', async () => {
-      orgSheetConnectorFindManyMock.mockResolvedValue([
-        { orgId: 'org-a', sheetId: 'org-a-sheet', sheetRange: 'Leads', defaultOwnerUserId: 'deleted-user' },
-      ])
-      userFindManyMock.mockResolvedValue([]) // the connector's configured owner is gone
-      getSheetRowsMock.mockResolvedValue([
-        ['Company', 'Email'],
-        ['Acme', 'a@acme.com'],
-      ])
+  it('syncs multiple org connectors independently, each with its own cursor', async () => {
+    orgSheetConnectorFindManyMock.mockResolvedValue([
+      { orgId: 'org-a', sheetId: 'org-a-sheet', sheetRange: 'Leads', defaultOwnerUserId: 'org-a-owner' },
+      { orgId: 'org-b', sheetId: 'org-b-sheet', sheetRange: 'Sheet1', defaultOwnerUserId: 'org-b-owner' },
+    ])
+    userFindManyMock.mockResolvedValue([
+      { id: 'org-a-owner', name: 'Org A Owner' },
+      { id: 'org-b-owner', name: 'Org B Owner' },
+    ])
+    getSheetRowsMock.mockResolvedValue([
+      ['Company', 'Email'],
+      ['Acme', 'a@acme.com'],
+    ])
+    importLeadRowsMock.mockResolvedValue({ created: 1, skipped: [] })
 
-      const res = await POST(req('test-key'))
-      const body = await res.json()
+    const res = await POST(req('test-key'))
+    const body = await res.json()
 
-      expect(body.results).toHaveLength(1) // only the global source ran
-      expect(body.results[0].source).toBe('global')
-    })
+    expect(body.results).toHaveLength(2)
+    expect(body.results.map((r: any) => r.source).sort()).toEqual(['org:org-a', 'org:org-b'])
+    expect(orgSheetConnectorUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ where: { orgId: 'org-a' } }))
+    expect(orgSheetConnectorUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ where: { orgId: 'org-b' } }))
+  })
+
+  it('skips an org connector whose configured default owner no longer exists, without failing the whole run', async () => {
+    orgSheetConnectorFindManyMock.mockResolvedValue([
+      { orgId: 'org-a', sheetId: 'org-a-sheet', sheetRange: 'Leads', defaultOwnerUserId: 'deleted-user' },
+    ])
+    userFindManyMock.mockResolvedValue([]) // the connector's configured owner is gone
+
+    const res = await POST(req('test-key'))
+    const body = await res.json()
+
+    expect(body.results).toEqual([])
   })
 })

@@ -41,9 +41,22 @@ import { TasksToCreateField, type DraftTask } from './TasksToCreateField'
 
 const NONE = '__none__'
 
-export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
+// Normally an uncontrolled dialog (its own trigger button + internal open
+// state) — the command palette's "Create lead" action instead opens it
+// headlessly via `open`/`onOpenChange`, with no trigger rendered at all.
+export function NewLeadDialog({
+  children,
+  open: openProp,
+  onOpenChange,
+}: {
+  children?: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = openProp ?? internalOpen
+  const setOpen = onOpenChange ?? setInternalOpen
   const [saving, setSaving] = useState(false)
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const { stages } = usePipelineConfig()
@@ -134,14 +147,16 @@ export function NewLeadDialog({ children }: { children?: React.ReactNode }) {
         if (!next) setDuplicateError(null)
       }}
     >
-      <DialogTrigger asChild>
-        {children ?? (
-          <Button size="sm">
-            <Plus className="h-4 w-4" />
-            New Lead
-          </Button>
-        )}
-      </DialogTrigger>
+      {openProp === undefined && (
+        <DialogTrigger asChild>
+          {children ?? (
+            <Button size="sm">
+              <Plus className="h-4 w-4" />
+              New Lead
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Add a new lead</DialogTitle>

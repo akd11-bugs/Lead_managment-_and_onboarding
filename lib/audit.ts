@@ -20,6 +20,8 @@ export type AuditAction =
   | 'rep_login_failed'
   | 'rep_login_locked'
   | 'custom_email_sent'
+  | 'reports_api_key_generated'
+  | 'reports_api_key_revoked'
 
 export async function logAudit(entry: {
   action: AuditAction

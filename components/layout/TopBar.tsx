@@ -105,9 +105,12 @@ export function TopBar({ user, signOutButton }: { user: SessionUser; signOutButt
             onFocus={() => setOpen(true)}
             onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
             placeholder="Search leads, companies, POCs…"
-            className="pl-9 h-9 bg-muted/40"
+            className="pl-9 pr-14 h-9 bg-muted/40"
             aria-label="Search"
           />
+          <kbd className="pointer-events-none absolute right-2.5 top-2 hidden select-none items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:flex">
+            ⌘K
+          </kbd>
         </div>
 
         {showDropdown && (

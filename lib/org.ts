@@ -94,10 +94,11 @@ export async function findOrgByEmailDomain(email: string): Promise<Organization 
   return prisma.organization.findUnique({ where: { id: match.orgId } })
 }
 
-// Every org that exists — used by the two platform-level routes that
-// operate across all companies rather than one caller's own org (the daily
-// activity report cron, which sends each org its own report, and the
-// external reports API, a static-API-key-authenticated aggregate view).
+// Every org that exists — used by the one platform-level route that operates
+// across all companies rather than one caller's own org: the daily activity
+// report cron, which still sends each org its own separate report. (The
+// external reports API used to be a second caller here too, but it's now
+// scoped to one org per API key — see app/api/external/reports/route.ts.)
 export async function getAllOrgIds(): Promise<string[]> {
   const orgs = await prisma.organization.findMany({ select: { id: true } })
   return orgs.map((o) => o.id)

@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { CommandPalette } from './CommandPalette'
 import type { SessionUser } from '@/lib/session'
 
 // The login page renders standalone — no nav shell around a sign-in form.
@@ -26,6 +27,7 @@ export function AppShell({
   }
   return (
     <div className="min-h-screen">
+      <CommandPalette user={user} />
       <Sidebar user={user} />
       <div className="md:pl-60">
         <TopBar user={user} signOutButton={signOutButton} />

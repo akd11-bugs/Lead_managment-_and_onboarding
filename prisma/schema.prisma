@@ -18,6 +18,13 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
 
+  // Scopes an admin-generated key to this org alone for
+  // app/api/external/reports — null until an admin generates one from
+  // Settings. Plaintext + unique index, same convention as Invite.code and
+  // SignupToken.token (a random 32-byte token has no meaningful brute-force
+  // surface, so there's nothing a hash buys here that a unique index doesn't).
+  reportsApiKey String? @unique
+
   emailConfig    OrgEmailConfig?
   sheetConnector OrgSheetConnector?
   companies      Company[]

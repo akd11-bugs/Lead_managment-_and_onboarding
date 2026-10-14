@@ -12,6 +12,7 @@ import { OrganisationPanel } from '@/components/settings/OrganisationPanel'
 import { EmailSettingsCard } from '@/components/settings/EmailSettingsCard'
 import { OrgEmailSettingsCard } from '@/components/settings/OrgEmailSettingsCard'
 import { OrgSheetConnectorCard } from '@/components/settings/OrgSheetConnectorCard'
+import { ReportsApiKeyCard } from '@/components/settings/ReportsApiKeyCard'
 import { WorkflowRulesCard } from '@/components/settings/WorkflowRulesCard'
 import { PipelineConfigCard } from '@/components/settings/PipelineConfigCard'
 import { CustomFieldsCard } from '@/components/settings/CustomFieldsCard'
@@ -77,6 +78,7 @@ export default async function SettingsPage() {
       <EmailSettingsCard />
       {isAdmin(user) && <OrgEmailSettingsCard />}
       {isAdmin(user) && <OrgSheetConnectorCard />}
+      {isAdmin(user) && <ReportsApiKeyCard />}
       <WorkflowRulesCard />
 
       {isAdmin(user) && (

@@ -11,17 +11,12 @@ export const dynamic = 'force-dynamic'
 const OWNER_SYNONYMS = ['owner', 'assigned to', 'sales rep', 'owner email', 'assignee'].map(normalizeHeader)
 
 interface SheetSource {
-  label: string // "global" or "org:<id>" — set once at construction, not re-derived
+  label: string // "org:<id>" — set once at construction, not re-derived
   cursorKey: string
   spreadsheetId: string
   range: string
   orgId: string
   defaultOwner: ImportOwner
-  // True for an org's own Settings-configured connector — updates its
-  // lastSyncedAt below. Both this and the legacy global source read with
-  // the same shared service account now (see lib/googleSheets.ts), so this
-  // is just bookkeeping, not a credential distinction.
-  isOrgConnector: boolean
 }
 
 interface SyncResult {
@@ -110,9 +105,7 @@ async function syncOneSheet(source: SheetSource): Promise<SyncResult> {
       create: { key: source.cursorKey, value: String(dataRows.length) },
       update: { value: String(dataRows.length) },
     })
-    if (source.isOrgConnector) {
-      await prisma.orgSheetConnector.update({ where: { orgId: source.orgId }, data: { lastSyncedAt: new Date() } })
-    }
+    await prisma.orgSheetConnector.update({ where: { orgId: source.orgId }, data: { lastSyncedAt: new Date() } })
 
     await recordJobRun({ orgId: source.orgId, jobKey: 'sync-leads-sheet', status: 'success', startedAt })
     skipped.sort((a, b) => a.row - b.row)
@@ -148,16 +141,15 @@ async function buildOrgSources(): Promise<SheetSource[]> {
       range: c.sheetRange,
       orgId: c.orgId,
       defaultOwner,
-      isOrgConnector: true,
     }]
   })
 }
 
 // Cross-domain, unattended caller — same static-Bearer-key pattern as
 // app/api/external/reports/route.ts, no browser session involved. One
-// external trigger fans out internally across every configured sheet
-// source (the legacy global one, plus every org's own connector) instead
-// of each org needing its own separately-scheduled cron.
+// external trigger fans out internally across every org's own connector —
+// each org configures its own sheet from Settings (OrgSheetConnectorCard),
+// no env vars or backend involvement needed per org.
 export async function POST(req: Request) {
   const expectedKey = process.env.CRON_SYNC_API_KEY
   if (!expectedKey) {
@@ -169,46 +161,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Legacy single global source from env vars — kept alongside any per-org
-  // connectors below rather than replaced by them, so an existing
-  // deployment's sheet keeps working with zero config changes. Unlike a
-  // misconfigured *org* connector (which just gets skipped — see
-  // buildOrgSources), a half-set global env is a real operator mistake, so
-  // it still hard-fails the whole request like it always has.
-  let globalSource: SheetSource | null = null
-  const spreadsheetId = process.env.LEADS_SHEET_ID
-  if (spreadsheetId) {
-    const range = process.env.LEADS_SHEET_RANGE || 'Sheet1'
-    const defaultOwnerEmail = process.env.SHEET_IMPORT_DEFAULT_OWNER_EMAIL
-    if (!defaultOwnerEmail) {
-      return NextResponse.json(
-        { error: 'LEADS_SHEET_ID and SHEET_IMPORT_DEFAULT_OWNER_EMAIL must both be set' },
-        { status: 503 },
-      )
-    }
-    const defaultOwnerRow = await prisma.user.findUnique({
-      where: { email: defaultOwnerEmail.toLowerCase() },
-      select: { id: true, name: true, orgId: true },
-    })
-    if (!defaultOwnerRow) {
-      return NextResponse.json(
-        { error: `SHEET_IMPORT_DEFAULT_OWNER_EMAIL (${defaultOwnerEmail}) does not match a real user` },
-        { status: 503 },
-      )
-    }
-    globalSource = {
-      label: 'global',
-      cursorKey: `leads-sheet:${spreadsheetId}:${range}`,
-      spreadsheetId,
-      range,
-      orgId: defaultOwnerRow.orgId,
-      defaultOwner: defaultOwnerRow,
-      isOrgConnector: false,
-    }
-  }
-
-  const orgSources = await buildOrgSources()
-  const sources = [...(globalSource ? [globalSource] : []), ...orgSources]
+  const sources = await buildOrgSources()
 
   if (sources.length === 0) {
     return NextResponse.json({ results: [] })
