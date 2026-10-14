@@ -4,16 +4,34 @@
 //   A nonce-based CSP (see Next.js docs) would remove this but requires
 //   wiring a per-request nonce through proxy.ts — worth doing later, not
 //   included in this pass to avoid risking hydration breakage app-wide.
+// - script-src also needs 'wasm-unsafe-eval' for lib/aiExtraction.ts's
+//   client-side models (transformers.js/onnxruntime-web, WASM execution) —
+//   this is the narrow CSP3 token for instantiating WebAssembly, not the
+//   much broader 'unsafe-eval'.
 // - style-src needs 'unsafe-inline' because recharts and @dnd-kit both set
 //   inline style="" attributes at render/drag time (not just <style>
 //   blocks) — there's no practical way to nonce those.
+// - connect-src allows Hugging Face's model CDN so the browser can download
+//   the small NER/zero-shot/embedding models directly (cached in the
+//   browser after the first use) — those calls never touch our server, so
+//   this costs us nothing per use, only a trust boundary on huggingface.co.
+//   It also needs cdn.jsdelivr.net — separately from the model weights,
+//   onnxruntime-web (transformers.js's inference engine) loads its own WASM
+//   runtime (.wasm/.mjs) from there, not from Hugging Face.
+// - script-src needs cdn.jsdelivr.net too — that WASM runtime loader is a
+//   dynamically-imported <script>, which script-src-elem falls back to
+//   script-src for. It also needs blob: — onnxruntime-web dynamically
+//   imports its own glue code from a blob: URL it constructs at runtime.
+// - worker-src allows a blob: worker — onnxruntime-web runs its WASM
+//   backend off the main thread via a worker constructed from a blob URL.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://huggingface.co https://*.hf.co https://cdn.jsdelivr.net",
+  "worker-src 'self' blob:",
   "frame-src 'none'",
   "frame-ancestors 'none'",
   "object-src 'none'",

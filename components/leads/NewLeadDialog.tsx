@@ -22,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus } from 'lucide-react'
+import { Plus, Wand2, Loader2 } from 'lucide-react'
+import { extractLeadFields } from '@/lib/aiExtraction'
 import {
   SOURCES,
   SOURCE_LABELS,
@@ -63,6 +64,8 @@ export function NewLeadDialog({
   const { fields: customFieldDefs } = useLeadFieldDefinitions()
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({})
   const [tasks, setTasks] = useState<DraftTask[]>([])
+  const [pasteText, setPasteText] = useState('')
+  const [extracting, setExtracting] = useState(false)
   const [form, setForm] = useState({
     poc: '',
     company: '',
@@ -77,6 +80,27 @@ export function NewLeadDialog({
     estimatedVolume: '5000',
     notes: '',
   })
+
+  // Runs entirely in the browser (lib/aiExtraction.ts) — a small NER model
+  // plus regex, not an LLM call. Only fills fields the user hasn't already
+  // typed something into, so re-running extraction (or pasting a second
+  // blob) never clobbers a manual edit.
+  async function handleExtract() {
+    if (!pasteText.trim()) return
+    setExtracting(true)
+    try {
+      const extracted = await extractLeadFields(pasteText)
+      setForm((prev) => ({
+        ...prev,
+        company: prev.company || extracted.company || prev.company,
+        poc: prev.poc || extracted.poc || prev.poc,
+        email: prev.email || extracted.email || prev.email,
+        phone: prev.phone || extracted.phone || prev.phone,
+      }))
+    } finally {
+      setExtracting(false)
+    }
+  }
 
   async function handleSubmit(force = false) {
     if (!form.company || !form.email) return
@@ -163,6 +187,26 @@ export function NewLeadDialog({
           <DialogDescription>Capture details now. Follow up later — that's what the skills are for.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
+          <div className="space-y-1.5 rounded-md border border-dashed p-2.5">
+            <Label htmlFor="pasteText" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Wand2 className="h-3.5 w-3.5" />
+              Paste a message, signature, or note to auto-fill the fields below
+            </Label>
+            <div className="flex gap-2">
+              <Textarea
+                id="pasteText"
+                rows={2}
+                className="text-sm"
+                placeholder="e.g. Hey, this is Priya from Northwind Traders, reach me at priya@northwind.com or 555-0142…"
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+              />
+              <Button type="button" size="sm" variant="outline" className="self-start shrink-0" onClick={handleExtract} disabled={extracting || !pasteText.trim()}>
+                {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                Fill
+              </Button>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="company">Company</Label>
