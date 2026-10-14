@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   BarChart3,
   CalendarDays,
+  PenTool,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SERVICES } from '@/lib/services/catalog'
@@ -66,6 +67,9 @@ export function Sidebar({ user }: { user: SessionUser }) {
               </NavItem>
               <NavItem href="/tasks" icon={<ListChecks className="h-4 w-4" />}>
                 Tasks
+              </NavItem>
+              <NavItem href="/whiteboard" icon={<PenTool className="h-4 w-4" />}>
+                Whiteboard
               </NavItem>
               <NavItem href="/calendar" icon={<CalendarDays className="h-4 w-4" />}>
                 Calendar

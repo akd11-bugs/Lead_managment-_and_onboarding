@@ -24,6 +24,11 @@ export interface LeadViewFilters {
   sortKey: string
   columns?: string[]
   calculations?: Record<string, string>
+  // A fixed set of lead ids — how the whiteboard's "save a circled group of
+  // notes as a segment" action creates a view. When present, the leads page
+  // shows exactly these leads and ignores stageFilter/sourceFilter/search;
+  // a predicate-based view never sets this.
+  leadIds?: string[]
 }
 
 interface SavedView<TFilters> {

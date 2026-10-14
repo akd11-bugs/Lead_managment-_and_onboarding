@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Loader2 } from 'lucide-react'
+import { Search, Loader2, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -69,6 +70,9 @@ export function LeadsTable({
   const [search, setSearch] = useState(initialQuery ?? '')
   const [stageFilter, setStageFilter] = useState<BoardColumnKey | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<LeadSource | 'all'>('all')
+  // Set only by applying a whiteboard-created segment (a fixed group of
+  // leads, not a predicate) — overrides stage/source/search entirely while active.
+  const [leadIdFilter, setLeadIdFilter] = useState<Set<string> | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkStage, setBulkStage] = useState<BoardColumnKey | ''>('')
@@ -85,6 +89,7 @@ export function LeadsTable({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const rows = initialLeads.filter((l) => {
+      if (leadIdFilter) return leadIdFilter.has(l.id)
       if (stageFilter !== 'all' && boardColumnFor(l) !== stageFilter) return false
       if (sourceFilter !== 'all' && l.source !== sourceFilter) return false
       if (q && !(`${l.company.name} ${l.person?.name ?? ''} ${l.email} ${l.industry ?? ''}`.toLowerCase().includes(q))) return false
@@ -100,7 +105,7 @@ export function LeadsTable({
       sorted.sort((a, b) => columnKeys.indexOf(boardColumnFor(a)) - columnKeys.indexOf(boardColumnFor(b)))
     }
     return sorted
-  }, [initialLeads, search, stageFilter, sourceFilter, sortKey, columnKeys])
+  }, [initialLeads, search, stageFilter, sourceFilter, sortKey, columnKeys, leadIdFilter])
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id))
 
@@ -221,6 +226,11 @@ export function LeadsTable({
           viewType="leads"
           filters={{ search, stageFilter, sourceFilter, sortKey, columns: visibleColumns, calculations }}
           onApply={(v) => {
+            if (v.leadIds?.length) {
+              setLeadIdFilter(new Set(v.leadIds))
+              return
+            }
+            setLeadIdFilter(null)
             setSearch(v.search)
             setStageFilter(columnKeys.includes(v.stageFilter) ? (v.stageFilter as BoardColumnKey) : 'all')
             setSourceFilter((SOURCES as string[]).includes(v.sourceFilter) ? (v.sourceFilter as LeadSource) : 'all')
@@ -229,6 +239,14 @@ export function LeadsTable({
             if (v.calculations) setCalculations(v.calculations as Record<string, Calculation>)
           }}
         />
+        {leadIdFilter && (
+          <Badge variant="outline" className="gap-1.5">
+            Segment · {leadIdFilter.size} leads
+            <button type="button" className="ml-1 text-muted-foreground hover:text-foreground" onClick={() => setLeadIdFilter(null)}>
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        )}
         <span className="ml-auto text-sm text-muted-foreground">
           {filtered.length} of {initialLeads.length} leads
         </span>

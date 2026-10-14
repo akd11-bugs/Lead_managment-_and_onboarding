@@ -51,6 +51,7 @@ import { PipelineProgressBar } from './PipelineProgressBar'
 import { CustomFieldsSection } from './CustomFieldsSection'
 import { HighlightsGrid, type Highlight } from '@/components/shared/HighlightsGrid'
 import { usePipelineConfig, useLeadFieldDefinitions } from '@/lib/hooks/usePipelineConfig'
+import { suggestStage } from '@/lib/aiExtraction'
 
 interface SkillRunEntry {
   id: string
@@ -115,6 +116,10 @@ export function LeadRecordView({
   const [running, setRunning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [stageChangeTarget, setStageChangeTarget] = useState<{ key: BoardColumnKey; label: string } | null>(null)
+  // A nudge, never an automatic change — suggestStage() just classifies the
+  // note's text against this org's own board columns (small on-device
+  // model, no LLM); the person still has to click to act on it.
+  const [stageNudge, setStageNudge] = useState<{ key: string; label: string } | null>(null)
   const [activityForm, setActivityForm] = useState<{ type: ActivityType; description: string }>({
     type: 'note',
     description: '',
@@ -167,16 +172,37 @@ export function LeadRecordView({
 
   async function addActivity() {
     if (!activityForm.description) return
+    const noteText = activityForm.description
     const res = await fetch('/api/activities', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ leadId: lead.id, type: activityForm.type, description: activityForm.description }),
+      body: JSON.stringify({ leadId: lead.id, type: activityForm.type, description: noteText }),
     })
     if (res.ok) {
       setActivityForm({ type: 'note', description: '' })
       const refreshed = await fetch(`/api/leads/${lead.id}`).then((r) => r.json())
       setActivities(refreshed.lead.activities ?? [])
       router.refresh()
+      checkStageNudge(noteText)
+    }
+  }
+
+  // Runs entirely in the browser (lib/aiExtraction.ts) — a small zero-shot
+  // classification model, not an LLM call. Only ever offers a one-click
+  // suggestion; never changes the stage itself.
+  async function checkStageNudge(text: string) {
+    if (text.trim().length < 12) return
+    const current = boardColumnFor(lead)
+    const candidates = columns.filter((c) => c.key !== current)
+    if (!candidates.length) return
+    try {
+      const result = await suggestStage(text, candidates.map((c) => c.key), candidates.map((c) => c.label))
+      if (result && result.confidence > 0.55) {
+        const label = candidates.find((c) => c.key === result.stageKey)?.label ?? result.stageKey
+        setStageNudge({ key: result.stageKey, label })
+      }
+    } catch {
+      // model failed to load (offline, blocked) — silently skip the nudge, never block logging the note
     }
   }
 
@@ -510,6 +536,26 @@ export function LeadRecordView({
             onSent={handleEmailSent}
             onMarkContacted={() => setStageChangeTarget({ key: 'pending_ours', label: 'Pending — Our Side' })}
           />
+
+          {stageNudge && (
+            <div className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm dark:border-violet-900 dark:bg-violet-950">
+              <Sparkles className="h-4 w-4 text-violet-500 shrink-0" />
+              <span className="flex-1">That note sounds like it belongs in <b>{stageNudge.label}</b>.</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setStageChangeTarget({ key: stageNudge.key, label: stageNudge.label })
+                  setStageNudge(null)
+                }}
+              >
+                Move it
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setStageNudge(null)}>
+                Dismiss
+              </Button>
+            </div>
+          )}
 
           <div className="rounded-md border p-3 space-y-2">
             <div className="flex gap-2">

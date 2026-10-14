@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import type { StageDefinition, OnboardingStepDefinition } from '@prisma/client'
 import { STAGES, STAGE_LABELS, STAGE_DESCRIPTIONS, ONBOARDING_SUB_STAGES, ONBOARDING_SUB_STAGE_LABELS } from '@/lib/types'
 
@@ -8,41 +9,57 @@ import { STAGES, STAGE_LABELS, STAGE_DESCRIPTIONS, ONBOARDING_SUB_STAGES, ONBOAR
 // route, not here) because lib/leadStage.ts, lib/alerts.ts, and
 // lib/reportsData.ts branch on these literal string values; only
 // label/description/color are meant to be admin-editable after seeding.
+//
+// A brand-new org's very first page load fires several of these
+// concurrently (the page itself, usePipelineConfig's own fetch, anything
+// else that reads stages) — each sees `existing.length === 0` before any of
+// them has committed, so more than one tries to seed. Only one createMany
+// wins; the rest hit the (orgId, key) unique constraint — re-fetch instead
+// of treating that as a real failure.
 export async function getStageDefinitions(orgId: string): Promise<StageDefinition[]> {
   const existing = await prisma.stageDefinition.findMany({ where: { orgId }, orderBy: { position: 'asc' } })
   if (existing.length > 0) return existing
 
-  await prisma.stageDefinition.createMany({
-    data: STAGES.map((key, position) => ({
-      orgId,
-      key,
-      label: STAGE_LABELS[key],
-      description: STAGE_DESCRIPTIONS[key],
-      position,
-      isCore: true,
-    })),
-  })
+  try {
+    await prisma.stageDefinition.createMany({
+      data: STAGES.map((key, position) => ({
+        orgId,
+        key,
+        label: STAGE_LABELS[key],
+        description: STAGE_DESCRIPTIONS[key],
+        position,
+        isCore: true,
+      })),
+    })
+  } catch (err) {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err
+  }
   return prisma.stageDefinition.findMany({ where: { orgId }, orderBy: { position: 'asc' } })
 }
 
-// Same seed-on-first-read pattern for the onboarding sub-pipeline. Only the
-// *last* seeded row (today's literal 'final_onboarded') is `isCore: true` —
-// it's the one lib/leadStage.ts checks to set onboardedAt, and the one
-// lib/reportsData.ts's Activity-description convention `(<key>)` depends on.
-// The 3 intermediate steps are fully admin add/remove/reorder/rename-able
-// from the moment they're seeded.
+// Same seed-on-first-read pattern for the onboarding sub-pipeline, and the
+// same race guard. Only the *last* seeded row (today's literal
+// 'final_onboarded') is `isCore: true` — it's the one lib/leadStage.ts
+// checks to set onboardedAt, and the one lib/reportsData.ts's
+// Activity-description convention `(<key>)` depends on. The 3 intermediate
+// steps are fully admin add/remove/reorder/rename-able from the moment
+// they're seeded.
 export async function getOnboardingStepDefinitions(orgId: string): Promise<OnboardingStepDefinition[]> {
   const existing = await prisma.onboardingStepDefinition.findMany({ where: { orgId }, orderBy: { position: 'asc' } })
   if (existing.length > 0) return existing
 
-  await prisma.onboardingStepDefinition.createMany({
-    data: ONBOARDING_SUB_STAGES.map((key, position) => ({
-      orgId,
-      key,
-      label: ONBOARDING_SUB_STAGE_LABELS[key],
-      position,
-      isCore: position === ONBOARDING_SUB_STAGES.length - 1,
-    })),
-  })
+  try {
+    await prisma.onboardingStepDefinition.createMany({
+      data: ONBOARDING_SUB_STAGES.map((key, position) => ({
+        orgId,
+        key,
+        label: ONBOARDING_SUB_STAGE_LABELS[key],
+        position,
+        isCore: position === ONBOARDING_SUB_STAGES.length - 1,
+      })),
+    })
+  } catch (err) {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err
+  }
   return prisma.onboardingStepDefinition.findMany({ where: { orgId }, orderBy: { position: 'asc' } })
 }
