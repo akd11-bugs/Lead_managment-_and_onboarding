@@ -810,3 +810,55 @@ nobody had verified bootstrap on an empty DB. Ten checks pass: slug assigned,
 founding admin created, stages self-seed to five in order, first lead
 created and org-scoped, other orgs invisible, and `/rep/<slug>` resolves.
 The probe cleans up after itself.
+
+---
+
+## Deploys apply reviewed migrations, not `db push` (2026-10-16)
+
+**Decision.** The Render build runs `prisma migrate deploy`. Schema changes
+go through a reviewed SQL file in `prisma/migrations/` rather than being
+inferred at deploy time.
+
+**What was wrong.** The build ran `prisma db push --skip-generate`, which
+compares the schema to the live database and applies whatever difference it
+finds. The deploy failed when three new unique constraints triggered
+Prisma's data-loss warning. The quick fix was `--accept-data-loss`, and that
+unblocked it — but it also meant a genuinely destructive change would apply
+silently on deploy instead of failing the build.
+
+The drift it would have applied was not hypothetical. The generated SQL
+contains `DROP COLUMN "company"` and `DROP COLUMN "poc"` on Lead, plus
+`ADD COLUMN "orgId" TEXT NOT NULL` with no default on five tables. On a
+database with rows the drops lose data and the NOT NULL additions fail
+outright. Both were waved through by `--accept-data-loss` and would have
+been invisible in a deploy log.
+
+**What was done.**
+
+1. Seven migration files existed from August but had never been applied to
+   production — the schema got there by `db push`, which records nothing in
+   `_prisma_migrations`.
+2. Applied those seven to a scratch database to confirm they still run, then
+   generated `20261016190000_sync_schema_drift` with `prisma migrate diff`
+   to capture everything `db push` had added since. The file carries a header
+   stating plainly that it is destructive and safe only on an empty database.
+3. Verified the chain reproduces `schema.prisma` exactly: a diff of the
+   migrated scratch database against the schema returns "This is an empty
+   migration" — zero drift.
+4. Baselined production and the local Docker database with
+   `prisma migrate resolve --applied` for all eight migrations, since both
+   already carried the schema.
+5. Switched the build to `prisma migrate deploy`, and confirmed against
+   production that it reports "No pending migrations to apply".
+
+**How to change the schema from now on.** Edit `schema.prisma`, then
+`npm run db:migrate` (interactive; writes the SQL file). Read the generated
+SQL before committing it — that reading is the entire point of the change.
+`npm run db:migrate:status` shows what a database has applied. `db:push`
+remains for throwaway local experiments only.
+
+**Still true:** the current migration would destroy data if replayed against
+a populated database. It will not be, because production is already
+baselined past it. A future destructive change needs a hand-written backfill
+between the ADD COLUMN and the NOT NULL constraint, which is exactly the
+review step `db push` skipped.
