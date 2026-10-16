@@ -32,7 +32,7 @@ export function AuthShell({
     <div className="grid min-h-screen grid-cols-1 bg-[#07080c] text-white lg:grid-cols-2">
       <div className="flex min-w-0 flex-col px-6 py-8 sm:px-10">
         <Link href="/" className="inline-flex w-fit items-center gap-2.5 font-semibold tracking-tight">
-          <OrgLogo org={{ name: BRAND_NAME }} size={24} />
+          <OrgLogo org={{ name: BRAND_NAME }} size={24} vendorFallback />
           {BRAND_NAME}
         </Link>
 

@@ -1,5 +1,15 @@
 import Image from 'next/image'
 
+// The vendor's own mark, used only when no tenant logo is set AND the caller
+// opts in (the marketing site and auth pages). Product chrome deliberately
+// does NOT fall back to it: an org that has not uploaded a logo should see a
+// neutral monogram, never someone else's brand.
+//
+// The source PNG is dark grey on transparent, which is nearly invisible on
+// the dark marketing background, so it is inverted to white in CSS rather
+// than shipping a second asset.
+const VENDOR_MARK = '/logo-mark.png'
+
 // White-label logo slot. Every onboarded org supplies its own mark; this
 // component is the single place that decides what to show when they have not
 // yet. The fallback is a generated monogram — deliberately NOT a vendor logo,
@@ -26,12 +36,29 @@ export function OrgLogo({
   org,
   size = 24,
   className = '',
+  vendorFallback = false,
 }: {
   org: OrgBranding
   size?: number
   className?: string
+  /** Show the vendor mark when the org has no logo. Marketing/auth only. */
+  vendorFallback?: boolean
 }) {
   const src = org.logoDataUrl || org.logoUrl
+
+  if (!src && vendorFallback) {
+    return (
+      <Image
+        src={VENDOR_MARK}
+        alt={org.name}
+        width={122}
+        height={106}
+        className={`w-auto object-contain brightness-0 invert ${className}`}
+        style={{ height: size }}
+        priority
+      />
+    )
+  }
 
   if (src) {
     return (

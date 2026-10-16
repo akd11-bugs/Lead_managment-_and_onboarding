@@ -67,7 +67,7 @@ function Nav() {
     <nav className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#07080c]/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <span className="flex items-center gap-2.5 font-semibold tracking-tight">
-          <OrgLogo org={{ name: BRAND_NAME }} size={24} />
+          <OrgLogo org={{ name: BRAND_NAME }} size={24} vendorFallback />
           {BRAND_NAME}
         </span>
         <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ function Footer() {
     <footer className="border-t border-white/[0.07] py-8">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 text-xs text-white/40">
         <span className="flex items-center gap-2 font-medium text-white/70">
-          <OrgLogo org={{ name: BRAND_NAME }} size={20} />
+          <OrgLogo org={{ name: BRAND_NAME }} size={20} vendorFallback />
           {BRAND_NAME}
         </span>
         <span>© 2026 {BRAND_NAME}</span>
