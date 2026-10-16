@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Kanban, BarChart3, Plug, KeyRound, Building2, Calendar, ShieldCheck } from 'lucide-react'
-import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
+import { GenericPipelineChart } from './GenericPipelineChart'
 import { SourceROI } from '@/components/dashboard/SourceROI'
 import { ActivityFeedView } from '@/components/dashboard/ActivityFeed'
 import { RepPerformance } from '@/components/dashboard/RepPerformance'
 import {
-  FUNNEL_DATA,
+  GENERIC_STAGE_DATA,
   ACTIVITY_DEMO,
   REPS_DEMO,
   SOURCES_DEMO,
@@ -38,7 +38,7 @@ const CARDS: Card[] = [
     description: 'Stages your team already uses.',
     render: () => (
       <div className="rounded-lg bg-background p-4 text-foreground">
-        <PipelineFunnel data={FUNNEL_DATA} />
+        <GenericPipelineChart data={GENERIC_STAGE_DATA} />
       </div>
     ),
   },

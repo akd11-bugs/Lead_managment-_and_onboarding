@@ -1,7 +1,6 @@
 'use client'
 
 import { StatTile, CurrencyTile } from '@/components/dashboard/StatTile'
-import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
 import { ActivityFeedView, type ActivityItem } from '@/components/dashboard/ActivityFeed'
 import { AlertBanner } from '@/components/dashboard/AlertBanner'
 import { RepPerformance, type RepPerformanceRow } from '@/components/dashboard/RepPerformance'
@@ -17,11 +16,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BRAND_NAME } from '@/lib/branding'
 import { Frame } from './Frame'
 import { DraggablePipelineSurface } from './DraggablePipelineSurface'
+import { GenericPipelineChart } from './GenericPipelineChart'
 
 // The product surfaces, rendered with the REAL dashboard components
-// (StatTile, CurrencyTile, PipelineFunnel, ActivityFeedView) rather than
-// hand-written lookalikes. A restyle of the product now shows up here
-// automatically instead of drifting.
+// (StatTile, CurrencyTile, ActivityFeedView) rather than hand-written
+// lookalikes. A restyle of the product now shows up here automatically
+// instead of drifting. The one exception is the pipeline chart: the real
+// PipelineFunnel always renders the product's fintech-only pending
+// sub-stages (our side / merchant / PSP), so every pipeline chart on this
+// page uses GenericPipelineChart instead, off the generic Stage enum.
 //
 // Data is fixed and fictional: these render on a public page with no session
 // and no database. Every name is invented — none is a real customer.
@@ -31,18 +34,6 @@ export const ACTIVITY_DEMO: ActivityItem[] = [
   { id: 'a2', type: 'email', description: 'Proposal sent (PDF)', date: new Date(Date.now() - 4 * 864e5).toISOString(), authorName: 'Arjun', leadName: 'Northwind Traders', leadId: 'demo' },
   { id: 'a3', type: 'meeting', description: 'Budget approved, moving to onboarding', date: new Date(Date.now() - 6 * 864e5).toISOString(), authorName: 'Sam', leadName: 'Cedarline Supply', leadId: 'demo' },
   { id: 'a4', type: 'note', description: 'Prefers a call before 6pm', date: new Date(Date.now() - 7 * 864e5).toISOString(), authorName: 'Priya', leadName: 'Lumen Retail Co', leadId: 'demo' },
-]
-
-// PipelineFunnel renders every BOARD_COLUMN, so each needs a figure or the
-// chart shows empty bars at zero.
-export const FUNNEL_DATA = [
-  { stage: 'new', count: 4, value: 96_000 },
-  { stage: 'pending_ours', count: 3, value: 130_000 },
-  { stage: 'pending_merchant', count: 2, value: 74_000 },
-  { stage: 'pending_psp', count: 1, value: 38_000 },
-  { stage: 'proposal', count: 2, value: 160_000 },
-  { stage: 'onboarding', count: 2, value: 180_000 },
-  { stage: 'not_interested', count: 1, value: 22_000 },
 ]
 
 // Generic, industry-agnostic stage data for GenericPipelineChart — the real
@@ -120,7 +111,11 @@ const BD: BDSummaryData = {
 
 // The whole dashboard, in the order app/page.tsx renders it: alerts, tiles,
 // funnel + activity, then the BD/rep/source panels. Every one of these is
-// the component the product uses, not a drawing of it.
+// the component the product uses, not a drawing of it — except the funnel:
+// PipelineFunnel always renders the product's fintech-only pending
+// sub-stages (our side / merchant / PSP), which don't belong on a public
+// page pitching this to any industry, so this uses the generic Stage chart
+// instead (same one as the "Run your pipeline" onboarding step).
 export function DashboardSurface({ compact = false }: { compact?: boolean }) {
   return (
     <Frame path="/dashboard">
@@ -132,7 +127,14 @@ export function DashboardSurface({ compact = false }: { compact?: boolean }) {
         <StatTile label="Conversion" value="18%" hint="2 / 11 won" />
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <PipelineFunnel data={FUNNEL_DATA} />
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Pipeline by stage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <GenericPipelineChart data={GENERIC_STAGE_DATA} />
+          </CardContent>
+        </Card>
         <ActivityFeedView items={ACTIVITY_DEMO} live={false} interactive={false} />
       </div>
       {!compact && (
