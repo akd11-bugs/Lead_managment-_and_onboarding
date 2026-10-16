@@ -13,21 +13,21 @@ const STAGES = [
     tone: 'red' as const,
     where: 'Where you are',
     title: 'A spreadsheet that works',
-    body: 'It is fast, everyone can edit it, and nobody needs training. It also has no history, no owner, and no memory of what was promised.',
+    body: 'Fast, familiar, and with no memory of what was promised.',
   },
   {
     glyph: GlyphGraph,
     tone: 'navy' as const,
     where: 'Where we sit',
     title: 'Structure, without the migration',
-    body: 'Paste what you already have. Your agent reads and writes it through a real API. You get stages, owners and an activity trail without a three-month rollout.',
+    body: 'Stages, owners and a trail. No three-month rollout.',
   },
   {
     glyph: GlyphCheck,
     tone: 'red' as const,
     where: 'Where you go',
     title: 'Ready for the real thing',
-    body: 'When you outgrow us, your data is already modelled the way a CRM expects. Export it clean and move. No lock-in, because lock-in is not the product.',
+    body: 'Export clean and move. Lock-in is not the product.',
   },
 ]
 

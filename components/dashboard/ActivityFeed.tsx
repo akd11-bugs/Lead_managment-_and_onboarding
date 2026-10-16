@@ -6,7 +6,7 @@ import { Phone, Mail, Calendar, StickyNote } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatRelative } from '@/lib/utils'
 
-interface ActivityItem {
+export interface ActivityItem {
   id: string
   type: string
   description: string
@@ -56,14 +56,33 @@ export function ActivityFeed({ limit = 8 }: { limit?: number }) {
     }
   }, [limit])
 
+  return <ActivityFeedView items={items} loading={loading} />
+}
+
+// Presentation only. The marketing page renders this with fixed demo data so
+// the landing page shows the REAL component rather than a hand-written
+// lookalike that drifts from it. `live` is off there: nothing is polling.
+export function ActivityFeedView({
+  items,
+  loading = false,
+  live = true,
+  interactive = true,
+}: {
+  items: ActivityItem[]
+  loading?: boolean
+  live?: boolean
+  interactive?: boolean
+}) {
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           Recent activity
-          <span className="flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> live
-          </span>
+          {live && (
+            <span className="flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> live
+            </span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -72,24 +91,34 @@ export function ActivityFeed({ limit = 8 }: { limit?: number }) {
           <p className="text-sm text-muted-foreground">No activity yet. Add a lead to get started.</p>
         )}
         {!loading &&
-          items.map((a) => (
-            <Link
-              key={a.id}
-              href={`/leads/${a.leadId}`}
-              className="flex items-start gap-3 text-sm rounded-md -mx-2 px-2 py-1 transition-colors hover:bg-accent/60"
-            >
-              <div className="mt-0.5 text-muted-foreground">{ICONS[a.type] ?? ICONS.note}</div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate">
-                  <span className="font-medium">{a.authorName}</span>{' '}
-                  <span className="text-muted-foreground">on</span>{' '}
-                  <span className="font-medium">{a.leadName}</span>
-                </p>
-                <p className="text-xs text-muted-foreground line-clamp-2">{a.description}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{formatRelative(a.date)}</p>
+          items.map((a) => {
+            const row = (
+              <>
+                <div className="mt-0.5 text-muted-foreground">{ICONS[a.type] ?? ICONS.note}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate">
+                    <span className="font-medium">{a.authorName}</span>{' '}
+                    <span className="text-muted-foreground">on</span>{' '}
+                    <span className="font-medium">{a.leadName}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{a.description}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatRelative(a.date)}</p>
+                </div>
+              </>
+            )
+            const cls = 'flex items-start gap-3 text-sm rounded-md -mx-2 px-2 py-1'
+            // Marketing renders a non-navigating version: a link to /leads/<id>
+            // from the landing page would 404 for a logged-out visitor.
+            return interactive ? (
+              <Link key={a.id} href={`/leads/${a.leadId}`} className={`${cls} transition-colors hover:bg-accent/60`}>
+                {row}
+              </Link>
+            ) : (
+              <div key={a.id} className={cls}>
+                {row}
               </div>
-            </Link>
-          ))}
+            )
+          })}
       </CardContent>
     </Card>
   )

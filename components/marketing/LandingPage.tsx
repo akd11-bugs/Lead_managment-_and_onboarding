@@ -1,7 +1,5 @@
 import Link from 'next/link'
 import { HeroCanvas } from './HeroCanvas'
-import { ProductDemo } from './ProductDemo'
-import { AppFrame, DashboardMock } from './AppMock'
 import { ScrollWordReveal } from './ScrollReveal'
 import { SmoothScroll } from './SmoothScroll'
 import { OnboardingFlow } from './OnboardingFlow'
@@ -12,7 +10,8 @@ import { AgentTerminal } from './AgentSection'
 import { FeatureGrid } from './FeatureGrid'
 import { BridgeSection } from './BridgeSection'
 import { StickyCta } from './StickyCta'
-import { Stamp, GlyphS, GlyphGraph, GlyphShield, GlyphSync } from './Stamp'
+import { HorizontalTour } from './HorizontalTour'
+import { DashboardSurface } from './RealAppShowcase'
 
 // Public marketing page, shown at "/" only when there's no session (see
 // app/page.tsx). Screenshots are real product captures from a seeded
@@ -27,16 +26,10 @@ export function LandingPage() {
 
       <Section>
         <Reveal>
-          <SectionHead
-            eyebrow="Product tour"
-            title="Everything an agent needs a surface for."
-            body="Every screen here is the real product. Each one is also an API your agent can call."
-          />
-        </Reveal>
-        <Reveal delay={0.1} className="mt-12">
-          <ProductDemo />
+          <SectionHead eyebrow="Product tour" title="The real product." body="Scroll." />
         </Reveal>
       </Section>
+      <HorizontalTour />
 
       <Bridge />
       <AgentSection />
@@ -124,8 +117,7 @@ function Hero() {
 
         <RevealOnMount delay={0.16}>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/60">
-            You are not ready for Salesforce and you have outgrown the sheet. {BRAND_NAME} is the stage in between:
-            structure you can adopt in an afternoon, built so your AI agents can run it with you from day one.
+            Outgrown the sheet. Not ready for Salesforce. Start here.
           </p>
         </RevealOnMount>
 
@@ -146,35 +138,13 @@ function Hero() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-white/40">
-            No credit card. No migration project. Export everything the day you leave.
+            No credit card. Export everything the day you leave.
           </p>
         </RevealOnMount>
 
-        <RevealOnMount delay={0.3}>
-          <div className="mt-12 flex items-center gap-3">
-            <Stamp tone="red" filled size={52} label={BRAND_NAME}>
-              {GlyphS}
-            </Stamp>
-            <Stamp tone="navy" size={52} label="Agent ready">
-              {GlyphGraph}
-            </Stamp>
-            <Stamp tone="navy" size={52} label="Your documents stay yours">
-              {GlyphShield}
-            </Stamp>
-            <Stamp tone="red" size={52} label="Export anytime">
-              {GlyphSync}
-            </Stamp>
-            <p className="ml-2 max-w-[15rem] font-mono text-[11px] leading-relaxed text-white/35">
-              Agent ready. Documents stay on your machine. Export the day you leave.
-            </p>
-          </div>
-        </RevealOnMount>
-
-        <RevealOnMount delay={0.38}>
-          <div className="mt-12">
-            <AppFrame active="Dashboard">
-              <DashboardMock />
-            </AppFrame>
+        <RevealOnMount delay={0.32}>
+          <div className="mt-14">
+            <DashboardSurface />
           </div>
         </RevealOnMount>
       </div>
@@ -190,8 +160,8 @@ function Bridge() {
       <Reveal>
         <SectionHead
           eyebrow="Where this sits"
-          title="We are not replacing your CRM. We are getting you ready for one."
-          body="Most teams are stuck between a sheet that has stopped scaling and a platform that costs more than the problem. This is the stage in between."
+          title="We are not replacing your CRM."
+          body="We are getting you ready for one."
         />
       </Reveal>
       <div className="mt-12">
@@ -211,7 +181,7 @@ function AgentSection() {
         <SectionHead
           eyebrow="Agent native"
           title="Your agent is a first-class user."
-          body="Most CRMs bolted AI on after the fact, so an agent has to click through a UI built for humans. We shipped the tools first. Claude, ChatGPT or your own agent reads and writes your pipeline through a real protocol, scoped to a key you issue and revoke."
+          body="Claude, ChatGPT or your own agent, over a real protocol."
         />
       </Reveal>
       <div className="mx-auto mt-12 grid max-w-6xl gap-10 px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
@@ -244,7 +214,7 @@ function EverythingElse() {
         <SectionHead
           eyebrow="Everything else"
           title="The rest of it is already here."
-          body="Not modules to buy separately. All of it, in the free tier, each one reachable by an agent."
+          body="All of it, free."
         />
       </Reveal>
       <div className="mt-12">
@@ -276,7 +246,7 @@ function HowItWorks() {
         <SectionHead
           eyebrow="How it works"
           title="From signup to a running pipeline."
-          body="Four steps, and the longest one is pasting an email."
+          body="The longest step is pasting an email."
         />
       </Reveal>
       <div className="mt-14">
@@ -290,9 +260,9 @@ function HowItWorks() {
 // page only sold the cost half.
 function Privacy() {
   const points = [
-    { k: 'On-device extraction', v: 'The model that reads your pasted text runs in your browser. That text is never sent to an AI provider.' },
-    { k: 'No per-seat AI fee', v: 'No LLM subscription, no token metering, no usage tier that quietly caps your team.' },
-    { k: 'Google sign-in only', v: 'No password for us to store, leak, or make you rotate every ninety days.' },
+    { k: 'On-device extraction', v: 'Your pasted text never leaves the browser.' },
+    { k: 'No per-seat AI fee', v: 'No subscription, no token metering.' },
+    { k: 'Google sign-in only', v: 'No password for us to store or leak.' },
   ]
   return (
     <Section>
@@ -300,7 +270,7 @@ function Privacy() {
         <SectionHead
           eyebrow="Why it's free"
           title="Free because of where the model runs."
-          body="Not a trial, not a seat count. The extraction model executes on your machine, so it costs us nothing to give away."
+          body="The model runs on your machine, so it costs us nothing."
         />
       </Reveal>
       <div className="mx-auto mt-12 max-w-6xl px-6">
@@ -329,7 +299,7 @@ function FinalCta() {
       <Reveal>
         <div className="mx-auto max-w-2xl px-6">
           <h2 className="text-4xl font-semibold tracking-tight sm:text-5xl">Stop managing leads. Start running them.</h2>
-          <p className="mt-4 text-white/55">Free to start. Google sign-in gets your whole team in under a minute.</p>
+          <p className="mt-4 text-white/55">Free to start.</p>
           <Link
             href="/signup"
             className="group mt-9 inline-block rounded-full bg-white px-7 py-3.5 text-sm font-medium text-[#07080c] transition-transform hover:scale-[1.03] active:scale-[0.98]"
