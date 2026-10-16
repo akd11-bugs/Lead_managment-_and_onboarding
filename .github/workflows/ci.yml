@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A PR that breaks types, lint, or tests should fail here rather than at
+# deploy time. Deliberately does NOT run `npm run build`: that script runs
+# `prisma db push` against a real database, which must never happen from CI.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Prisma Client is generated from the schema, and tsc needs its types.
+      - run: npx prisma generate
+
+      - run: npx tsc --noEmit
+
+      # Non-blocking for now: there are 13 pre-existing lint errors (mostly
+      # react-hooks/set-state-in-effect) unrelated to any current change.
+      # Remove continue-on-error once they're cleared, so lint gates merges
+      # like the other two steps.
+      - run: npx eslint .
+        continue-on-error: true
+
+      - run: npx vitest run
