@@ -1,0 +1,128 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Steadfast Agent API",
+    "version": "1.0.0",
+    "description": "Scoped, org-authenticated actions an AI agent (or any script) can call on this org's behalf — create leads, log activity, move deals through the pipeline. Every action here runs through the exact same validation and workflow-automation path a human using the app would trigger; nothing here is a shortcut around it. Authenticate with `Authorization: Bearer <agentApiKey>`, generated from Settings → Agent API key."
+  },
+  "servers": [{ "url": "/api/agent/v1" }],
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/leads": {
+      "get": {
+        "operationId": "listLeads",
+        "summary": "Search or list leads in this org",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Matches company name, contact name, or email" },
+          { "name": "stage", "in": "query", "schema": { "type": "string", "enum": ["new", "pending", "proposal", "onboarding", "not_interested"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching leads (max 50, newest first)",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "leads": { "type": "array", "items": { "$ref": "#/components/schemas/Lead" } } } } } }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createLead",
+        "summary": "Create a lead",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["company", "email", "ownerEmail"],
+                "properties": {
+                  "company": { "type": "string", "description": "Company name — matched or created if it doesn't exist yet" },
+                  "poc": { "type": "string", "description": "Contact person's name" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "ownerEmail": { "type": "string", "description": "Must match an active user in this org — who this lead belongs to" },
+                  "source": { "type": "string", "enum": ["website", "referral", "linkedin", "cold_outreach", "other"] },
+                  "stage": { "type": "string", "default": "new" },
+                  "estimatedVolume": { "type": "number" },
+                  "notes": { "type": "string" },
+                  "force": { "type": "boolean", "description": "Skip the duplicate-email/contact check" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "type": "object", "properties": { "lead": { "$ref": "#/components/schemas/Lead" } } } } } },
+          "409": { "description": "Possible duplicate — set force:true to create anyway" }
+        }
+      }
+    },
+    "/leads/{id}/stage": {
+      "patch": {
+        "operationId": "moveLeadStage",
+        "summary": "Move a lead to a different pipeline stage",
+        "description": "Fires the org's configured workflow automations exactly as a human dragging the card would — never a silent, rule-free update.",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["remark"],
+                "properties": {
+                  "stage": { "type": "string", "enum": ["new", "pending", "proposal", "onboarding", "not_interested"] },
+                  "remark": { "type": "string", "description": "Required — what happened, in one line. Becomes the activity-log entry." },
+                  "pendingSubStatus": { "type": "string" },
+                  "assignedOpsId": { "type": "string", "description": "Required when moving into onboarding" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/leads/{id}/activities": {
+      "post": {
+        "operationId": "logActivity",
+        "summary": "Log a note/call/email/meeting on a lead without changing its stage",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["description"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["call", "email", "note", "meeting"], "default": "note" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Logged" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "Lead": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "company": { "type": "string", "nullable": true },
+          "poc": { "type": "string", "nullable": true },
+          "email": { "type": "string" },
+          "phone": { "type": "string", "nullable": true },
+          "stage": { "type": "string" },
+          "source": { "type": "string" },
+          "estimatedVolume": { "type": "number" },
+          "notes": { "type": "string" },
+          "owner": { "type": "string" }
+        }
+      }
+    }
+  }
+}
