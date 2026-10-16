@@ -4,6 +4,7 @@ import { neonAuth } from '@/lib/auth'
 import { resolveSession } from '@/lib/session'
 import { SignupEmailForm } from '@/components/auth/SignupEmailForm'
 import { AuthShell } from '@/components/auth/AuthShell'
+import { BRAND_NAME } from '@/lib/branding'
 
 // Google-first, mirroring app/login/page.tsx — Google sign-in already proves
 // email ownership, so a brand-new identity lands on /account-not-found which
@@ -32,7 +33,7 @@ export default async function SignupPage() {
 
   return (
     <AuthShell
-      title="Join Steadfast"
+      title={`Join ${BRAND_NAME}`}
       subtitle="Create your account to get started."
       quote={{
         line: 'No credit card. No new password — Google already proved it’s you.',

@@ -6,6 +6,7 @@ import { resolveSession } from '@/lib/session'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/auth/AuthShell'
+import { BRAND_NAME } from '@/lib/branding'
 
 export default async function LoginPage({
   searchParams,
@@ -54,10 +55,10 @@ export default async function LoginPage({
   return (
     <AuthShell
       title="Welcome back"
-      subtitle="Sign in to your Steadfast workspace."
+      subtitle={`Sign in to your ${BRAND_NAME} workspace.`}
       quote={{
-        line: 'Leads don’t need another spreadsheet.',
-        attribution: 'Steadfast — lead management that keeps up',
+        line: 'The step between a spreadsheet and a CRM.',
+        attribution: BRAND_NAME,
       }}
       footer={
         <>

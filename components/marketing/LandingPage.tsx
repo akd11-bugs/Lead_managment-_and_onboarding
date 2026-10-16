@@ -24,11 +24,6 @@ export function LandingPage() {
       <Nav />
       <Hero />
 
-      <Section>
-        <Reveal>
-          <SectionHead eyebrow="Product tour" title="The real product." body="Scroll." />
-        </Reveal>
-      </Section>
       <HorizontalTour />
 
       <Bridge />
@@ -181,7 +176,7 @@ function AgentSection() {
         <SectionHead
           eyebrow="Agent native"
           title="Your agent is a first-class user."
-          body="Claude, ChatGPT or your own agent, over a real protocol."
+          body="Your agent reads and writes your pipeline over a real protocol."
         />
       </Reveal>
       <div className="mx-auto mt-12 grid max-w-6xl gap-10 px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">

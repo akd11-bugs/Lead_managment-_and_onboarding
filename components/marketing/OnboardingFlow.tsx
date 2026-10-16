@@ -79,11 +79,10 @@ export function OnboardingFlow() {
                     }}
                     className="flex gap-5"
                   >
-                    {/* Postal-stamp numeral, the one analogue motif carried
-                        into the dark design. stamp-edge punches perforations
-                        into the top and bottom edges. */}
+                    {/* Plain numeral. The stamp treatment was dropped: it
+                        was decoration competing with the step content. */}
                     <span
-                      className={`stamp-edge mt-0.5 grid h-9 w-9 shrink-0 place-items-center font-mono text-[11px] font-semibold transition-colors duration-300 ${
+                      className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full font-mono text-[11px] font-semibold transition-colors duration-300 ${
                         isActive
                           ? 'bg-[#5b8cff] text-[#07080c]'
                           : isPast

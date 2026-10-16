@@ -123,7 +123,7 @@ export function AgentTerminal() {
         <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-        <span className="ml-2 font-mono text-[11px] text-white/35">claude · your CRM</span>
+        <span className="ml-2 font-mono text-[11px] text-white/35">your CRM</span>
       </div>
 
       <div className="space-y-2.5 p-5 font-mono text-[12px] leading-relaxed [overflow-wrap:anywhere] sm:p-6 sm:text-[13px]">
