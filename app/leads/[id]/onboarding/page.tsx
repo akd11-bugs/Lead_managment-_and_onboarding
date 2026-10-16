@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Building2, Globe, Mail } from 'lucide-react'
 import { OnboardingProgressPanel } from '@/components/leads/OnboardingProgressPanel'
+import { DocumentVaultPanel } from '@/components/leads/DocumentVaultPanel'
 import { WebsiteLink } from '@/components/leads/WebsiteLink'
 import { formatCurrency } from '@/lib/utils'
 import { BUSINESS_TYPE_LABELS, LEAD_TYPE_LABELS, type BusinessType, type LeadType } from '@/lib/types'
@@ -91,6 +92,15 @@ export default async function OnboardingDetailPage({ params }: { params: Promise
             </CardHeader>
             <CardContent>
               <OnboardingProgressPanel leadId={lead.id} subStage={lead.onboardingSubStage as never} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Documents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DocumentVaultPanel leadId={lead.id} />
             </CardContent>
           </Card>
         </>

@@ -9,14 +9,27 @@ import { ONBOARDING_SUB_STAGES, ONBOARDING_SUB_STAGE_LABELS, onboardingProgressP
 
 export const dynamic = 'force-dynamic'
 
-export default async function OnboardingQueuePage() {
+export default async function OnboardingQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ all?: string }>
+}) {
   const user = await requireUser()
   // This is the ops/admin cross-rep view — Sales already has per-lead
   // progress via the "View more" link on their own leads.
   if (!isAdmin(user) && !isOperations(user)) redirect('/')
 
+  const { all } = await searchParams
+
+  // An operations user sees the merchants assigned to them by default: the
+  // sales rep names an ops owner when moving a lead to Onboarding, and this
+  // is that person's work queue, not the org's whole backlog. Admins see
+  // everything, and ops can opt into the full view with ?all=1.
+  const showAll = isAdmin(user) || all === '1'
+  const mineOnly = !showAll ? { assignedOpsId: user.id } : {}
+
   const leads = await prisma.lead.findMany({
-    where: { stage: 'onboarding', ...leadScope(user) },
+    where: { stage: 'onboarding', ...leadScope(user), ...mineOnly },
     orderBy: { updatedAt: 'desc' },
     include: { company: true },
   })
@@ -30,11 +43,25 @@ export default async function OnboardingQueuePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Onboarding queue</h1>
-        <p className="text-sm text-muted-foreground">
-          Every merchant that&apos;s closed-won, across all reps, grouped by where they are in onboarding.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {showAll ? 'Onboarding queue' : 'Your onboarding queue'}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {showAll
+              ? 'Every merchant in onboarding, across all reps and operations owners.'
+              : `${leads.length} merchant${leads.length === 1 ? '' : 's'} assigned to you, grouped by where they are.`}
+          </p>
+        </div>
+        {!isAdmin(user) && (
+          <Link
+            href={showAll ? '/onboarding' : '/onboarding?all=1'}
+            className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent"
+          >
+            {showAll ? 'Show only mine' : 'Show all'}
+          </Link>
+        )}
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -73,11 +100,33 @@ export default async function OnboardingQueuePage() {
                     </Badge>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{lead.ownerName}</span>
-                    <span>{formatCurrency(lead.estimatedVolume)}</span>
+                    <span className="truncate">{lead.ownerName}</span>
+                    <span className="shrink-0">{formatCurrency(lead.estimatedVolume)}</span>
                   </div>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Updated {formatRelative(lead.updatedAt)}
+
+                  {/* Contact details inline: the ops member's next action is
+                      almost always to call or email, and making them open the
+                      lead first just to find a number is wasted motion. */}
+                  <div className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+                    {lead.email && <p className="truncate">{lead.email}</p>}
+                    {lead.phone && <p className="truncate">{lead.phone}</p>}
+                    {lead.website && <p className="truncate">{lead.website}</p>}
+                  </div>
+
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {(() => {
+                      const days = Math.floor((Date.now() - lead.updatedAt.getTime()) / 86_400_000)
+                      // Surfaces merchants that have gone quiet. The main
+                      // pipeline flags stale leads at 21 days; onboarding
+                      // should move faster than that, so 7 is the threshold.
+                      return days >= 7 ? (
+                        <span className="font-medium text-amber-600 dark:text-amber-500">
+                          No movement in {days} days
+                        </span>
+                      ) : (
+                        <>Updated {formatRelative(lead.updatedAt)}</>
+                      )
+                    })()}
                   </p>
                 </Link>
               ))}
