@@ -8,6 +8,10 @@ import { RepPerformance, type RepPerformanceRow } from '@/components/dashboard/R
 import { SourceROI, type SourceROIRow } from '@/components/dashboard/SourceROI'
 import { BDSummary, type BDSummaryData } from '@/components/dashboard/BDSummary'
 import { GettingStartedCard } from '@/components/dashboard/GettingStartedCard'
+import { DataTable } from '@/components/shared/DataTable'
+import { getCompanyColumns, type CompanyRow } from '@/lib/tableColumns'
+import { CalendarMonth, type CalendarDay } from '@/components/calendar/CalendarMonth'
+import { AuditLogTable, type AuditLogRow } from '@/components/settings/AuditLogTable'
 import type { Alert } from '@/lib/alerts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -56,6 +60,40 @@ export const SOURCES_DEMO: SourceROIRow[] = [
   { source: 'website', value: 118_000, count: 3, winRate: 33 },
   { source: 'linkedin', value: 64_000, count: 2, winRate: -1 },
   { source: 'event', value: 37_000, count: 2, winRate: 0 },
+]
+
+export const COMPANIES_DEMO: CompanyRow[] = [
+  { id: 'c1', name: 'Ardent Studio', industry: 'Fashion', businessType: null, website: 'ardent.studio', createdAt: new Date(Date.now() - 12 * 864e5), _count: { leads: 2, people: 3 } },
+  { id: 'c2', name: 'Northwind Traders', industry: 'F&B', businessType: null, website: 'northwind.com', createdAt: new Date(Date.now() - 20 * 864e5), _count: { leads: 1, people: 2 } },
+  { id: 'c3', name: 'Cedarline Supply', industry: 'Wholesale', businessType: null, website: null, createdAt: new Date(Date.now() - 30 * 864e5), _count: { leads: 1, people: 1 } },
+]
+
+export const CALENDAR_DEMO: CalendarDay[] = (() => {
+  const today = new Date()
+  const days: CalendarDay[] = []
+  for (let i = -2; i <= 4; i++) {
+    const d = new Date(today)
+    d.setDate(d.getDate() + i)
+    const isToday = i === 0
+    days.push({
+      date: d.toISOString().slice(0, 10),
+      label: String(d.getDate()),
+      isCurrentMonth: true,
+      isToday,
+      tasks: isToday
+        ? [{ id: 't1', title: 'Call Ardent Studio', done: false, leadId: null, leadCompany: 'Ardent Studio' }]
+        : i === 2
+          ? [{ id: 't2', title: 'Send proposal', done: false, leadId: null, leadCompany: 'Northwind Traders' }]
+          : [],
+    })
+  }
+  return days
+})()
+
+export const AUDIT_DEMO: AuditLogRow[] = [
+  { id: 'l1', createdAt: new Date(Date.now() - 1 * 3600e3), action: 'login_success', actorName: 'Priya', targetLabel: null },
+  { id: 'l2', createdAt: new Date(Date.now() - 5 * 3600e3), action: 'invite_redeemed', actorName: 'Arjun', targetLabel: null },
+  { id: 'l3', createdAt: new Date(Date.now() - 26 * 3600e3), action: 'user_role_changed', actorName: 'You', targetLabel: 'Priya' },
 ]
 
 const BD: BDSummaryData = {
@@ -212,6 +250,40 @@ export function WhiteboardSurface() {
           </p>
         </CardContent>
       </Card>
+    </Frame>
+  )
+}
+
+export function CompaniesSurface() {
+  return (
+    <Frame path="/companies">
+      <DataTable
+        tableId="marketing-companies"
+        rows={COMPANIES_DEMO}
+        rowKey={(c) => c.id}
+        rowHref={() => '/signup'}
+        allColumns={getCompanyColumns()}
+        visibleColumnKeys={['name', 'industry', 'website', 'leadsCount', 'peopleCount', 'createdAt']}
+        calculations={{}}
+        onColumnsChange={() => {}}
+        onCalculationsChange={() => {}}
+      />
+    </Frame>
+  )
+}
+
+export function CalendarSurface() {
+  return (
+    <Frame path="/calendar">
+      <CalendarMonth days={CALENDAR_DEMO} />
+    </Frame>
+  )
+}
+
+export function AuditLogSurface() {
+  return (
+    <Frame path="/settings/audit-log">
+      <AuditLogTable rows={AUDIT_DEMO} />
     </Frame>
   )
 }

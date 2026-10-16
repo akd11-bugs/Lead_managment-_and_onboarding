@@ -7,7 +7,7 @@ import { Reveal, RevealOnMount } from './Reveal'
 import { OrgLogo } from '@/components/branding/OrgLogo'
 import { BRAND_NAME } from '@/lib/branding'
 import { AgentTerminal } from './AgentSection'
-import { FeatureBento } from './FeatureBento'
+import { FeatureCarousel } from './FeatureCarousel'
 import { BridgeSection } from './BridgeSection'
 import { StickyCta } from './StickyCta'
 import { HorizontalTour } from './HorizontalTour'
@@ -213,7 +213,7 @@ function EverythingElse() {
         />
       </Reveal>
       <div className="mt-12">
-        <FeatureBento />
+        <FeatureCarousel />
       </div>
     </Section>
   )

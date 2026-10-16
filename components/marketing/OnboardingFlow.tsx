@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { BRAND_NAME } from '@/lib/branding'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Wand2, Loader2 } from 'lucide-react'
+import { extractLeadFields, type ExtractedLeadFields } from '@/lib/aiExtraction'
 import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
 import { FUNNEL_DATA } from './RealAppShowcase'
 
@@ -170,34 +174,70 @@ function GoogleSignIn() {
   )
 }
 
-// The paste-to-fill demo: raw pasted text on the left, extracted fields
-// appearing on the right. The staggered animation is CSS-only and loops, so
-// it reads as "the model is working" without a video file.
+// The real paste-to-fill feature, not a drawing of it: this calls the same
+// lib/aiExtraction.ts the product's NewLeadDialog calls, running the same
+// on-device NER model in the visitor's own browser. Seeded with a sample
+// so the preview shows filled fields without the visitor pasting anything
+// first, but "Fill" re-runs the real extraction live.
+const SAMPLE_PASTE =
+  'Hi, following up from the call. Meera Raghavan at Ardent Studio, meera@ardent.studio, +91 98200 11234. Wants a quote by Friday.'
+
+const SAMPLE_FIELDS: ExtractedLeadFields = {
+  company: 'Ardent Studio',
+  poc: 'Meera Raghavan',
+  email: 'meera@ardent.studio',
+  phone: '+91 98200 11234',
+}
+
 function PasteToFill() {
-  const fields = [
-    { k: 'Company', v: 'Ardent Studio' },
-    { k: 'Contact', v: 'Meera Raghavan' },
-    { k: 'Email', v: 'meera@ardent.studio' },
-    { k: 'Phone', v: '+91 98200 11234' },
+  const [text, setText] = useState(SAMPLE_PASTE)
+  const [fields, setFields] = useState<ExtractedLeadFields>(SAMPLE_FIELDS)
+  const [extracting, setExtracting] = useState(false)
+
+  async function handleExtract() {
+    if (!text.trim()) return
+    setExtracting(true)
+    try {
+      setFields(await extractLeadFields(text))
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  const rows: [string, string | undefined][] = [
+    ['Company', fields.company],
+    ['Contact', fields.poc],
+    ['Email', fields.email],
+    ['Phone', fields.phone],
   ]
+
   return (
     <div className="space-y-3 py-2">
-      <div className="rounded-md border border-white/10 bg-white/[0.02] p-3">
-        <div className="text-[9px] uppercase tracking-wide text-white/30">Pasted</div>
-        <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-white/50">
-          Hi, following up from the call. Meera Raghavan at Ardent Studio,
-          meera@ardent.studio, +91 98200 11234. Wants a quote by Friday.
-        </p>
+      <div className="space-y-1.5 rounded-md border border-dashed border-white/15 bg-white/[0.02] p-2.5">
+        <Label htmlFor="marketing-paste" className="flex items-center gap-1.5 text-[10px] text-white/40">
+          <Wand2 className="h-3 w-3" />
+          Paste a message or note
+        </Label>
+        <Textarea
+          id="marketing-paste"
+          rows={2}
+          className="border-white/10 bg-transparent text-[11px] text-white/70"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleExtract} disabled={extracting || !text.trim()}>
+          {extracting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+          Fill
+        </Button>
       </div>
       <div className="space-y-1.5">
-        {fields.map((f, i) => (
+        {rows.map(([k, v]) => (
           <div
-            key={f.k}
+            key={k}
             className="flex items-center justify-between rounded-md border border-[#2ecc9b]/25 bg-[#2ecc9b]/[0.07] px-2.5 py-1.5"
-            style={{ animation: `extract-in 500ms ease-out ${i * 160}ms both` }}
           >
-            <span className="text-[9px] text-white/40">{f.k}</span>
-            <span className="text-[10px] font-medium text-white/85">{f.v}</span>
+            <span className="text-[9px] text-white/40">{k}</span>
+            <span className="truncate text-[10px] font-medium text-white/85">{v || '—'}</span>
           </div>
         ))}
       </div>
