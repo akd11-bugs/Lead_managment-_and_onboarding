@@ -12,6 +12,8 @@ import { BridgeSection } from './BridgeSection'
 import { StickyCta } from './StickyCta'
 import { HorizontalTour } from './HorizontalTour'
 import { DashboardSurface } from './RealAppShowcase'
+import { BentoGrid, BentoCell } from './Bento'
+import { ShieldCheck, Wallet, KeyRound } from 'lucide-react'
 
 // Public marketing page, shown at "/" only when there's no session (see
 // app/page.tsx). Screenshots are real product captures from a seeded
@@ -49,7 +51,7 @@ function Section({ children, id }: { children: React.ReactNode; id?: string }) {
 
 function SectionHead({ eyebrow, title, body }: { eyebrow: string; title: string; body?: string }) {
   return (
-    <div className="mx-auto max-w-6xl px-6">
+    <div className="mx-auto max-w-7xl px-6">
       <span className="font-mono text-xs uppercase tracking-[0.18em] text-[#5b8cff]">{eyebrow}</span>
       <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
       {body && <p className="mt-4 max-w-xl leading-relaxed text-white/55">{body}</p>}
@@ -60,7 +62,7 @@ function SectionHead({ eyebrow, title, body }: { eyebrow: string; title: string;
 function Nav() {
   return (
     <nav className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#07080c]/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <span className="flex items-center gap-2.5 font-semibold tracking-tight">
           <OrgLogo org={{ name: BRAND_NAME }} size={24} vendorFallback />
           {BRAND_NAME}
@@ -94,7 +96,7 @@ function Hero() {
         aria-hidden="true"
         className="absolute inset-0 -z-10 bg-[radial-gradient(90%_70%_at_50%_0%,#16224d_0%,#0a0c14_55%,#07080c_100%)]"
       />
-      <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-20 sm:pt-24">
+      <div className="relative mx-auto max-w-7xl px-6 pb-20 pt-20 sm:pt-24">
         <RevealOnMount>
           <span className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.06] px-3.5 py-1.5 text-xs text-white/75 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-[#5b8cff]" />
@@ -170,6 +172,11 @@ function Bridge() {
 // just seen the surfaces, so "and your AI can drive all of it" lands with
 // something concrete to attach to.
 function AgentSection() {
+  const points = [
+    ['Six tools, not a scraper', 'Search, read, create, log activity, move stage, summarise pipeline. A real API, not an agent clicking through your UI.'],
+    ['Scoped to one org', 'Every call is filtered to the key’s organisation. An agent key cannot see another tenant’s leads.'],
+    ['Revocable in a click', 'Issue a key from Settings, hand it to an agent, revoke it the moment you want it gone.'],
+  ]
   return (
     <Section id="agents">
       <Reveal>
@@ -179,24 +186,27 @@ function AgentSection() {
           body="Your agent reads and writes your pipeline over a real protocol."
         />
       </Reveal>
-      <div className="mx-auto mt-12 grid max-w-6xl gap-10 px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-        <Reveal>
-          <AgentTerminal />
-        </Reveal>
-        <Reveal delay={0.1}>
-          <ul className="space-y-6">
-            {[
-              ['Six tools, not a scraper', 'Search, read, create, log activity, move stage, summarise pipeline. A real API, not an agent clicking through your UI.'],
-              ['Scoped to one org', 'Every call is filtered to the key’s organisation. An agent key cannot see another tenant’s leads.'],
-              ['Revocable in a click', 'Issue a key from Settings, hand it to an agent, revoke it the moment you want it gone.'],
-            ].map(([k, v]) => (
-              <li key={k}>
-                <h3 className="text-sm font-semibold text-white">{k}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-white/55">{v}</p>
-              </li>
+      <div className="mx-auto mt-12 max-w-7xl px-6">
+        <BentoGrid>
+          <div className="md:col-span-4">
+            <Reveal className="h-full">
+              <AgentTerminal />
+            </Reveal>
+          </div>
+          <div className="flex flex-col gap-3 md:col-span-2">
+            {points.map(([k, v], i) => (
+              <div
+                key={k}
+                className="flex-1 rounded-xl border border-white/[0.09] bg-white/[0.03] p-6 transition-colors duration-300 hover:border-white/[0.16] hover:bg-white/[0.045]"
+              >
+                <Reveal delay={0.08 + i * 0.06}>
+                  <h3 className="text-sm font-semibold text-white">{k}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-white/55">{v}</p>
+                </Reveal>
+              </div>
             ))}
-          </ul>
-        </Reveal>
+          </div>
+        </BentoGrid>
       </div>
     </Section>
   )
@@ -255,9 +265,9 @@ function HowItWorks() {
 // page only sold the cost half.
 function Privacy() {
   const points = [
-    { k: 'On-device extraction', v: 'Your pasted text never leaves the browser.' },
-    { k: 'No per-seat AI fee', v: 'No subscription, no token metering.' },
-    { k: 'Google sign-in only', v: 'No password for us to store or leak.' },
+    { Icon: ShieldCheck, k: 'On-device extraction', v: 'Your pasted text never leaves the browser.', span: 2 as const },
+    { Icon: Wallet, k: 'No per-seat AI fee', v: 'No subscription, no token metering.', span: 2 as const },
+    { Icon: KeyRound, k: 'Google sign-in only', v: 'No password for us to store or leak.', span: 2 as const },
   ]
   return (
     <Section>
@@ -268,17 +278,18 @@ function Privacy() {
           body="The model runs on your machine, so it costs us nothing."
         />
       </Reveal>
-      <div className="mx-auto mt-12 max-w-6xl px-6">
-        <div className="grid gap-px overflow-hidden rounded-xl border border-white/[0.09] bg-white/[0.07] sm:grid-cols-3">
+      <div className="mx-auto mt-12 max-w-7xl px-6">
+        <BentoGrid>
           {points.map((p, i) => (
-            <Reveal key={p.k} delay={i * 0.08} className="bg-[#07080c]">
-              <div className="h-full p-6">
-                <h3 className="text-sm font-semibold text-white">{p.k}</h3>
+            <BentoCell key={p.k} span={p.span}>
+              <Reveal delay={i * 0.08}>
+                <p.Icon className="h-5 w-5 text-[#5b8cff]" strokeWidth={1.75} aria-hidden="true" />
+                <h3 className="mt-4 text-sm font-semibold text-white">{p.k}</h3>
                 <p className="mt-2.5 text-sm leading-relaxed text-white/55">{p.v}</p>
-              </div>
-            </Reveal>
+              </Reveal>
+            </BentoCell>
           ))}
-        </div>
+        </BentoGrid>
       </div>
     </Section>
   )
@@ -311,7 +322,7 @@ function FinalCta() {
 function Footer() {
   return (
     <footer className="border-t border-white/[0.07] py-8">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 text-xs text-white/40">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 text-xs text-white/40">
         <span className="flex items-center gap-2 font-medium text-white/70">
           <OrgLogo org={{ name: BRAND_NAME }} size={20} vendorFallback />
           {BRAND_NAME}

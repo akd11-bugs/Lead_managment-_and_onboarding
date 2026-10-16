@@ -63,7 +63,7 @@ export function OnboardingFlow() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-6xl px-6">
+    <div className="mx-auto max-w-7xl px-6">
       <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr]">
         {/* Steps rail */}
         <div className="relative">

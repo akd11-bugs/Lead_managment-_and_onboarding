@@ -61,7 +61,7 @@ export function HorizontalTour() {
   // Stacked, non-pinned version: phones, and anyone on reduced motion.
   if (!enabled) {
     return (
-      <div className="mx-auto max-w-6xl space-y-16 px-6">
+      <div className="mx-auto max-w-7xl space-y-16 px-6">
         {SURFACES.map(s => (
           <div key={s.id}>
             <h3 className="mb-5 text-2xl font-semibold tracking-tight">{s.title}</h3>
@@ -79,7 +79,7 @@ export function HorizontalTour() {
   return (
     <div ref={sectionRef} style={{ height: `${n * 100}vh` }}>
       <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
-        <div className="mx-auto w-full max-w-6xl px-6">
+        <div className="mx-auto w-full max-w-7xl px-6">
           <h3 className="mb-6 h-9 text-2xl font-semibold tracking-tight transition-opacity duration-300">
             {SURFACES[index].title}
           </h3>
@@ -96,12 +96,12 @@ export function HorizontalTour() {
         >
           {SURFACES.map(s => (
             <div key={s.id} className="w-screen shrink-0 px-6">
-              <div className="mx-auto max-w-5xl">{s.render()}</div>
+              <div className="mx-auto max-w-6xl">{s.render()}</div>
             </div>
           ))}
         </div>
 
-        <div className="mx-auto mt-8 flex max-w-6xl gap-1.5 px-6">
+        <div className="mx-auto mt-8 flex max-w-7xl gap-1.5 px-6">
           {SURFACES.map((s, i) => (
             <span
               key={s.id}
