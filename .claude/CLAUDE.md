@@ -75,6 +75,28 @@ The other 28 run via **Claude Sonnet 4.5** (~ $0.05–0.30 per run).
 
 The runner dispatch is in `lib/skills/runner.ts`. The catalog entry tells the runner which path to take.
 
+## Branches and environments
+
+| Branch | Deploys to | Database |
+|---|---|---|
+| `development` | nothing (local) | Docker Postgres via `.env.local` |
+| `main` | Render (auto-deploy) | Neon production |
+
+**All work happens on `development`.** `main` auto-deploys on push, so a
+commit there reaches customers without review. Promote by merging
+`development` into `main` deliberately, once the change has been exercised
+locally.
+
+Local setup: `./scripts/test-db.sh` stands up the Docker database with real
+restored data plus a second org; `./scripts/use-local-db.sh` points
+`.env.local` at it. Both are safe to re-run.
+
+Before promoting to `main`: `npx tsc --noEmit`, `npx vitest run`, and
+`npx next build` must all pass. Schema changes need `prisma db push` against
+production separately — the Render build runs it, but verify the diff is
+what you expect first (`--accept-data-loss` is required even for additive
+unique constraints, so read the warning rather than reflexively passing it).
+
 ## Multi-tenancy — read this before writing any query
 
 Every tenant is an `Organization`. `orgId` is the ONLY boundary between
