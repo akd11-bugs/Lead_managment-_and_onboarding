@@ -1,6 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { BRAND_NAME } from '@/lib/branding'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
+import { FUNNEL_DATA } from './RealAppShowcase'
 
 // Scroll-advanced onboarding sequence, in the spirit of redstone.software's
 // numbered process section: the active step lights up as you scroll through
@@ -148,16 +153,18 @@ export function OnboardingFlow() {
 
 // ---- Step previews -------------------------------------------------------
 
+// Renders the product's own Card and Button rather than a hand-drawn
+// approximation of the signup screen, so a restyle reaches this too.
 function GoogleSignIn() {
   return (
-    <div className="grid place-items-center py-8">
-      <div className="w-full max-w-[260px] rounded-lg border border-white/10 bg-[#0b0d14] p-5 text-center">
-        <div className="text-[11px] font-semibold text-white">Join Steadfast</div>
-        <div className="mt-1 text-[10px] text-white/40">Create your account to get started.</div>
-        <div className="mt-4 rounded-full bg-white px-3 py-2 text-[10px] font-medium text-[#07080c]">
+    <div className="grid place-items-center py-6">
+      <div className="w-full max-w-[280px] rounded-lg bg-background p-5 text-center text-foreground">
+        <p className="text-sm font-semibold">Join {BRAND_NAME}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Create your account to get started.</p>
+        <Button className="mt-4 w-full" size="sm">
           Sign up with Google
-        </div>
-        <div className="mt-2.5 text-[9px] text-white/30">No credit card. No new password.</div>
+        </Button>
+        <p className="mt-2.5 text-[11px] text-muted-foreground">No credit card. No new password.</p>
       </div>
     </div>
   )
@@ -219,7 +226,7 @@ function InviteTeam() {
             {p.n[0]}
           </span>
           <span className="text-[10px] text-white/80">{p.n}</span>
-          <span className="ml-auto rounded bg-white/5 px-1.5 py-0.5 text-[8px] text-white/45">{p.r}</span>
+          <Badge variant="outline" className="ml-auto text-[9px]">{p.r}</Badge>
         </div>
       ))}
       <div className="pt-1 text-center text-[9px] text-white/30">Invite by email, they land in your org.</div>
@@ -227,27 +234,11 @@ function InviteTeam() {
   )
 }
 
+// The real PipelineFunnel from the dashboard, not a drawn stand-in.
 function RunPipeline() {
-  const cols = [
-    { k: 'New', n: 4 },
-    { k: 'Pending', n: 3 },
-    { k: 'Proposal', n: 2 },
-    { k: 'Won', n: 2, done: true },
-  ]
   return (
-    <div className="grid grid-cols-4 gap-1.5 py-6">
-      {cols.map((c, i) => (
-        <div
-          key={c.k}
-          className={`rounded-md border p-2.5 text-center ${
-            c.done ? 'border-[#2ecc9b]/40 bg-[#2ecc9b]/[0.07]' : 'border-white/10 bg-white/[0.02]'
-          }`}
-          style={{ animation: `extract-in 500ms ease-out ${i * 140}ms both` }}
-        >
-          <div className="text-[8px] tracking-wide text-white/40">{c.k.toUpperCase()}</div>
-          <div className={`mt-1 text-lg font-semibold ${c.done ? 'text-[#2ecc9b]' : 'text-white'}`}>{c.n}</div>
-        </div>
-      ))}
+    <div className="rounded-md bg-background p-3 text-foreground">
+      <PipelineFunnel data={FUNNEL_DATA} />
     </div>
   )
 }

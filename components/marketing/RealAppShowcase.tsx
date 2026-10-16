@@ -24,7 +24,7 @@ const ACTIVITY: ActivityItem[] = [
 
 // PipelineFunnel renders every BOARD_COLUMN, so each needs a figure or the
 // chart shows empty bars at zero.
-const FUNNEL = [
+export const FUNNEL_DATA = [
   { stage: 'new', count: 4, value: 96_000 },
   { stage: 'pending_ours', count: 3, value: 130_000 },
   { stage: 'pending_merchant', count: 2, value: 74_000 },
@@ -60,7 +60,7 @@ export function DashboardSurface() {
         <StatTile label="Conversion" value="18%" hint="2 / 11 won" />
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <PipelineFunnel data={FUNNEL} />
+        <PipelineFunnel data={FUNNEL_DATA} />
         <ActivityFeedView items={ACTIVITY} live={false} interactive={false} />
       </div>
     </Frame>

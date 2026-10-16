@@ -1,4 +1,4 @@
-import { Stamp, GlyphDocument, GlyphGraph, GlyphCheck } from './Stamp'
+import { FileSpreadsheet, GitBranch, CheckCircle2 } from 'lucide-react'
 
 // The positioning section. The product is not pitched as a better CRM; it is
 // pitched as the stage between a spreadsheet and a CRM, with the agent layer
@@ -9,22 +9,19 @@ import { Stamp, GlyphDocument, GlyphGraph, GlyphCheck } from './Stamp'
 
 const STAGES = [
   {
-    glyph: GlyphDocument,
-    tone: 'red' as const,
+    icon: FileSpreadsheet,
     where: 'Where you are',
     title: 'A spreadsheet that works',
     body: 'Fast, familiar, and with no memory of what was promised.',
   },
   {
-    glyph: GlyphGraph,
-    tone: 'navy' as const,
+    icon: GitBranch,
     where: 'Where we sit',
     title: 'Structure, without the migration',
     body: 'Stages, owners and a trail. No three-month rollout.',
   },
   {
-    glyph: GlyphCheck,
-    tone: 'red' as const,
+    icon: CheckCircle2,
     where: 'Where you go',
     title: 'Ready for the real thing',
     body: 'Export clean and move. Lock-in is not the product.',
@@ -38,9 +35,7 @@ export function BridgeSection() {
         {STAGES.map((s, i) => (
           <div key={s.title} className="relative bg-[#07080c] p-7">
             <div className="flex items-center gap-3">
-              <Stamp tone={s.tone} size={64}>
-                {s.glyph}
-              </Stamp>
+              <s.icon className="h-5 w-5 text-white/35" strokeWidth={1.75} aria-hidden="true" />
               <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-white/35">
                 {String(i + 1).padStart(2, '0')} / {s.where}
               </span>
