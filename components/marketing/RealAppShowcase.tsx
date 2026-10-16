@@ -14,8 +14,9 @@ import { CalendarMonth, type CalendarDay } from '@/components/calendar/CalendarM
 import { AuditLogTable, type AuditLogRow } from '@/components/settings/AuditLogTable'
 import type { Alert } from '@/lib/alerts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { BRAND_NAME } from '@/lib/branding'
+import { Frame } from './Frame'
+import { DraggablePipelineSurface } from './DraggablePipelineSurface'
 
 // The product surfaces, rendered with the REAL dashboard components
 // (StatTile, CurrencyTile, PipelineFunnel, ActivityFeedView) rather than
@@ -42,6 +43,16 @@ export const FUNNEL_DATA = [
   { stage: 'proposal', count: 2, value: 160_000 },
   { stage: 'onboarding', count: 2, value: 180_000 },
   { stage: 'not_interested', count: 1, value: 22_000 },
+]
+
+// Generic, industry-agnostic stage data for GenericPipelineChart — the real
+// top-level Stage enum, not the fintech-only pending sub-statuses above.
+export const GENERIC_STAGE_DATA = [
+  { stage: 'new' as const, count: 5, value: 112_000 },
+  { stage: 'pending' as const, count: 4, value: 148_000 },
+  { stage: 'proposal' as const, count: 2, value: 160_000 },
+  { stage: 'onboarding' as const, count: 2, value: 180_000 },
+  { stage: 'not_interested' as const, count: 1, value: 22_000 },
 ]
 
 const ALERTS: Alert[] = [
@@ -107,22 +118,6 @@ const BD: BDSummaryData = {
   ],
 }
 
-/** Chrome that frames a surface as a browser window, as in the product. */
-export function Frame({ path, children }: { path: string; children: React.ReactNode }) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-white/[0.09] bg-[#0b0d14] shadow-2xl shadow-black/40">
-      <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-3">
-        <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-        <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-        <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-        <span className="ml-2 font-mono text-[11px] text-white/35">{path}</span>
-      </div>
-      {/* The product's own light surface, sitting inside the dark page. */}
-      <div className="bg-background p-5 text-foreground">{children}</div>
-    </div>
-  )
-}
-
 // The whole dashboard, in the order app/page.tsx renders it: alerts, tiles,
 // funnel + activity, then the BD/rep/source panels. Every one of these is
 // the component the product uses, not a drawing of it.
@@ -151,48 +146,6 @@ export function DashboardSurface({ compact = false }: { compact?: boolean }) {
           </div>
         </>
       )}
-    </Frame>
-  )
-}
-
-export function PipelineSurface() {
-  const columns = [
-    { label: 'New', leads: [{ name: 'Downbeat Organics', value: '₹58,000', tone: 'outline' as const, badge: 'New' }] },
-    { label: 'Pending', leads: [
-      { name: 'Northwind Traders', value: '₹92,000', tone: 'secondary' as const, badge: 'Pending' },
-      { name: 'TechFlow Solutions', value: '₹43,000', tone: 'secondary' as const, badge: 'Pending' },
-    ] },
-    { label: 'Proposal', leads: [
-      { name: 'Cedarline Supply', value: '₹64,000', tone: 'default' as const, badge: 'Proposal' },
-      { name: 'Lumen Retail Co', value: '₹77,000', tone: 'default' as const, badge: 'Proposal' },
-    ] },
-    { label: 'Onboarding', leads: [{ name: 'Ardent Studio', value: '₹1,12,000', tone: 'default' as const, badge: 'Onboarding' }] },
-  ]
-  return (
-    <Frame path="/pipeline">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {columns.map(col => (
-          <div key={col.label} className="min-w-0">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">{col.label}</span>
-              <span className="text-xs tabular-nums text-muted-foreground">{col.leads.length}</span>
-            </div>
-            <div className="space-y-2">
-              {col.leads.map(l => (
-                <Card key={l.name} className="border-muted">
-                  <CardContent className="p-3">
-                    <p className="truncate text-sm font-medium">{l.name}</p>
-                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <span className="text-xs tabular-nums text-muted-foreground">{l.value}</span>
-                      <Badge variant={l.tone} className="shrink-0 text-[10px]">{l.badge}</Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
     </Frame>
   )
 }
@@ -290,7 +243,7 @@ export function AuditLogSurface() {
 
 export const SURFACES = [
   { id: 'dashboard', title: 'Your pipeline, at a glance.', render: () => <DashboardSurface /> },
-  { id: 'pipeline', title: 'Stages that match how you sell.', render: () => <PipelineSurface /> },
+  { id: 'pipeline', title: 'Stages that match how you sell.', render: () => <DraggablePipelineSurface /> },
   { id: 'lead', title: "Every lead's full story.", render: () => <LeadSurface /> },
   { id: 'whiteboard', title: 'A funnel your team can draw on.', render: () => <WhiteboardSurface /> },
 ]

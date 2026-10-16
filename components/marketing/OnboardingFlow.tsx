@@ -8,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Wand2, Loader2 } from 'lucide-react'
 import { extractLeadFields, type ExtractedLeadFields } from '@/lib/aiExtraction'
-import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
-import { FUNNEL_DATA } from './RealAppShowcase'
+import { GenericPipelineChart } from './GenericPipelineChart'
+import { GENERIC_STAGE_DATA } from './RealAppShowcase'
 
 // Scroll-advanced onboarding sequence, in the spirit of redstone.software's
 // numbered process section: the active step lights up as you scroll through
@@ -274,11 +274,15 @@ function InviteTeam() {
   )
 }
 
-// The real PipelineFunnel from the dashboard, not a drawn stand-in.
+// The real top-level pipeline stages (new, pending, proposal, onboarding,
+// not interested) — every lead moves through these regardless of what the
+// business sells. Not PipelineFunnel: that always renders the product's
+// fintech-only pending sub-stages (our side / merchant / PSP), which don't
+// belong in a pitch aimed at any industry.
 function RunPipeline() {
   return (
     <div className="rounded-md bg-background p-3 text-foreground">
-      <PipelineFunnel data={FUNNEL_DATA} />
+      <GenericPipelineChart data={GENERIC_STAGE_DATA} />
     </div>
   )
 }
