@@ -48,4 +48,15 @@ next-env.d.ts
 .idea/
 .vscode/
 
+# Local scratch work — verification scripts, debug dumps, screenshots.
+# Untracked but previously unignored, so easy to commit by accident.
+scratchpad/
+
+# Generated launch-video output (/brag) — large MP4s and render intermediates.
+brag-output/
+brag-output-*/
+
+# Per-machine MCP server config; may reference local endpoints or keys.
+.mcp.json
+
 

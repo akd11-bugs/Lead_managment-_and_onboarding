@@ -8,9 +8,9 @@ A web-based Lead Management System that productizes a 30-skill B2B lead-generati
 
 | Layer | Tech | File |
 |---|---|---|
-| Framework | Next.js 15 (App Router) + TypeScript | `next.config.mjs`, `tsconfig.json` |
+| Framework | Next.js 16 (App Router) + TypeScript | `next.config.mjs`, `tsconfig.json` |
 | Styling | Tailwind CSS v3 + shadcn/ui | `tailwind.config.ts`, `components/ui/*` |
-| Database | Prisma + SQLite | `prisma/schema.prisma`, `lib/db.ts` |
+| Database | Prisma + Postgres (Neon) | `prisma/schema.prisma`, `lib/db.ts` |
 | State | Zustand (UI only) | `lib/store.ts` |
 | Drag & Drop | @dnd-kit | `components/kanban/*` |
 | Charts | Recharts | `components/dashboard/*` |
@@ -52,8 +52,8 @@ components/
   ui/                     # shadcn primitives.
 
 prisma/
-  schema.prisma           # Lead, Activity, SkillRun (no User for v1).
-  seed.ts                 # 25 leads across all stages.
+  schema.prisma           # Multi-tenant: Organization, User, Lead, Activity, OnboardingDocument, ...
+  seed.ts                 # Sample leads for a new org (see lib/org.ts seedSampleLeads).
 ```
 
 ## Pipeline Stages
@@ -74,6 +74,27 @@ Two skills have deterministic Python scripts and run **free / instant**:
 The other 28 run via **Claude Sonnet 4.5** (~ $0.05–0.30 per run).
 
 The runner dispatch is in `lib/skills/runner.ts`. The catalog entry tells the runner which path to take.
+
+## Multi-tenancy — read this before writing any query
+
+Every tenant is an `Organization`. `orgId` is the ONLY boundary between
+customers; there is no cross-org visibility by design.
+
+- Spread `leadScope(user)` (`lib/session.ts`) into any `prisma.lead` where
+  clause. It returns `{ orgId: { in: visibleOrgIds } }` for admin/operations
+  and additionally `{ ownerId: user.id }` for sales.
+- Use `findFirst` with an `orgId` term, never `findUnique({ where: { id } })`,
+  to resolve a client-supplied id. An id is globally unique, so `findUnique`
+  skips the tenant filter entirely.
+- Take `orgId` from the session, never from the request body or query.
+- Return 404, not 403, for another org's row — 403 confirms it exists.
+- Field reps (`/rep/<slug>`) have no email; their org comes from the URL
+  slug, resolved server-side. See `lib/repAuth.ts` for the cross-tenant
+  lockout that caused.
+
+`test/tenantIsolation.test.ts` asserts these on the routes it covers, and
+`test/integration.test.ts` checks them against a real two-org database
+(`scripts/test-db.sh`).
 
 ## Conventions
 
@@ -96,3 +117,7 @@ Three new skills live in `.claude/skills/`:
 - `lms-skill-history-recap` — summarize what skills have been run and what was applied.
 
 These follow the same `SKILL.md` format (YAML frontmatter, "Use this skill when", decision rules, guardrails) as the parent library.
+
+# graphify
+- **graphify** (`.claude/skills/graphify/SKILL.md`) - any input to knowledge graph. Trigger: `/graphify`
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.

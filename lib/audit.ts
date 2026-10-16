@@ -22,6 +22,8 @@ export type AuditAction =
   | 'custom_email_sent'
   | 'reports_api_key_generated'
   | 'reports_api_key_revoked'
+  | 'agent_api_key_generated'
+  | 'agent_api_key_revoked'
 
 export async function logAudit(entry: {
   action: AuditAction

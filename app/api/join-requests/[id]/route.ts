@@ -40,7 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   await sendEmail(
     {
       to: existing.requesterEmail,
-      subject: `You're in — finish setting up your bluSwap account`,
+      subject: `You're in — finish setting up your Steadfast account`,
       body: `Your request to join was approved. Finish setting up your account here:\n\n${origin}/invite/redeem?code=${invite.code}\n\nThis link is just for you — no one else can use it.`,
     },
     user.orgId,

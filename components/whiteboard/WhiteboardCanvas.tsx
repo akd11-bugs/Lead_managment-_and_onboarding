@@ -23,6 +23,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { extractLeadFields } from '@/lib/aiExtraction'
+import { useOthers, useUpdateMyPresence, CURSOR_COLORS } from '@/lib/liveblocksConfig'
 
 type Tool = 'select' | 'pan' | 'sticky' | 'rect' | 'circle' | 'arrow' | 'freehand'
 
@@ -71,6 +72,15 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function WhiteboardCanvas() {
   const router = useRouter()
+  const updateMyPresence = useUpdateMyPresence()
+  const others = useOthers()
+  // Who (if anyone) is currently dragging/typing in each element, keyed by
+  // element id — derived fresh every render from everyone else's presence,
+  // never stored locally. Liveblocks carries only this ephemeral "what's
+  // happening right now"; the element data itself still lives in Postgres.
+  const editingById = new Map(
+    others.filter((o) => o.presence.editingId).map((o) => [o.presence.editingId as string, { name: o.info?.name ?? 'Someone', color: CURSOR_COLORS[o.connectionId % CURSOR_COLORS.length] }]),
+  )
   const [elements, setElements] = useState<WBElement[]>([])
   const [loading, setLoading] = useState(true)
   const [tool, setTool] = useState<Tool>('select')
@@ -235,6 +245,7 @@ export function WhiteboardCanvas() {
   }
 
   function onViewportMouseMove(ev: React.MouseEvent) {
+    updateMyPresence({ cursor: toWorld(ev.clientX, ev.clientY) })
     const creating = creatingRef.current
     if (!creating) return
     const w = toWorld(ev.clientX, ev.clientY)
@@ -318,6 +329,7 @@ export function WhiteboardCanvas() {
       if (ids.includes(e.id)) startPositions[e.id] = { x: e.x, y: e.y }
     })
     dragRef.current = { ids, startWorld, startPositions, moved: false }
+    updateMyPresence({ editingId: el.id })
 
     function onMove(mv: MouseEvent) {
       const d = dragRef.current
@@ -334,6 +346,7 @@ export function WhiteboardCanvas() {
     async function onUp() {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      updateMyPresence({ editingId: null })
       const d = dragRef.current
       dragRef.current = null
       if (!d || !d.moved) return
@@ -509,8 +522,8 @@ export function WhiteboardCanvas() {
       </div>
 
       <p className="border-b bg-muted/30 px-4 py-1.5 text-xs text-muted-foreground">
-        Shared with your whole org — everyone sees the same board on their next load. Not live: another person&apos;s edit
-        appears after a refresh, not instantly.
+        Shared with your whole org — cursors and who&apos;s editing update live. New notes and shapes appear for others on
+        their next load, not instantly.
       </p>
 
       <div
@@ -520,6 +533,7 @@ export function WhiteboardCanvas() {
         onMouseDown={onViewportMouseDown}
         onMouseMove={onViewportMouseMove}
         onMouseUp={onViewportMouseUp}
+        onMouseLeave={() => updateMyPresence({ cursor: null })}
         onWheel={onWheel}
       >
         {loading && <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Loading board…</div>}
@@ -543,14 +557,15 @@ export function WhiteboardCanvas() {
                   />
                 )
               }
+              const editor = editingById.get(el.id)
               if (el.type === 'rect') {
                 return (
                   <rect
                     key={el.id}
                     x={el.x} y={el.y} width={el.w ?? 0} height={el.h ?? 0} rx={8}
                     fill="hsl(var(--primary) / 0.07)"
-                    stroke={selected.includes(el.id) ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
-                    strokeWidth={selected.includes(el.id) ? 2 : 1.5}
+                    stroke={editor ? editor.color : selected.includes(el.id) ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
+                    strokeWidth={editor || selected.includes(el.id) ? 2 : 1.5}
                     className="pointer-events-auto cursor-pointer"
                     onMouseDown={(e) => startDragElement(e as never, el)}
                   />
@@ -562,8 +577,8 @@ export function WhiteboardCanvas() {
                     key={el.id}
                     cx={el.x + (el.w ?? 0) / 2} cy={el.y + (el.h ?? 0) / 2} rx={(el.w ?? 0) / 2} ry={(el.h ?? 0) / 2}
                     fill="hsl(var(--primary) / 0.07)"
-                    stroke={selected.includes(el.id) ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
-                    strokeWidth={selected.includes(el.id) ? 2 : 1.5}
+                    stroke={editor ? editor.color : selected.includes(el.id) ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
+                    strokeWidth={editor || selected.includes(el.id) ? 2 : 1.5}
                     className="pointer-events-auto cursor-pointer"
                     onMouseDown={(e) => startDragElement(e as never, el)}
                   />
@@ -597,7 +612,9 @@ export function WhiteboardCanvas() {
                   key={el.id}
                   el={el}
                   selected={selected.includes(el.id)}
+                  editingBy={editingById.get(el.id)}
                   onMouseDown={(e) => startDragElement(e, el)}
+                  onTextFocus={() => updateMyPresence({ editingId: el.id })}
                   onTextChange={(text) => {
                     const next = elementsRef.current.map((e) => (e.id === el.id ? { ...e, text } : e))
                     elementsRef.current = next
@@ -606,12 +623,32 @@ export function WhiteboardCanvas() {
                   onTextBlur={(text) => {
                     patchElement(el.id, { text })
                     commitCurrentElements()
+                    updateMyPresence({ editingId: null })
                   }}
                   onSelectOnly={() => setSelected([el.id])}
                 />
               )
             }
             return null
+          })}
+
+          {others.map((other) => {
+            if (!other.presence.cursor) return null
+            const color = CURSOR_COLORS[other.connectionId % CURSOR_COLORS.length]
+            return (
+              <div
+                key={other.connectionId}
+                className="pointer-events-none absolute z-50 flex items-center gap-1.5"
+                style={{ left: other.presence.cursor.x, top: other.presence.cursor.y }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={color} style={{ transform: 'translate(-2px,-2px)' }}>
+                  <path d="M4 3l16 7-6.5 2L11 19z" />
+                </svg>
+                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white shadow" style={{ background: color }}>
+                  {other.info?.name ?? 'Someone'}
+                </span>
+              </div>
+            )
           })}
         </div>
 
@@ -664,14 +701,18 @@ function ToolButton({ icon, active, onClick, label }: { icon: React.ReactNode; a
 function StickyNoteBox({
   el,
   selected,
+  editingBy,
   onMouseDown,
+  onTextFocus,
   onTextChange,
   onTextBlur,
   onSelectOnly,
 }: {
   el: WBElement
   selected: boolean
+  editingBy?: { name: string; color: string }
   onMouseDown: (e: React.MouseEvent) => void
+  onTextFocus: () => void
   onTextChange: (text: string) => void
   onTextBlur: (text: string) => void
   onSelectOnly: () => void
@@ -681,9 +722,17 @@ function StickyNoteBox({
     <div
       data-testid={`sticky-${el.id}`}
       className={`absolute flex flex-col rounded-md border p-2 shadow-md ${NOTE_BG[color]} ${selected ? 'ring-2 ring-primary ring-offset-2' : ''}`}
-      style={{ left: el.x, top: el.y, width: el.w ?? 210, height: el.h ?? 150 }}
+      style={{ left: el.x, top: el.y, width: el.w ?? 210, height: el.h ?? 150, ...(editingBy ? { boxShadow: `0 0 0 2px ${editingBy.color}` } : {}) }}
       onMouseDown={onMouseDown}
     >
+      {editingBy && (
+        <span
+          className="absolute -top-6 left-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium text-white shadow"
+          style={{ background: editingBy.color }}
+        >
+          {editingBy.name} is editing
+        </span>
+      )}
       <textarea
         className="h-full w-full flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-current/50"
         placeholder="Type a note…"
@@ -692,6 +741,7 @@ function StickyNoteBox({
           e.stopPropagation()
           onSelectOnly()
         }}
+        onFocus={onTextFocus}
         onChange={(e) => onTextChange(e.target.value)}
         onBlur={(e) => onTextBlur(e.target.value)}
       />

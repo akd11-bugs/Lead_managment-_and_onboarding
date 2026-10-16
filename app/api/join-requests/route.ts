@@ -25,7 +25,7 @@ export async function GET() {
 // Called from the "smart" app/account-not-found/page.tsx for a Google
 // identity whose email domain matched an existing org. Deliberately does
 // NOT use requireApiUser() — the caller has a verified Neon Auth session
-// but no bluSwap User row yet (that's the whole point of this route). The
+// but no Steadfast User row yet (that's the whole point of this route). The
 // requester's email comes from that session, never from the request body,
 // so nobody can file a request claiming to be someone else's address.
 export async function POST(req: Request) {
@@ -65,8 +65,8 @@ export async function POST(req: Request) {
       sendEmail(
         {
           to: admin.email,
-          subject: `${requesterName} wants to join your bluSwap workspace`,
-          body: `${requesterName} (${requesterEmail}) signed in with an email at your company's domain and asked to join ${org.name} on bluSwap.\n\nApprove or decline from Settings → Organisation.`,
+          subject: `${requesterName} wants to join your Steadfast workspace`,
+          body: `${requesterName} (${requesterEmail}) signed in with an email at your company's domain and asked to join ${org.name} on Steadfast.\n\nApprove or decline from Settings → Organisation.`,
         },
         orgId,
       ).catch(() => {}), // best-effort — a failed notification shouldn't fail the request itself
