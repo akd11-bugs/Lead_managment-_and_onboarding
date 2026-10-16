@@ -3,6 +3,12 @@
 import { StatTile, CurrencyTile } from '@/components/dashboard/StatTile'
 import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
 import { ActivityFeedView, type ActivityItem } from '@/components/dashboard/ActivityFeed'
+import { AlertBanner } from '@/components/dashboard/AlertBanner'
+import { RepPerformance, type RepPerformanceRow } from '@/components/dashboard/RepPerformance'
+import { SourceROI, type SourceROIRow } from '@/components/dashboard/SourceROI'
+import { BDSummary, type BDSummaryData } from '@/components/dashboard/BDSummary'
+import { GettingStartedCard } from '@/components/dashboard/GettingStartedCard'
+import type { Alert } from '@/lib/alerts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BRAND_NAME } from '@/lib/branding'
@@ -15,7 +21,7 @@ import { BRAND_NAME } from '@/lib/branding'
 // Data is fixed and fictional: these render on a public page with no session
 // and no database. Every name is invented — none is a real customer.
 
-const ACTIVITY: ActivityItem[] = [
+export const ACTIVITY_DEMO: ActivityItem[] = [
   { id: 'a1', type: 'call', description: 'Asked for a revised quote by Friday', date: new Date(Date.now() - 2 * 864e5).toISOString(), authorName: 'Priya', leadName: 'Ardent Studio', leadId: 'demo' },
   { id: 'a2', type: 'email', description: 'Proposal sent (PDF)', date: new Date(Date.now() - 4 * 864e5).toISOString(), authorName: 'Arjun', leadName: 'Northwind Traders', leadId: 'demo' },
   { id: 'a3', type: 'meeting', description: 'Budget approved, moving to onboarding', date: new Date(Date.now() - 6 * 864e5).toISOString(), authorName: 'Sam', leadName: 'Cedarline Supply', leadId: 'demo' },
@@ -34,6 +40,35 @@ export const FUNNEL_DATA = [
   { stage: 'not_interested', count: 1, value: 22_000 },
 ]
 
+const ALERTS: Alert[] = [
+  { skillId: 'pipeline-hygiene-audit', skillName: 'Pipeline hygiene audit', reason: '3 leads have had no activity for 21 days', metric: '3 stale', severity: 'medium' },
+  { skillId: 'follow-up-cadence', skillName: 'Follow-up cadence', reason: 'Two proposals are past their promised reply date', metric: '2 overdue', severity: 'high' },
+]
+
+export const REPS_DEMO: RepPerformanceRow[] = [
+  { ownerName: 'Priya', openValue: 186_000, totalLeads: 5, winRate: 40 },
+  { ownerName: 'Arjun', openValue: 122_000, totalLeads: 4, winRate: 25 },
+  { ownerName: 'Sam', openValue: 75_000, totalLeads: 2, winRate: -1 },
+]
+
+export const SOURCES_DEMO: SourceROIRow[] = [
+  { source: 'referral', value: 164_000, count: 4, winRate: 50 },
+  { source: 'website', value: 118_000, count: 3, winRate: 33 },
+  { source: 'linkedin', value: 64_000, count: 2, winRate: -1 },
+  { source: 'event', value: 37_000, count: 2, winRate: 0 },
+]
+
+const BD: BDSummaryData = {
+  partnersOnboarded: 2,
+  merchantsOnboarded: 4,
+  expectedCount: 3,
+  expectedVolume: 240_000,
+  byOwner: [
+    { ownerName: 'Priya', partnersOnboarded: 1, merchantsOnboarded: 3, expectedCount: 2, expectedVolume: 160_000 },
+    { ownerName: 'Arjun', partnersOnboarded: 1, merchantsOnboarded: 1, expectedCount: 1, expectedVolume: 80_000 },
+  ],
+}
+
 /** Chrome that frames a surface as a browser window, as in the product. */
 export function Frame({ path, children }: { path: string; children: React.ReactNode }) {
   return (
@@ -50,10 +85,14 @@ export function Frame({ path, children }: { path: string; children: React.ReactN
   )
 }
 
-export function DashboardSurface() {
+// The whole dashboard, in the order app/page.tsx renders it: alerts, tiles,
+// funnel + activity, then the BD/rep/source panels. Every one of these is
+// the component the product uses, not a drawing of it.
+export function DashboardSurface({ compact = false }: { compact?: boolean }) {
   return (
     <Frame path="/dashboard">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <AlertBanner alerts={ALERTS} />
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <CurrencyTile label="Open pipeline" value={383_000} hint="9 open leads" />
         <StatTile label="Total leads" value={11} hint="2 won · 0 lost" />
         <StatTile label="Won this month" value={2} hint="₹1.8L" trend={{ direction: 'up', text: 'up from last month' }} />
@@ -61,8 +100,19 @@ export function DashboardSurface() {
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <PipelineFunnel data={FUNNEL_DATA} />
-        <ActivityFeedView items={ACTIVITY} live={false} interactive={false} />
+        <ActivityFeedView items={ACTIVITY_DEMO} live={false} interactive={false} />
       </div>
+      {!compact && (
+        <>
+          <div className="mt-3">
+            <BDSummary data={BD} />
+          </div>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            <RepPerformance rows={REPS_DEMO} />
+            <SourceROI rows={SOURCES_DEMO} />
+          </div>
+        </>
+      )}
     </Frame>
   )
 }
@@ -125,7 +175,7 @@ export function LeadSurface() {
             </div>
           ))}
         </div>
-        <ActivityFeedView items={ACTIVITY.slice(0, 3)} live={false} interactive={false} />
+        <ActivityFeedView items={ACTIVITY_DEMO.slice(0, 3)} live={false} interactive={false} />
       </div>
     </Frame>
   )
