@@ -1,6 +1,18 @@
 // Adds a synthetic second org so tenant isolation can be tested against real
 // rows. Idempotent: wipes and recreates org-b-test on every run.
 import { PrismaClient } from '@prisma/client'
+
+// Deletes and recreates org-b-test. Harmless locally, but an explicit
+// DATABASE_URL= prefix bypasses .env.local, so refuse a remote target
+// rather than trusting the caller got it right.
+const url = process.env.DATABASE_URL ?? ''
+if (!(url.includes('localhost') || url.includes('127.0.0.1')) && process.env.I_MEAN_IT !== 'yes') {
+  console.error('\nRefusing to seed a non-local database.')
+  console.error(`  target: ${url.replace(/:\/\/[^@]*@/, '://***@') || '(unset)'}`)
+  console.error('Re-run with I_MEAN_IT=yes if that is genuinely intended.\n')
+  process.exit(1)
+}
+
 const db = new PrismaClient()
 const ORG_B = 'org-b-test'
 

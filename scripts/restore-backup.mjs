@@ -7,12 +7,27 @@
 import { PrismaClient } from '@prisma/client'
 import { readFileSync } from 'node:fs'
 
-const db = new PrismaClient()
 const path = process.argv[2]
 if (!path) {
   console.error('usage: node scripts/restore-backup.mjs <backup.json>')
   process.exit(1)
 }
+
+// This script writes rows into whatever DATABASE_URL points at. An explicit
+// `DATABASE_URL=... node scripts/restore-backup.mjs` prefix bypasses
+// .env.local entirely, so the usual local-only guarantee does not apply
+// here. Refuse a non-local target unless the caller says they meant it.
+const url = process.env.DATABASE_URL ?? ''
+const isLocal = url.includes('localhost') || url.includes('127.0.0.1')
+if (!isLocal && process.env.I_MEAN_IT !== 'yes') {
+  console.error('\nRefusing to write to a non-local database.')
+  console.error(`  target: ${url.replace(/:\/\/[^@]*@/, '://***@') || '(unset)'}`)
+  console.error('\nThis would restore rows into a remote database, probably production.')
+  console.error('If that is genuinely what you want, re-run with I_MEAN_IT=yes\n')
+  process.exit(1)
+}
+
+const db = new PrismaClient()
 const dump = JSON.parse(readFileSync(path, 'utf-8'))
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
