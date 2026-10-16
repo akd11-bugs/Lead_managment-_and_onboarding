@@ -5,7 +5,7 @@ import { SignOutButton } from '@/components/layout/SignOutButton'
 import { Ban } from 'lucide-react'
 
 // Landed on by requireUser()/requireAnyUser()/app/login/page.tsx when a
-// Neon Auth identity matches a bluSwap User whose isActive is false. Keeping
+// Neon Auth identity matches a Steadfast User whose isActive is false. Keeping
 // this as its own target (instead of folding into /login, which only has a
 // raw Neon Auth session to check) is what stops a deactivated account from
 // looping between here and /login — see lib/session.ts's resolveSession.

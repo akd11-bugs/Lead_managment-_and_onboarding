@@ -77,7 +77,7 @@ export function AccountNotFoundActions({ matchedOrg, suggestedName }: { matchedO
     return (
       <div className="space-y-3">
         <p className="text-sm">
-          <span className="font-medium">{matchedOrg.name}</span> is already on bluSwap — want to request to join them?
+          <span className="font-medium">{matchedOrg.name}</span> is already on Steadfast — want to request to join them?
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="requesterName">Your name</Label>

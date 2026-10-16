@@ -6,19 +6,78 @@ import { cn } from '@/lib/utils'
 
 const Tabs = TabsPrimitive.Root
 
+// Underline-style list with an indicator that slides between triggers.
+//
+// Built on Radix rather than plain divs so arrow-key navigation, roving
+// focus and the tab/tabpanel ARIA wiring keep working — this sits on screens
+// people use all day. The indicator is measured from the live DOM (the
+// active trigger's offsetLeft/offsetWidth) because trigger widths depend on
+// their label text, which is dynamic ("Activity (12)").
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      'inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
-      className
-    )}
-    {...props}
-  />
-))
+>(({ className, children, ...props }, ref) => {
+  const innerRef = React.useRef<HTMLDivElement | null>(null)
+  const [indicator, setIndicator] = React.useState<{ left: number; width: number } | null>(null)
+
+  // Keep the ref usable by both this component and any forwarded ref.
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      innerRef.current = node
+      if (typeof ref === 'function') ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref],
+  )
+
+  React.useEffect(() => {
+    const list = innerRef.current
+    if (!list) return
+
+    const measure = () => {
+      const active = list.querySelector<HTMLElement>('[role="tab"][data-state="active"]')
+      if (!active) return
+      setIndicator({ left: active.offsetLeft, width: active.offsetWidth })
+    }
+
+    measure()
+
+    // data-state flips on the triggers when the value changes, and label text
+    // can change width ("Activity (3)" -> "Activity (4)"), so watch both.
+    const mo = new MutationObserver(measure)
+    mo.observe(list, { attributes: true, attributeFilter: ['data-state'], subtree: true, childList: true })
+
+    const ro = new ResizeObserver(measure)
+    ro.observe(list)
+    list.querySelectorAll('[role="tab"]').forEach((el) => ro.observe(el))
+
+    return () => {
+      mo.disconnect()
+      ro.disconnect()
+    }
+  }, [children])
+
+  return (
+    <TabsPrimitive.List
+      ref={setRefs}
+      className={cn(
+        'relative inline-flex h-10 items-center justify-start gap-1 border-b border-border text-muted-foreground',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      {/* Rendered only once measured, so it never flashes at 0,0 on mount. */}
+      {indicator && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 h-[2px] rounded-full bg-foreground transition-[left,width] duration-300 ease-out motion-reduce:transition-none"
+          style={{ left: indicator.left, width: indicator.width }}
+        />
+      )}
+    </TabsPrimitive.List>
+  )
+})
 TabsList.displayName = TabsPrimitive.List.displayName
 
 const TabsTrigger = React.forwardRef<
@@ -28,8 +87,8 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow',
-      className
+      'relative inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground',
+      className,
     )}
     {...props}
   />
@@ -44,7 +103,7 @@ const TabsContent = React.forwardRef<
     ref={ref}
     className={cn(
       'mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-      className
+      className,
     )}
     {...props}
   />

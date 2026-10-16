@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { Search, Plus, Building2, User as UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { NewLeadDialog } from '@/components/leads/NewLeadDialog'
 import { ImportLeadsDialog } from '@/components/leads/ImportLeadsDialog'
 import type { SessionUser } from '@/lib/session'
+import { OrgLogo } from '@/components/branding/OrgLogo'
+import { BRAND_NAME } from '@/lib/branding'
 
 interface CompanyResult {
   id: string
@@ -90,8 +91,9 @@ export function TopBar({ user, signOutButton }: { user: SessionUser; signOutButt
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/95 px-4 md:px-6 backdrop-blur">
-      <div className="md:hidden">
-        <Image src="/logo-bluswap.webp" alt="bluSwap" width={132} height={38} className="h-6 w-auto" />
+      <div className="md:hidden flex items-center gap-2 font-semibold">
+        <OrgLogo org={{ name: BRAND_NAME }} size={20} />
+        <span className="text-sm tracking-tight">{BRAND_NAME}</span>
       </div>
       <div className="flex-1 max-w-xl relative" ref={containerRef}>
         <div className="relative">

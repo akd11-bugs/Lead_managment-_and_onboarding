@@ -9,7 +9,7 @@ import { UserX } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 // Landed on by requireUser()/requireAnyUser() when a Neon Auth identity
-// (typically first-time Google sign-in) has no matching bluSwap User row.
+// (typically first-time Google sign-in) has no matching Steadfast User row.
 // Used to be a dead end with two passive links — now it actually acts on
 // the verified email: a company-domain match offers "request to join",
 // everything else (a personal-email domain, or no match) offers creating a
@@ -30,7 +30,7 @@ export default async function AccountNotFoundPage() {
             <UserX className="h-5 w-5 text-muted-foreground" />
           </div>
           <CardTitle className="text-xl">No account found</CardTitle>
-          <CardDescription>There&apos;s no bluSwap account for {email} yet.</CardDescription>
+          <CardDescription>There&apos;s no Steadfast account for {email} yet.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <AccountNotFoundActions

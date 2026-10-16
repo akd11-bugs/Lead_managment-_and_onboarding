@@ -8,7 +8,7 @@ import { SignOutButton } from '@/components/layout/SignOutButton'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  title: 'bluSwap — Lead Management',
+  title: 'Steadfast: the step between a spreadsheet and a CRM',
   description: 'Skill-driven lead management system. CRM with built-in B2B diagnostics.',
 }
 

@@ -62,6 +62,86 @@
   }
 }
 
+/* Marketing hero entrance. Pure CSS so the end state is correct even if JS
+   never runs — the animation fills forwards from hidden to visible, and is
+   skipped entirely under reduced motion. */
+@keyframes reveal-mount {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-reveal-mount] {
+  animation: reveal-mount 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal-mount] {
+    animation: none;
+  }
+}
+
+/* Postage-stamp perforated edge, used as an accent on marketing cards.
+   The notches are punched out with a repeating radial-gradient mask rather
+   than drawn, so the card's own background shows through the scallops and
+   the effect survives any backdrop behind it. */
+.stamp-edge {
+  /* Notch and spacing are intentionally small: the perforations sit on the
+     top and bottom edges only, so they must stay well under half the
+     element's height or they eat the content. Override --stamp-notch /
+     --stamp-gap per element for larger cards. */
+  --stamp-notch: 3px;
+  --stamp-gap: 8px;
+  /* Three mask layers: the notch strips along the top and bottom edges, plus
+     a solid fill for everything between them. They are ADDED (not
+     intersected) — intersecting a top-only strip with a bottom-only strip
+     leaves an empty middle and the element disappears entirely. */
+  -webkit-mask-image:
+    radial-gradient(circle at center, transparent calc(var(--stamp-notch) - 0.5px), #000 var(--stamp-notch)),
+    radial-gradient(circle at center, transparent calc(var(--stamp-notch) - 0.5px), #000 var(--stamp-notch)),
+    linear-gradient(#000, #000);
+  mask-image:
+    radial-gradient(circle at center, transparent calc(var(--stamp-notch) - 0.5px), #000 var(--stamp-notch)),
+    radial-gradient(circle at center, transparent calc(var(--stamp-notch) - 0.5px), #000 var(--stamp-notch)),
+    linear-gradient(#000, #000);
+  -webkit-mask-size:
+    var(--stamp-gap) var(--stamp-gap),
+    var(--stamp-gap) var(--stamp-gap),
+    100% calc(100% - var(--stamp-gap));
+  mask-size:
+    var(--stamp-gap) var(--stamp-gap),
+    var(--stamp-gap) var(--stamp-gap),
+    100% calc(100% - var(--stamp-gap));
+  -webkit-mask-repeat: repeat-x, repeat-x, no-repeat;
+  mask-repeat: repeat-x, repeat-x, no-repeat;
+  -webkit-mask-position: center top, center bottom, center center;
+  mask-position: center top, center bottom, center center;
+}
+
+/* Staggered entrance for the onboarding-flow previews — each extracted
+   field / teammate / column slides in behind the one before it. */
+@keyframes extract-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*='extract-in'] {
+    animation: none !important;
+  }
+}
+
 /* Scrollbar styling for kanban */
 .kanban-scroll::-webkit-scrollbar {
   height: 10px;

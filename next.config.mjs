@@ -24,9 +24,17 @@
 //   imports its own glue code from a blob: URL it constructs at runtime.
 // - worker-src allows a blob: worker — onnxruntime-web runs its WASM
 //   backend off the main thread via a worker constructed from a blob URL.
+// - React's development build uses eval() for debugging features (component
+//   stacks across environments). Without 'unsafe-eval' in dev, the dev
+//   runtime fails and client components never finish hydrating — animations
+//   and other effects silently never run. Production React never calls
+//   eval(), so this token is added in dev only and the deployed CSP is
+//   unchanged.
+const DEV = process.env.NODE_ENV === 'development'
+
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net blob:",
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${DEV ? " 'unsafe-eval'" : ''} https://cdn.jsdelivr.net blob:`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",

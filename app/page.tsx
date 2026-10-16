@@ -13,11 +13,22 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { boardColumnFor, type LeadSource } from '@/lib/types'
 import { redirect } from 'next/navigation'
-import { requireUser, leadScope, isOperations } from '@/lib/session'
+import { requireUser, resolveSession, leadScope, isOperations } from '@/lib/session'
+import { LandingPage } from '@/components/marketing/LandingPage'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
+  // "/" is the public marketing page for a logged-out visitor, and the
+  // dashboard for everyone else — same route, branching on session rather
+  // than redirecting, so the marketing page can actually live at the root
+  // domain like any other SaaS site. Every other non-'ok' resolution
+  // (no-app-user, inactive) still goes through requireUser()'s existing
+  // redirects below, unchanged — only a genuinely logged-out visitor sees
+  // the marketing page instead of bouncing to /login.
+  const resolution = await resolveSession()
+  if (resolution.kind === 'no-session') return <LandingPage />
+
   const user = await requireUser()
   if (isOperations(user)) redirect('/onboarding')
   const leads = await prisma.lead.findMany({

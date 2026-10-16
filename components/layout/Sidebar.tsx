@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -22,6 +21,8 @@ import {
 import { cn } from '@/lib/utils'
 import { SERVICES } from '@/lib/services/catalog'
 import type { SessionUser } from '@/lib/session'
+import { OrgLogo } from '@/components/branding/OrgLogo'
+import { BRAND_NAME } from '@/lib/branding'
 
 const SERVICE_ICONS: Record<string, React.ReactNode> = {
   'lead-capture': <Users className="h-4 w-4" />,
@@ -39,8 +40,9 @@ export function Sidebar({ user }: { user: SessionUser }) {
   return (
     <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 z-30 border-r bg-muted/30">
       <div className="flex h-14 items-center border-b px-4">
-        <Link href="/" className="flex items-center font-semibold">
-          <Image src="/logo-bluswap.webp" alt="bluSwap" width={132} height={38} className="h-7 w-auto" priority />
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <OrgLogo org={{ name: BRAND_NAME }} size={24} />
+          <span className="text-base tracking-tight">{BRAND_NAME}</span>
         </Link>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4 text-sm">

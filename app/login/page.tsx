@@ -3,10 +3,9 @@ import Link from 'next/link'
 import { neonAuth } from '@/lib/auth'
 import { signInWithLockout } from '@/lib/loginLockout'
 import { resolveSession } from '@/lib/session'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
+import { AuthShell } from '@/components/auth/AuthShell'
 
 export default async function LoginPage({
   searchParams,
@@ -53,67 +52,92 @@ export default async function LoginPage({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-xl">bluSwap</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {redeemed && !error && (
-            <p className="mb-3 text-sm text-emerald-600">Account created — log in with your new password.</p>
-          )}
-          {error && (
-            <p className="mb-3 text-sm text-rose-600">
-              {reason === 'locked'
-                ? 'Too many failed attempts — try again in 15 minutes.'
-                : reason === 'rate'
-                  ? 'Too many attempts — try again later.'
-                  : 'Invalid email or password.'}
-            </p>
-          )}
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to your Steadfast workspace."
+      quote={{
+        line: 'Leads don’t need another spreadsheet.',
+        attribution: 'Steadfast — lead management that keeps up',
+      }}
+      footer={
+        <>
+          New here?{' '}
+          <Link href="/signup" className="text-white underline underline-offset-4">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      {redeemed && !error && (
+        <p className="mb-4 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+          Account created — log in with your new password.
+        </p>
+      )}
+      {error && (
+        <p className="mb-4 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+          {reason === 'locked'
+            ? 'Too many failed attempts — try again in 15 minutes.'
+            : reason === 'rate'
+              ? 'Too many attempts — try again later.'
+              : 'Invalid email or password.'}
+        </p>
+      )}
 
-          {googleEnabled && (
-            <form action={loginWithGoogle}>
-              <Button type="submit" className="w-full">
-                Sign in with Google
-              </Button>
-            </form>
-          )}
+      {googleEnabled && (
+        <form action={loginWithGoogle}>
+          <button
+            type="submit"
+            className="w-full rounded-full bg-white px-5 py-2.5 text-sm font-medium text-[#07080c] transition-transform hover:scale-[1.01] active:scale-[0.99]"
+          >
+            Sign in with Google
+          </button>
+        </form>
+      )}
 
-          {/* Opens by default without Google, or when a password attempt just
-              failed (error=1 only ever comes from the credentials path below —
-              see the `login` action's catch) so the error isn't hidden behind
-              a collapsed disclosure. */}
-          <details className={googleEnabled ? 'mt-4 group' : 'group'} open={!googleEnabled || !!error}>
-            {googleEnabled && (
-              <summary className="cursor-pointer list-none text-center text-sm text-muted-foreground underline underline-offset-2">
-                Use a password instead
-              </summary>
-            )}
-            <form action={login} className={googleEnabled ? 'mt-3 space-y-3' : 'space-y-3'}>
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" required autoFocus={!googleEnabled} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" name="password" type="password" required />
-              </div>
-              <Button type="submit" variant={googleEnabled ? 'outline' : 'default'} className="w-full">
-                Sign in
-              </Button>
-            </form>
-          </details>
-
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            New here?{' '}
-            <Link href="/signup" className="underline underline-offset-2">
-              Create an account
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+      {/* Opens by default without Google, or when a password attempt just
+          failed (error=1 only ever comes from the credentials path below —
+          see the `login` action's catch) so the error isn't hidden behind
+          a collapsed disclosure. */}
+      <details className={googleEnabled ? 'group mt-5' : 'group'} open={!googleEnabled || !!error}>
+        {googleEnabled && (
+          <summary className="cursor-pointer list-none text-center text-sm text-white/45 underline underline-offset-4 hover:text-white/70">
+            Use a password instead
+          </summary>
+        )}
+        <form action={login} className={googleEnabled ? 'mt-4 space-y-3' : 'space-y-3'}>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-white/70">
+              Email
+            </Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              required
+              autoFocus={!googleEnabled}
+              className="border-white/15 bg-white/[0.04] text-white placeholder:text-white/30"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-white/70">
+              Password
+            </Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              required
+              className="border-white/15 bg-white/[0.04] text-white placeholder:text-white/30"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full rounded-full border border-white/15 px-5 py-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            Sign in
+          </button>
+        </form>
+      </details>
+    </AuthShell>
   )
 }
