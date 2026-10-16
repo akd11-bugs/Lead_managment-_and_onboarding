@@ -72,7 +72,7 @@ function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n)
 }
 
-export function RepForm() {
+export function RepForm({ orgSlug }: { orgSlug: string }) {
   const { columns } = usePipelineConfig()
   const columnLabels = Object.fromEntries(columns.map((c) => [c.key, c.label]))
   const [loggedIn, setLoggedIn] = useState(false)
@@ -134,7 +134,7 @@ export function RepForm() {
       const res = await fetch('/api/rep/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, pin }),
+        body: JSON.stringify({ name, pin, orgSlug }),
       })
       const data = await res.json()
       if (!res.ok) {

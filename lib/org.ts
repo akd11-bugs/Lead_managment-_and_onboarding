@@ -1,12 +1,33 @@
 import { prisma } from '@/lib/db'
 import type { Organization } from '@prisma/client'
 import { findOrCreateCompany, findOrCreatePerson } from '@/lib/company'
+import { uniqueOrgSlug } from '@/lib/orgSlug'
+import { Prisma } from '@prisma/client'
 
 // Creates a brand-new, fully isolated company org — used by self-serve
 // signup (a founding admin creating their own company) and the
 // create-admin bootstrap script. There is no "default" or "root" org
 // concept: every org is its own flat tenant from the start.
+// Every org gets a slug at creation: it is what makes /rep/<slug> work, and
+// an org without one has no field-rep login at all. Retries on a unique-index
+// collision, because uniqueOrgSlug's check-then-insert is racy by nature and
+// the index is the real guard.
 export async function createOrganization(name: string): Promise<Organization> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const slug = await uniqueOrgSlug(name)
+    try {
+      return await prisma.organization.create({ data: { name, slug } })
+    } catch (err) {
+      const isSlugCollision =
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        String(err.meta?.target ?? '').includes('slug')
+      if (!isSlugCollision) throw err
+      // Someone took this slug between the check and the insert — recompute.
+    }
+  }
+  // Give the org a working record rather than failing signup outright; the
+  // backfill script can assign a slug afterwards.
   return prisma.organization.create({ data: { name } })
 }
 
@@ -67,7 +88,7 @@ export async function seedSampleLeads(orgId: string): Promise<void> {
 // Domains that can't meaningfully identify "a company" — two strangers who
 // both happen to use Gmail are not colleagues. A personal-email domain
 // always means "create your own org," never a join-request match, however
-// many other bluSwap users happen to share that same free provider.
+// many other Steadfast users happen to share that same free provider.
 const PERSONAL_EMAIL_DOMAINS = new Set([
   'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com',
   'aol.com', 'protonmail.com', 'live.com', 'msn.com',

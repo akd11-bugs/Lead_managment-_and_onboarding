@@ -62,10 +62,14 @@ export function OrganisationPanel({
   initialUsers,
   initialInvites,
   initialJoinRequests,
+  orgSlug,
 }: {
   initialUsers: UserRow[]
   initialInvites: InviteRow[]
   initialJoinRequests: JoinRequestRow[]
+  // Null until the org is backfilled; the PIN dialog then omits the link
+  // rather than showing a broken one.
+  orgSlug?: string | null
 }) {
   const router = useRouter()
   const [users, setUsers] = useState(initialUsers)
@@ -457,9 +461,15 @@ export function OrganisationPanel({
           <DialogHeader>
             <DialogTitle>Set PIN for {pinTarget?.name}</DialogTitle>
             <DialogDescription>
-              Used to sign in at <code className="text-xs">/rep</code> — the lightweight lead-update form. Reps
-              enter their name and this 6-digit PIN, nothing else. Make sure {pinTarget?.name}&apos;s name is spelled
-              exactly the way they&apos;ll type it — it must be unique across your team.
+              Used to sign in on your team&apos;s own rep link, the lightweight lead-update form. Reps enter
+              their name and this 6-digit PIN, nothing else. Make sure {pinTarget?.name}&apos;s name is spelled
+              exactly the way they&apos;ll type it; names must be unique within your team.
+              {orgSlug && (
+                <>
+                  {' '}Your link is{' '}
+                  <code className="text-xs">{`/rep/${orgSlug}`}</code> — share it with them.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <Input

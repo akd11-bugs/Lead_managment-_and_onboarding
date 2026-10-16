@@ -13,19 +13,24 @@ export type RepLoginResult =
 // pinFailedAttempts / pinLockedUntil) — a rep locked out of the PIN form
 // shouldn't lock their dashboard login, or vice versa.
 //
-// Identified by name (not email) — User.name has no unique constraint, so a
-// duplicate name is treated as a failed login rather than silently picking
-// one of the matches; an admin should rename one of them if this ever fires.
-export async function verifyRepLogin(name: string, pin: string): Promise<RepLoginResult> {
+// Identified by (orgId, name). Field reps have no email, so the org cannot be
+// derived from the credential itself — it comes from the per-org login URL
+// (/rep/<slug>) and is passed in here.
+//
+// This used to search User.name across EVERY org and accept the login only
+// when exactly one match existed anywhere. Two tenants each employing a
+// "Priya" therefore locked BOTH out, with a generic error neither admin
+// could diagnose: a cross-tenant outage one customer could inflict on
+// another. Scoping by orgId removes the ambiguity entirely, and
+// @@unique([orgId, name]) now makes a duplicate within one org impossible.
+export async function verifyRepLogin(orgId: string, name: string, pin: string): Promise<RepLoginResult> {
   const normalizedName = name.trim()
-  const matches = await prisma.user.findMany({
-    where: { name: { equals: normalizedName, mode: 'insensitive' } },
+  const user = await prisma.user.findFirst({
+    where: { orgId, name: { equals: normalizedName, mode: 'insensitive' } },
   })
-  const user = matches.length === 1 ? matches[0] : null
 
   if (!user || !user.isActive || !user.pinHash) {
-    const reason = matches.length > 1 ? 'ambiguous_name' : 'no_pin_set'
-    await logAudit({ action: 'rep_login_failed', metadata: { name: normalizedName, reason } })
+    await logAudit({ action: 'rep_login_failed', metadata: { orgId, name: normalizedName, reason: 'no_pin_set' } })
     return { ok: false, status: 401, error: 'Invalid name or PIN' }
   }
 

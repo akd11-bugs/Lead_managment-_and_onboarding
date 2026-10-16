@@ -19,8 +19,15 @@ export default async function proxy(req: NextRequest) {
   const isSignupPage = pathname === '/signup' || pathname === '/signup/complete'
   // The lightweight rep-facing form — its own PIN-based auth lives entirely
   // inside app/api/rep/* route handlers (the rep_session cookie), never here.
-  const isRepPage = pathname === '/rep'
-  const isPublicPage = pathname === '/login' || isInviteRedeemPage || isSignupPage || isRepPage
+  // Covers /rep and the per-org /rep/<slug> login pages. Was an exact match
+  // before the slug route existed, which would have redirected /rep/acme to
+  // /login and broken field sign-in entirely.
+  const isRepPage = pathname === '/rep' || pathname.startsWith('/rep/')
+  // "/" itself must be reachable while logged out too — app/page.tsx branches
+  // on session there (marketing page vs dashboard), so the middleware can't
+  // blanket-redirect it to /login the way every other route still should.
+  const isRootPage = pathname === '/'
+  const isPublicPage = pathname === '/login' || isInviteRedeemPage || isSignupPage || isRepPage || isRootPage
 
   // Defense-in-depth beyond the session cookie's own sameSite=lax setting
   // (which already blocks the cookie from riding along on a genuine
@@ -62,11 +69,13 @@ export const config = {
   // /signup, and /rep must be able to load it while logged out), the Neon
   // Auth API routes, the invite-redemption and signup APIs (must be
   // callable while logged out), the external reports API + the
-  // leads-sheet sync cron route (both authenticate callers with their own
-  // API key, not a browser session), and the rep-form API (its own
-  // rep_session cookie) — everything else (pages and our own /api/*
-  // routes) requires a Neon Auth session.
+  // leads-sheet sync cron route + the agent-facing write API (all three
+  // authenticate callers with their own per-org API key, not a browser
+  // session), the rep-form API (its own rep_session cookie), and the health
+  // probe (the hosting platform calls it with no session and must get a
+  // real status, not a redirect to /login) — everything else (pages and our
+  // own /api/* routes) requires a Neon Auth session.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/rep).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/agent|api/rep|api/health).*)',
   ],
 }

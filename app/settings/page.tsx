@@ -12,6 +12,7 @@ import { OrganisationPanel } from '@/components/settings/OrganisationPanel'
 import { EmailSettingsCard } from '@/components/settings/EmailSettingsCard'
 import { OrgEmailSettingsCard } from '@/components/settings/OrgEmailSettingsCard'
 import { OrgSheetConnectorCard } from '@/components/settings/OrgSheetConnectorCard'
+import { AgentApiKeyCard } from '@/components/settings/AgentApiKeyCard'
 import { ReportsApiKeyCard } from '@/components/settings/ReportsApiKeyCard'
 import { WorkflowRulesCard } from '@/components/settings/WorkflowRulesCard'
 import { PipelineConfigCard } from '@/components/settings/PipelineConfigCard'
@@ -31,6 +32,12 @@ async function checkSkillLibrary() {
 export default async function SettingsPage() {
   const user = await requireUser()
   const skillLibrary = await checkSkillLibrary()
+  // Own org only — the slug drives the per-org rep login link shown in the
+  // PIN dialog (components/settings/OrganisationPanel.tsx).
+  const org = isAdmin(user)
+    ? await prisma.organization.findUnique({ where: { id: user.orgId }, select: { slug: true } })
+    : null
+
   const users = isAdmin(user)
     ? await prisma.user.findMany({
         where: { orgId: { in: user.visibleOrgIds } },
@@ -79,10 +86,11 @@ export default async function SettingsPage() {
       {isAdmin(user) && <OrgEmailSettingsCard />}
       {isAdmin(user) && <OrgSheetConnectorCard />}
       {isAdmin(user) && <ReportsApiKeyCard />}
+      {isAdmin(user) && <AgentApiKeyCard />}
       <WorkflowRulesCard />
 
       {isAdmin(user) && (
-        <OrganisationPanel initialUsers={users as never} initialInvites={invites as never} initialJoinRequests={joinRequests as never} />
+        <OrganisationPanel initialUsers={users as never} initialInvites={invites as never} initialJoinRequests={joinRequests as never} orgSlug={org?.slug ?? null} />
       )}
 
       {isAdmin(user) ? (

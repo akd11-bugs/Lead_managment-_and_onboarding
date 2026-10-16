@@ -18,12 +18,44 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
 
+  // URL-safe identifier for the per-org rep login page (/rep/<slug>).
+  //
+  // Field reps authenticate with name + PIN and have no email, so there is
+  // nothing in their request that says which tenant they belong to. Before
+  // this existed, lib/repAuth.ts searched User.name across EVERY org and
+  // rejected the login whenever two tenants had a rep with the same name —
+  // a cross-tenant lockout one customer could inflict on another.
+  //
+  // Nullable so existing orgs keep working until backfilled; the rep login
+  // route 404s a slug it cannot resolve rather than falling back to a
+  // global search.
+  slug String? @unique
+
+  // White-label branding. Each onboarded org supplies its own mark; until
+  // then the UI falls back to a neutral generated placeholder (never a
+  // vendor logo) — see components/branding/OrgLogo.tsx.
+  //
+  // logoUrl holds an external/CDN URL. logoDataUrl holds a small inlined
+  // data: URI for orgs that upload directly, so a logo needs no object
+  // store to work. Cap enforced at the API layer, not here.
+  logoUrl     String?
+  logoDataUrl String?
+  // Hex accent (e.g. "#5b8cff") used for the org's chrome; null = default.
+  brandColor  String?
+
   // Scopes an admin-generated key to this org alone for
   // app/api/external/reports — null until an admin generates one from
   // Settings. Plaintext + unique index, same convention as Invite.code and
   // SignupToken.token (a random 32-byte token has no meaningful brute-force
   // surface, so there's nothing a hash buys here that a unique index doesn't).
   reportsApiKey String? @unique
+
+  // Scopes an admin-generated key to this org for the agent-facing write API
+  // (app/api/agent/v1/*) — same unique-token-as-scope convention as
+  // reportsApiKey above, kept as a separate column/key (not reused) because
+  // this one grants write actions (create lead, log activity, move stage),
+  // a meaningfully different risk level than the read-only reports key.
+  agentApiKey String? @unique
 
   emailConfig    OrgEmailConfig?
   sheetConnector OrgSheetConnector?
@@ -123,6 +155,50 @@ model OnboardingStepDefinition {
 // Per-org custom fields on a Lead. `key` is immutable after creation —
 // stored values in Lead.customFieldsJson are keyed by it, so renaming would
 // orphan data (label is the editable, user-facing name instead).
+// Metadata ONLY for an onboarding document. The file itself is NEVER sent to
+// this server: it lives in the uploader's browser (OPFS/IndexedDB), keyed by
+// `localKey`. These are frequently government-issued identity documents, so
+// the deliberate design is that the vendor holds no copy and cannot produce
+// one under subpoena, breach, or insider access.
+//
+// What we DO store is enough to run the workflow:
+//   - that a document of a given kind exists and was reviewed
+//   - its size/type/filename so the UI can list it without the bytes
+//   - a SHA-256 so a re-presented file can be proven identical
+//
+// sha256 is a hash of a file we never hold. It is not reversible, but it IS
+// a correlatable identifier: do not expose it on any unauthenticated route.
+model OnboardingDocument {
+  id       String @id @default(cuid())
+  orgId    String
+  leadId   String
+  // Opaque handle into the uploader's browser store. Meaningless server-side.
+  localKey String
+
+  kind     String  // "pan" | "gst" | "incorporation" | "bank" | "other"
+  label    String
+  fileName String
+  mimeType String
+  byteSize Int
+  sha256   String
+
+  status     String    @default("held")  // held | verified | rejected | missing
+  reviewedAt DateTime?
+  reviewedBy String?
+  note       String?
+
+  // Which browser/device actually holds the bytes, so the UI can say
+  // "uploaded from Meera's laptop" rather than showing a dead download link.
+  holderUserId String?
+  holderLabel  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, leadId])
+  @@index([orgId, status])
+}
+
 model LeadFieldDefinition {
   id        String   @id @default(cuid())
   orgId     String
@@ -266,6 +342,10 @@ model User {
   // No hard FK from Lead.ownerId — kept a plain string (like stage/source) so
   // imported/legacy leads with an unrecognized owner never fail to save.
 
+  // Rep login resolves a person by (orgId, name); a duplicate name
+  // inside one org is the same ambiguity the org slug fixes across
+  // orgs. The settings UI already states this rule; now it is enforced.
+  @@unique([orgId, name])
   @@index([orgId])
 }
 
