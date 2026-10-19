@@ -1,9 +1,13 @@
 import { cache } from 'react'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { NextResponse } from 'next/server'
 import { neonAuth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import type { User } from '@prisma/client'
+import { DEV_BYPASS_COOKIE } from '@/lib/devBypass'
+
+export { DEV_BYPASS_COOKIE }
 
 export interface SessionUser {
   id: string
@@ -43,7 +47,31 @@ type SessionResolution =
 // 'inactive'/'no-app-user' for its own "already signed in?" check — unlike
 // requireUser()/requireAnyUser() below, it must render the login form
 // rather than redirect for 'no-session'.
+// Local-only auth bypass: Google OAuth can't complete against localhost
+// because the Neon Auth project's trusted origins only list the production
+// URL, which isn't something this repo can fix. Opt-in via a cookie (set by
+// visiting /api/dev-login, see that route) rather than unconditionally, so
+// "/" with no cookie still renders the public marketing page like normal —
+// only a visitor who deliberately asked for the bypass skips real auth.
+// Gated on NODE_ENV in addition to the cookie so this can never do anything
+// outside `next dev`/`next build` locally — Render always runs with
+// NODE_ENV=production regardless of what's in env.
+async function resolveDevBypass(): Promise<SessionResolution | null> {
+  if (process.env.NODE_ENV === 'production') return null
+  const email = process.env.DEV_BYPASS_AUTH_EMAIL?.trim().toLowerCase()
+  if (!email) return null
+  const jar = await cookies()
+  if (jar.get(DEV_BYPASS_COOKIE)?.value !== '1') return null
+  const appUser = await prisma.user.findUnique({ where: { email } })
+  if (!appUser) return { kind: 'no-app-user' }
+  if (!appUser.isActive) return { kind: 'inactive' }
+  return { kind: 'ok', user: appUser }
+}
+
 export const resolveSession = cache(async (): Promise<SessionResolution> => {
+  const bypass = await resolveDevBypass()
+  if (bypass) return bypass
+
   const { data } = await neonAuth.getSession()
   if (!data?.user?.email) return { kind: 'no-session' }
 

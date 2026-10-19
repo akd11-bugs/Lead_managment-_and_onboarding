@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { Frame } from './Frame'
+import { Reveal } from './Reveal'
 
 // A real drag-and-drop demo of the Kanban board, not a static mockup —
 // built with the same @dnd-kit primitives the product's own KanbanBoard
@@ -86,8 +87,10 @@ export function DraggablePipelineSurface() {
     <Frame path="/pipeline">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {ALL_COLUMNS.map((col) => (
-            <Column key={col} id={col} label={COLUMN_LABELS[col]} deals={columns[col]} draggable={DRAGGABLE_COLUMNS.includes(col)} />
+          {ALL_COLUMNS.map((col, i) => (
+            <Reveal key={col} delay={i * 0.08} y={14} force>
+              <Column id={col} label={COLUMN_LABELS[col]} deals={columns[col]} draggable={DRAGGABLE_COLUMNS.includes(col)} columnIndex={i} />
+            </Reveal>
           ))}
         </div>
       </DndContext>
@@ -98,7 +101,19 @@ export function DraggablePipelineSurface() {
   )
 }
 
-function Column({ id, label, deals, draggable }: { id: ColumnKey; label: string; deals: Deal[]; draggable: boolean }) {
+function Column({
+  id,
+  label,
+  deals,
+  draggable,
+  columnIndex,
+}: {
+  id: ColumnKey
+  label: string
+  deals: Deal[]
+  draggable: boolean
+  columnIndex: number
+}) {
   const { setNodeRef, isOver } = useDroppable({ id })
   return (
     <div ref={setNodeRef} className={cn('min-w-0 rounded-md p-1 transition-colors', isOver && 'bg-accent/50')}>
@@ -107,8 +122,10 @@ function Column({ id, label, deals, draggable }: { id: ColumnKey; label: string;
         <span className="text-xs tabular-nums text-muted-foreground">{deals.length}</span>
       </div>
       <div className="space-y-2">
-        {deals.map((d) => (
-          <DealCard key={d.id} deal={d} label={label} draggable={draggable} />
+        {deals.map((d, i) => (
+          <Reveal key={d.id} delay={columnIndex * 0.08 + 0.1 + i * 0.06} y={10} force>
+            <DealCard deal={d} label={label} draggable={draggable} />
+          </Reveal>
         ))}
       </div>
     </div>

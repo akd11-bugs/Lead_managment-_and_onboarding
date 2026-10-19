@@ -18,6 +18,13 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['var(--font-sans)', ...defaultTheme.fontFamily.sans],
+        // Same intent as the marketing footer's wordmark/nav treatment
+        // (components/ui/halftone-wordmark-footer.tsx) so every font-mono
+        // use on the landing page — eyebrows, nav, footer — reads as one
+        // typeface instead of falling back to a generic system monospace.
+        // --font-mono is JetBrains Mono, self-hosted via next/font/google
+        // in app/layout.tsx (same pattern as --font-sans/Inter).
+        mono: ['var(--font-mono)', ...defaultTheme.fontFamily.mono],
       },
       colors: {
         border: 'hsl(var(--border))',

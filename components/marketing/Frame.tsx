@@ -8,8 +8,13 @@ export function Frame({ path, children }: { path: string; children: React.ReactN
         <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
         <span className="ml-2 font-mono text-[11px] text-white/35">{path}</span>
       </div>
-      {/* The product's own light surface, sitting inside the dark page. */}
-      <div className="bg-background p-5 text-foreground">{children}</div>
+      {/* The product's own light surface, sitting inside the dark page —
+          pinned to light regardless of the marketing page's own theme
+          (next-themes' `light` class scopes --background/--foreground/
+          etc. for everything inside it), since the real dashboard this
+          previews is shown here as a fixed reference screenshot, not
+          something that should flip with the visitor's theme choice. */}
+      <div className="light bg-background p-5 text-foreground">{children}</div>
     </div>
   )
 }

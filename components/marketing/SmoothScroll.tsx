@@ -1,14 +1,22 @@
 'use client'
 
 import { useEffect } from 'react'
+import type Lenis from 'lenis'
 
-// Lenis smooth scroll, scoped to the marketing page only.
+// Lenis smooth scroll, scoped to the marketing page only, wired into GSAP's
+// ScrollTrigger (used by HorizontalTour's pinned tour section).
 //
 // This is the single biggest contributor to the "expensive" feel of sites
 // like neutomni.com — their lerp values (0.07 desktop / 0.3 mobile) are
-// mirrored here. Lenis is MIT with zero dependencies; the heavier GSAP +
-// ScrollTrigger stack those sites also run is deliberately not used, since
-// motion already covers the reveals.
+// mirrored here.
+//
+// ScrollTrigger and Lenis both think they own "scroll position" — without
+// wiring them together, ScrollTrigger reads native window.scrollY on its
+// own ticker while Lenis is smoothing the visually-rendered position
+// somewhere else, so pins jitter and desync from what's on screen. The fix
+// (GSAP's documented Lenis integration): Lenis's own 'scroll' event tells
+// ScrollTrigger to re-check its triggers, and GSAP's ticker (not a separate
+// rAF loop) drives Lenis's raf — one clock for both.
 //
 // Deliberately NOT applied app-wide: hijacking scroll inside a CRM makes
 // long tables and the kanban board feel laggy and breaks scroll-into-view
@@ -20,23 +28,28 @@ export function SmoothScroll() {
     // scrolling entirely.
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
-    let lenis: { raf: (t: number) => void; destroy: () => void } | null = null
-    let raf = 0
+    let lenis: Lenis | null = null
     let cancelled = false
+    let tickerFn: ((time: number) => void) | null = null
 
-    // Dynamically imported so Lenis never lands in the shared app bundle —
-    // every authenticated page would otherwise pay for it.
-    import('lenis')
-      .then(({ default: Lenis }) => {
+    // Dynamically imported so Lenis/GSAP never land in the shared app
+    // bundle — every authenticated page would otherwise pay for them.
+    Promise.all([import('lenis'), import('gsap'), import('gsap/ScrollTrigger')])
+      .then(([{ default: LenisCtor }, { default: gsap }, { ScrollTrigger }]) => {
         if (cancelled) return
-        const isMobile = window.matchMedia('(max-width: 768px)').matches
-        lenis = new Lenis({ lerp: isMobile ? 0.3 : 0.07 })
+        gsap.registerPlugin(ScrollTrigger)
 
-        const loop = (time: number) => {
-          lenis?.raf(time)
-          raf = requestAnimationFrame(loop)
+        const isMobile = window.matchMedia('(max-width: 768px)').matches
+        lenis = new LenisCtor({ lerp: isMobile ? 0.3 : 0.07 })
+
+        lenis.on('scroll', ScrollTrigger.update)
+
+        tickerFn = (time: number) => {
+          // GSAP's ticker time is in seconds; Lenis wants milliseconds.
+          lenis?.raf(time * 1000)
         }
-        raf = requestAnimationFrame(loop)
+        gsap.ticker.add(tickerFn)
+        gsap.ticker.lagSmoothing(0)
       })
       .catch(() => {
         // Smooth scroll is an enhancement; native scrolling is the fallback.
@@ -44,7 +57,9 @@ export function SmoothScroll() {
 
     return () => {
       cancelled = true
-      cancelAnimationFrame(raf)
+      if (tickerFn) {
+        import('gsap').then(({ default: gsap }) => gsap.ticker.remove(tickerFn!))
+      }
       lenis?.destroy()
     }
   }, [])

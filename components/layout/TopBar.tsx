@@ -11,6 +11,7 @@ import { ImportLeadsDialog } from '@/components/leads/ImportLeadsDialog'
 import type { SessionUser } from '@/lib/session'
 import { OrgLogo } from '@/components/branding/OrgLogo'
 import { BRAND_NAME } from '@/lib/branding'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 
 interface CompanyResult {
   id: string
@@ -172,6 +173,7 @@ export function TopBar({ user, signOutButton }: { user: SessionUser; signOutButt
             {user.role}
           </Badge>
         </div>
+        <ThemeToggle />
         {signOutButton}
       </div>
     </header>

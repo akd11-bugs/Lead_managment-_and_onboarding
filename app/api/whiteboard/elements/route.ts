@@ -12,12 +12,13 @@ const FUNNEL_BOX_W = 150
 const FUNNEL_BOX_H = 92
 const FUNNEL_GAP = 80
 
-// First-ever load for this org: lay out a funnel box (+ connecting arrows)
-// per real pipeline stage, left to right — same seed-on-first-read
-// convention lib/pipelineConfig.ts already uses for StageDefinition itself.
+// Lays out a funnel box (+ connecting arrows) per real pipeline stage, left
+// to right. Called on demand from the "Insert pipeline funnel" toolbar
+// action (see app/api/whiteboard/elements/funnel/route.ts) — the board no
+// longer seeds this automatically, so a fresh whiteboard starts blank.
 // 'not_interested' is left out, same as the dashboard's own open-pipeline
 // view — a funnel reads left-to-right toward winning the deal, not losing it.
-async function seedFunnel(orgId: string) {
+export async function seedFunnel(orgId: string) {
   const stages = (await getStageDefinitions(orgId)).filter((s) => s.key !== 'not_interested')
   let x = 40
   let prevRightEdge: number | null = null
@@ -71,11 +72,7 @@ function serialize(el: { id: string; type: string; x: number; y: number; w: numb
 export async function GET() {
   const user = await requireApiUser()
   if (user instanceof NextResponse) return user
-  let elements = await prisma.whiteboardElement.findMany({ where: { orgId: user.orgId } })
-  if (elements.length === 0) {
-    await seedFunnel(user.orgId)
-    elements = await prisma.whiteboardElement.findMany({ where: { orgId: user.orgId } })
-  }
+  const elements = await prisma.whiteboardElement.findMany({ where: { orgId: user.orgId } })
 
   // A funnel box only ever stores its position + which stage it represents
   // (dataJson.stageKey) — its count/value are computed live, every read,

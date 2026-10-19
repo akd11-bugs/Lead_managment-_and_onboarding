@@ -125,12 +125,27 @@ export async function importLeadRows(rows: unknown[], owner: ImportOwner, orgId:
   const existingPeople = await prisma.person.findMany({ where: { orgId, companyId: { in: companyIds } }, select: { companyId: true, name: true } })
   const existingPersonKeys = new Set(existingPeople.map((p) => `${p.companyId}::${p.name.toLowerCase()}`))
 
+  // Company-only fallback: a row with neither email nor POC (e.g. a lead-
+  // discovery sheet of just company name/industry/source, no contact info)
+  // has no per-contact identity to dedupe on, so without this a company
+  // mentioned in two source rows (common — press coverage repeats a company
+  // across articles) creates a duplicate lead every sync. Only applies when
+  // BOTH identifiers are absent — a company legitimately having several
+  // named contacts, or several emails, is normal and must still go through.
+  const existingBareLeads = await prisma.lead.findMany({
+    where: { orgId, companyId: { in: companyIds }, email: '', personId: null },
+    select: { companyId: true },
+  })
+  const existingBareCompanyIds = new Set(existingBareLeads.map((l) => l.companyId))
+
   const seenEmails = new Set<string>()
   const seenPersonKeys = new Set<string>()
+  const seenBareCompanyIds = new Set<string>()
 
   const finalRows = resolvedRows.filter((r) => {
     const email = r.email.toLowerCase()
     const personKey = r.poc ? `${r.companyId}::${r.poc.toLowerCase()}` : null
+    const isBare = !email && !personKey
 
     if (email && existingEmails.has(email)) {
       skipped.push({ row: r.row, reason: `Duplicate of an existing lead: ${r.email}` })
@@ -138,6 +153,10 @@ export async function importLeadRows(rows: unknown[], owner: ImportOwner, orgId:
     }
     if (personKey && existingPersonKeys.has(personKey)) {
       skipped.push({ row: r.row, reason: `Duplicate of an existing contact: ${r.poc} at ${r.company}` })
+      return false
+    }
+    if (isBare && existingBareCompanyIds.has(r.companyId)) {
+      skipped.push({ row: r.row, reason: `Duplicate of an existing lead at: ${r.company}` })
       return false
     }
     if (email && seenEmails.has(email)) {
@@ -148,8 +167,13 @@ export async function importLeadRows(rows: unknown[], owner: ImportOwner, orgId:
       skipped.push({ row: r.row, reason: `Duplicate within this file: ${r.poc} at ${r.company}` })
       return false
     }
+    if (isBare && seenBareCompanyIds.has(r.companyId)) {
+      skipped.push({ row: r.row, reason: `Duplicate within this file: ${r.company}` })
+      return false
+    }
     if (email) seenEmails.add(email)
     if (personKey) seenPersonKeys.add(personKey)
+    if (isBare) seenBareCompanyIds.add(r.companyId)
     return true
   })
 

@@ -16,11 +16,22 @@ export function Reveal({
   delay = 0,
   y = 24,
   className,
+  force,
 }: {
   children: React.ReactNode
   delay?: number
   y?: number
   className?: string
+  /** Skip the "already on screen, don't bother animating" bailout — still
+   * waits for its own IntersectionObserver to fire, just never short-
+   * circuits because the element happened to already be laid out in the
+   * viewport at mount time. For a Reveal nested inside another Reveal's
+   * cascade (e.g. a KPI tile inside a dashboard panel): a child's bounding
+   * rect reads as "on screen" the instant its parent is mounted — the
+   * parent occupies that layout space immediately, opacity aside — so
+   * without `force` every nested Reveal bails out and the whole cascade
+   * renders at opacity:1 from first paint, with no stagger at all. */
+  force?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [hidden, setHidden] = useState(false)
@@ -29,8 +40,9 @@ export function Reveal({
     const el = ref.current
     if (!el) return
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
     // Already on screen — leave it alone rather than hiding it to fade it in.
-    if (el.getBoundingClientRect().top < window.innerHeight - 80) return
+    if (!force && el.getBoundingClientRect().top < window.innerHeight - 80) return
 
     setHidden(true)
     const io = new IntersectionObserver(
@@ -49,7 +61,7 @@ export function Reveal({
       io.disconnect()
       clearTimeout(t)
     }
-  }, [])
+  }, [force])
 
   return (
     <div

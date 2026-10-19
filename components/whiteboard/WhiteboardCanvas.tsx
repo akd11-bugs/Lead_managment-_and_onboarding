@@ -21,6 +21,8 @@ import {
   Wand2,
   Users,
   Loader2,
+  Workflow,
+  ClipboardList,
 } from 'lucide-react'
 import { extractLeadFields } from '@/lib/aiExtraction'
 import { useOthers, useUpdateMyPresence, CURSOR_COLORS } from '@/lib/liveblocksConfig'
@@ -91,6 +93,20 @@ export function WhiteboardCanvas() {
   const [extractForm, setExtractForm] = useState({ company: '', poc: '', email: '', phone: '' })
   const [extracting, setExtracting] = useState(false)
   const [savingSegment, setSavingSegment] = useState(false)
+
+  // "Log as activity" — a second on-device-assisted path next to "Extract
+  // to lead": this one is for a note that's really about an EXISTING lead
+  // ("call back Ardent Studio Thu"), not a brand-new one. Same NER model
+  // (extractLeadFields) picks out a likely company/person name from the
+  // note's text to pre-fill the search box, but the user always confirms
+  // which real lead it is before anything gets logged — no auto-guessing
+  // which lead to write to.
+  const [activityTarget, setActivityTarget] = useState<WBElement | null>(null)
+  const [activityQuery, setActivityQuery] = useState('')
+  const [activityResults, setActivityResults] = useState<{ id: string; company: string; person: string | null }[]>([])
+  const [activitySearching, setActivitySearching] = useState(false)
+  const [activityLeadId, setActivityLeadId] = useState<string | null>(null)
+  const [loggingActivity, setLoggingActivity] = useState(false)
 
   const viewportRef = useRef<HTMLDivElement>(null)
   // The single synchronous source of truth for "the current elements array,
@@ -443,6 +459,62 @@ export function WhiteboardCanvas() {
     }
   }
 
+  // ---------------- Log as activity ----------------
+  function openActivityLog(el: WBElement) {
+    setActivityTarget(el)
+    setActivityLeadId(null)
+    setActivityResults([])
+    // Pre-fill the search box with whatever the on-device NER model finds
+    // in the note (a company or person name) — just a starting guess the
+    // user can overwrite; they still pick the exact lead from real results
+    // before anything is logged.
+    setActivityQuery('')
+    extractLeadFields(el.text ?? '').then((result) => {
+      const guess = result.company || result.poc || ''
+      if (guess) setActivityQuery(guess)
+    })
+  }
+
+  // Debounced search-as-you-type against the same endpoint the top bar's
+  // own search uses (app/api/leads/search) — reused rather than inventing
+  // a second lead-lookup convention.
+  useEffect(() => {
+    if (!activityTarget) return
+    const q = activityQuery.trim()
+    if (q.length < 2) {
+      setActivityResults([])
+      return
+    }
+    setActivitySearching(true)
+    const t = setTimeout(() => {
+      api<{ leads: { id: string; company: { name: string }; person: { name: string } | null }[] }>(
+        `/api/leads/search?q=${encodeURIComponent(q)}`,
+      )
+        .then((data) => {
+          setActivityResults(data.leads.map((l) => ({ id: l.id, company: l.company.name, person: l.person?.name ?? null })))
+        })
+        .finally(() => setActivitySearching(false))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [activityQuery, activityTarget])
+
+  async function confirmActivityLog() {
+    if (!activityTarget || !activityLeadId || !activityTarget.text?.trim()) return
+    setLoggingActivity(true)
+    try {
+      await api('/api/activities', {
+        method: 'POST',
+        body: JSON.stringify({ leadId: activityLeadId, type: 'note', description: activityTarget.text.trim() }),
+      })
+      setActivityTarget(null)
+      router.refresh()
+    } catch {
+      // leave the popover open so they can retry/pick a different lead
+    } finally {
+      setLoggingActivity(false)
+    }
+  }
+
   // ---------------- Save as segment ----------------
   const selectedLinkedIds = selected.filter((id) => elements.find((e) => e.id === id)?.leadId)
   async function saveSegment() {
@@ -467,6 +539,11 @@ export function WhiteboardCanvas() {
     load()
   }
 
+  async function insertFunnel() {
+    await api('/api/whiteboard/elements/funnel', { method: 'POST' })
+    load()
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b bg-background/95 px-4 py-2">
@@ -479,6 +556,10 @@ export function WhiteboardCanvas() {
         <ToolButton icon={<ArrowUpRight className="h-4 w-4" />} active={tool === 'arrow'} onClick={() => setTool('arrow')} label="Arrow" />
         <ToolButton icon={<Pencil className="h-4 w-4" />} active={tool === 'freehand'} onClick={() => setTool('freehand')} label="Draw" />
         <div className="mx-1 h-6 w-px bg-border" />
+        <Button size="sm" variant="outline" onClick={insertFunnel} title="Add a funnel box per pipeline stage">
+          <Workflow className="h-3.5 w-3.5" /> Insert pipeline funnel
+        </Button>
+        <div className="mx-1 h-6 w-px bg-border" />
         <Button size="icon" variant="outline" className="h-8 w-8" disabled={!canUndo} onClick={undo} title="Undo">
           <Undo2 className="h-4 w-4" />
         </Button>
@@ -489,9 +570,14 @@ export function WhiteboardCanvas() {
           <>
             <div className="mx-1 h-6 w-px bg-border" />
             {selected.length === 1 && elements.find((e) => e.id === selected[0])?.type === 'sticky' && (
-              <Button size="sm" variant="outline" onClick={() => openExtract(elements.find((e) => e.id === selected[0])!)}>
-                <Wand2 className="h-3.5 w-3.5" /> Extract to lead
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={() => openExtract(elements.find((e) => e.id === selected[0])!)}>
+                  <Wand2 className="h-3.5 w-3.5" /> Extract to lead
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => openActivityLog(elements.find((e) => e.id === selected[0])!)}>
+                  <ClipboardList className="h-3.5 w-3.5" /> Log as activity
+                </Button>
+              </>
             )}
             {selected.length > 1 && (
               <Button size="sm" variant="outline" disabled={selectedLinkedIds.length < 2 || savingSegment} onClick={saveSegment}>
@@ -680,6 +766,59 @@ export function WhiteboardCanvas() {
               <Button size="sm" className="flex-1" disabled={extracting || !extractForm.company || !extractForm.email} onClick={confirmExtract}>
                 {extracting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Add to CRM
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activityTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50" onMouseDown={() => setActivityTarget(null)}>
+          <div className="w-80 rounded-lg border bg-popover p-4 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+            <h4 className="text-sm font-semibold">Log as activity</h4>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Logs this note's text against a lead you pick below — nothing is written until you confirm.
+            </p>
+            <div className="mt-3 rounded-md border bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground">{activityTarget.text || '(empty note)'}</div>
+            <div className="mt-3 space-y-1">
+              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Search for the lead</label>
+              <input
+                autoFocus
+                className="h-8 w-full rounded-md border bg-background px-2 text-sm"
+                placeholder="Company, contact, or email"
+                value={activityQuery}
+                onChange={(e) => {
+                  setActivityQuery(e.target.value)
+                  setActivityLeadId(null)
+                }}
+              />
+            </div>
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+              {activitySearching && <p className="px-1 py-1.5 text-xs text-muted-foreground">Searching…</p>}
+              {!activitySearching && activityQuery.trim().length >= 2 && activityResults.length === 0 && (
+                <p className="px-1 py-1.5 text-xs text-muted-foreground">No matching leads.</p>
+              )}
+              {activityResults.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className={`block w-full rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${
+                    activityLeadId === r.id ? 'border-primary bg-accent' : 'hover:bg-accent'
+                  }`}
+                  onClick={() => setActivityLeadId(r.id)}
+                >
+                  <span className="font-medium">{r.company}</span>
+                  {r.person && <span className="text-muted-foreground"> · {r.person}</span>}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button size="sm" variant="ghost" className="flex-1" onClick={() => setActivityTarget(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" className="flex-1" disabled={loggingActivity || !activityLeadId} onClick={confirmActivityLog}>
+                {loggingActivity && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Log activity
               </Button>
             </div>
           </div>

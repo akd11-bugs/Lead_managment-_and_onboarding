@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { HeroCanvas } from './HeroCanvas'
+import KineticGrid from './KineticGrid'
 import { ScrollWordReveal } from './ScrollReveal'
 import { SmoothScroll } from './SmoothScroll'
 import { OnboardingFlow } from './OnboardingFlow'
@@ -11,22 +11,32 @@ import { FeatureCarousel } from './FeatureCarousel'
 import { BridgeSection } from './BridgeSection'
 import { StickyCta } from './StickyCta'
 import { HorizontalTour } from './HorizontalTour'
-import { DashboardSurface } from './RealAppShowcase'
 import { BentoGrid, BentoCell } from './Bento'
 import { ShieldCheck, Wallet, KeyRound } from 'lucide-react'
+import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer'
 
 // Public marketing page, shown at "/" only when there's no session (see
 // app/page.tsx). Screenshots are real product captures from a seeded
 // workspace, not illustrations.
+//
+// KineticGrid is the page's persistent background (fixed full-viewport
+// canvas, our own ground color passed through via backgroundColor so it
+// matches the rest of the page rather than the component's own default).
+// Scoped deliberately: every section below keeps its own opaque background
+// unchanged, so the grid is visible in the gaps between sections (padding,
+// empty margins) rather than requiring every card/section on the page to
+// go transparent — a much larger, riskier change than what was asked for.
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#07080c] text-white antialiased">
+    <KineticGrid backgroundColor="#07080c" className="marketing-square text-white antialiased">
       <SmoothScroll />
       <StickyCta />
       <Nav />
       <Hero />
 
-      <HorizontalTour />
+      <Section id="tour">
+        <HorizontalTour />
+      </Section>
 
       <Bridge />
       <AgentSection />
@@ -37,13 +47,13 @@ export function LandingPage() {
       <Privacy />
       <FinalCta />
       <Footer />
-    </div>
+    </KineticGrid>
   )
 }
 
 function Section({ children, id }: { children: React.ReactNode; id?: string }) {
   return (
-    <section id={id} className="border-t border-white/[0.07] py-24">
+    <section id={id} className="border-t border-white/[0.07] py-32 sm:py-40">
       {children}
     </section>
   )
@@ -53,32 +63,41 @@ function SectionHead({ eyebrow, title, body }: { eyebrow: string; title: string;
   return (
     <div className="mx-auto max-w-7xl px-6">
       <span className="font-mono text-xs uppercase tracking-[0.18em] text-[#5b8cff]">{eyebrow}</span>
-      <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
-      {body && <p className="mt-4 max-w-xl leading-relaxed text-white/55">{body}</p>}
+      <h2 className="mt-5 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
+      {body && <p className="mt-6 max-w-xl leading-relaxed text-white/55">{body}</p>}
     </div>
   )
 }
 
+// Minimal header: logo left, auth actions right, no nav links — the page
+// below is a plain scroll with no in-page anchors to jump to anymore (the
+// rail/carousel sections auto-advance or scroll into view on their own),
+// so a link row here was just chrome with nothing to point at.
 function Nav() {
   return (
-    <nav className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#07080c]/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+    <nav className="sticky top-0 z-40 bg-[#07080c]/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
         <span className="flex items-center gap-2.5 font-semibold tracking-tight">
           <OrgLogo org={{ name: BRAND_NAME }} size={24} vendorFallback />
           {BRAND_NAME}
         </span>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center">
           <Link
             href="/login"
-            className="rounded-full px-4 py-2 text-sm text-white/65 transition-colors hover:text-white"
+            className="rounded-full bg-[#161616] px-4 py-2 text-sm text-white/70 transition-colors hover:bg-[#1e1e1e] hover:text-white"
           >
             Sign in
           </Link>
           <Link
             href="/signup"
-            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-[#07080c] transition-transform hover:scale-[1.03] active:scale-[0.98]"
+            aria-label="Start free"
+            className="ml-2 flex items-center overflow-hidden rounded-full border border-white/10 bg-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
           >
-            Start free
+            <span className="px-4 py-2 text-sm font-medium text-[#07080c]">Start free</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-[#5b8cff] text-[#07080c]">
+              <span className="inline-block -rotate-45 text-base leading-none">→</span>
+            </span>
           </Link>
         </div>
       </div>
@@ -86,19 +105,34 @@ function Nav() {
   )
 }
 
+// Single centered column, Better Stack-inspired copy/CTA structure but
+// without a product-preview visual — a 3D-tilted dashboard screenshot was
+// tried here and looked bad (flat single-axis rotation, no real depth; the
+// crop also cut off before the actual chart), so it was removed rather than
+// patched. Theme-aware (light/dark both real here) even though the rest of
+// the marketing page below it is still dark-only — marketing-page-wide
+// theming is a separate, larger pass; this section alone uses the
+// --background/--foreground/--border tokens so it doesn't look broken the
+// one time a visitor actually flips the toggle.
 function Hero() {
   return (
-    <header className="relative isolate overflow-hidden">
-      <HeroCanvas />
-      {/* Static gradient under the canvas so the hero still reads as designed
-          when WebGL is unavailable or reduced-motion is on. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[radial-gradient(90%_70%_at_50%_0%,#16224d_0%,#0a0c14_55%,#07080c_100%)]"
-      />
-      <div className="relative mx-auto max-w-7xl px-6 pb-20 pt-20 sm:pt-24">
+    // text-white, not text-foreground: this whole page is a committed dark
+    // world (every other section below uses literal white/[opacity] and
+    // hex colors, never the semantic --foreground token that flips with
+    // the signed-in app's light/dark toggle). Hero used to be the one
+    // section left on --foreground, so a visitor who'd ever switched the
+    // app to light mode got this hero rendered near-black-on-black —
+    // match the rest of the page's convention instead of reacting to a
+    // toggle this page was never designed to support.
+    <header className="relative isolate overflow-hidden text-white">
+      {/* pb-32 sm:pb-40 matches Section's own py-32 sm:py-40 rhythm — Hero
+          isn't wrapped in Section (it needs its own top spacing, tighter
+          than the rest since it's the page's very first thing), but its
+          bottom gap into the next section (the pipeline tour) must still
+          match the uniform rhythm every other section-to-section gap uses. */}
+      <div className="relative mx-auto max-w-7xl px-6 pb-32 pt-20 sm:pb-40 sm:pt-24">
         <RevealOnMount>
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.06] px-3.5 py-1.5 text-xs text-white/75 backdrop-blur-sm">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-xs text-white/75 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-[#5b8cff]" />
             Built for the agents you are already using
           </span>
@@ -106,7 +140,12 @@ function Hero() {
 
         <RevealOnMount delay={0.08}>
           <h1 className="mt-7 max-w-4xl text-5xl font-semibold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
-            The step between
+            The{' '}
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#5b8cff]/15 px-4 py-1 align-middle text-[#5b8cff] dark:text-[#8fb0ff]">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#5b8cff]" />
+              step
+            </span>{' '}
+            between
             <br />
             a spreadsheet and a CRM.
           </h1>
@@ -129,7 +168,7 @@ function Hero() {
             </Link>
             <Link
               href="#how-it-works"
-              className="rounded-full border border-white/15 px-6 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/[0.06] hover:text-white"
+              className="rounded-full border border-white/10 px-6 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
               See how it works
             </Link>
@@ -137,12 +176,6 @@ function Hero() {
           <p className="mt-4 text-xs text-white/40">
             No credit card. Export everything the day you leave.
           </p>
-        </RevealOnMount>
-
-        <RevealOnMount delay={0.32}>
-          <div className="mt-14">
-            <DashboardSurface />
-          </div>
         </RevealOnMount>
       </div>
     </header>
@@ -161,7 +194,7 @@ function Bridge() {
           body="We are getting you ready for one."
         />
       </Reveal>
-      <div className="mt-12">
+      <div className="mt-16">
         <BridgeSection />
       </div>
     </Section>
@@ -186,24 +219,21 @@ function AgentSection() {
           body="Your agent reads and writes your pipeline over a real protocol."
         />
       </Reveal>
-      <div className="mx-auto mt-12 max-w-7xl px-6">
+      <div className="mx-auto mt-16 max-w-7xl px-6">
         <BentoGrid>
-          <div className="md:col-span-4">
+          <BentoCell span={4} className="p-0">
             <Reveal className="h-full">
               <AgentTerminal />
             </Reveal>
-          </div>
-          <div className="flex flex-col gap-3 md:col-span-2">
+          </BentoCell>
+          <div className="grid grid-cols-1 md:col-span-2">
             {points.map(([k, v], i) => (
-              <div
-                key={k}
-                className="flex-1 rounded-xl border border-white/[0.09] bg-white/[0.03] p-6 transition-colors duration-300 hover:border-white/[0.16] hover:bg-white/[0.045]"
-              >
+              <BentoCell key={k} span={6} className="p-6 first:mt-0">
                 <Reveal delay={0.08 + i * 0.06}>
                   <h3 className="text-sm font-semibold text-white">{k}</h3>
                   <p className="mt-1.5 text-sm leading-relaxed text-white/55">{v}</p>
                 </Reveal>
-              </div>
+              </BentoCell>
             ))}
           </div>
         </BentoGrid>
@@ -222,7 +252,7 @@ function EverythingElse() {
           body="All of it, free."
         />
       </Reveal>
-      <div className="mt-12">
+      <div className="mt-16">
         <FeatureCarousel />
       </div>
     </Section>
@@ -254,7 +284,7 @@ function HowItWorks() {
           body="The longest step is pasting an email."
         />
       </Reveal>
-      <div className="mt-14">
+      <div className="mt-16">
         <OnboardingFlow />
       </div>
     </Section>
@@ -278,7 +308,7 @@ function Privacy() {
           body="The model runs on your machine, so it costs us nothing."
         />
       </Reveal>
-      <div className="mx-auto mt-12 max-w-7xl px-6">
+      <div className="mx-auto mt-16 max-w-7xl px-6">
         <BentoGrid>
           {points.map((p, i) => (
             <BentoCell key={p.k} span={p.span}>
@@ -297,7 +327,7 @@ function Privacy() {
 
 function FinalCta() {
   return (
-    <section className="relative isolate overflow-hidden border-t border-white/[0.07] py-28 text-center">
+    <section className="relative isolate overflow-hidden border-t border-white/[0.07] py-32 sm:py-40 text-center">
       <div
         aria-hidden="true"
         className="absolute inset-0 -z-10 bg-[radial-gradient(70%_120%_at_50%_100%,#16224d_0%,#07080c_70%)]"
@@ -321,14 +351,32 @@ function FinalCta() {
 
 function Footer() {
   return (
-    <footer className="border-t border-white/[0.07] py-8">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 text-xs text-white/40">
-        <span className="flex items-center gap-2 font-medium text-white/70">
-          <OrgLogo org={{ name: BRAND_NAME }} size={20} vendorFallback />
-          {BRAND_NAME}
-        </span>
-        <span>© 2026 {BRAND_NAME}</span>
-      </div>
-    </footer>
+    <HalftoneWordmarkFooter
+      wordmark={BRAND_NAME.toLowerCase()}
+      label={BRAND_NAME}
+      meta="© 2026 · The step between a spreadsheet and a CRM"
+      palette={{ background: '#07080c', ink: '#ededec', warm: '#5b8cff' }}
+      columns={[
+        {
+          title: 'Product',
+          links: [
+            { label: 'Where this sits', href: '#bridge' },
+            { label: 'Agent API', href: '#agents' },
+            { label: 'How it works', href: '#how-it-works' },
+          ],
+        },
+        {
+          title: 'Account',
+          links: [
+            { label: 'Sign in', href: '/login' },
+            { label: 'Start free', href: '/signup' },
+          ],
+        },
+        {
+          title: 'Company',
+          links: [{ label: BRAND_NAME }],
+        },
+      ]}
+    />
   )
 }

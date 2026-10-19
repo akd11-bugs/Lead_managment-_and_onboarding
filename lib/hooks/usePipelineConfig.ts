@@ -58,12 +58,29 @@ function buildBoardColumns(stages: StageOption[]): BoardColumn[] {
   )
 }
 
+function shapeConfig(stages: StageOption[] | null, onboardingSteps: OnboardingStepOption[] | null) {
+  const resolvedStages = stages ?? []
+  const resolvedSteps = onboardingSteps ?? []
+
+  return {
+    stages: resolvedStages,
+    onboardingSteps: resolvedSteps,
+    columns: buildBoardColumns(resolvedStages),
+    finalOnboardingStepKey: resolvedSteps.find((s) => s.isCore)?.key ?? 'final_onboarded',
+    loading: stages === null || onboardingSteps === null,
+  }
+}
+
 // Fetches the caller's org-scoped pipeline configuration once (stages +
 // onboarding steps), seeded server-side on first read if the org has none
 // yet (see lib/pipelineConfig.ts) — every Kanban/lead-form component that
 // used to import STAGES/BOARD_COLUMNS/ONBOARDING_SUB_STAGES directly from
 // lib/types.ts uses this instead, so a Settings-side rename/custom-stage
 // actually shows up everywhere else in the app.
+//
+// Only for a regular (Google/password) session — the backing routes are
+// admin/sales/ops-authenticated and 401 a rep session. RepForm uses
+// useRepPipelineConfig below instead.
 export function usePipelineConfig() {
   const [stages, setStages] = useState<StageOption[] | null>(null)
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepOption[] | null>(null)
@@ -81,16 +98,35 @@ export function usePipelineConfig() {
     }
   }, [])
 
-  const resolvedStages = stages ?? []
-  const resolvedSteps = onboardingSteps ?? []
+  return shapeConfig(stages, onboardingSteps)
+}
 
-  return {
-    stages: resolvedStages,
-    onboardingSteps: resolvedSteps,
-    columns: buildBoardColumns(resolvedStages),
-    finalOnboardingStepKey: resolvedSteps.find((s) => s.isCore)?.key ?? 'final_onboarded',
-    loading: stages === null || onboardingSteps === null,
-  }
+// Rep-session equivalent, backed by the single combined
+// GET /api/rep/pipeline-config route (a rep session can't call the
+// admin-authenticated /api/pipeline-config/* routes above). `loggedIn` must
+// gate the fetch (same convention as RepForm's own lead-search effect) —
+// RepForm renders before PIN login, when there's no rep_session cookie yet,
+// so an unconditional fetch here would always 401 and never retry.
+export function useRepPipelineConfig(loggedIn: boolean) {
+  const [stages, setStages] = useState<StageOption[] | null>(null)
+  const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepOption[] | null>(null)
+
+  useEffect(() => {
+    if (!loggedIn) return
+    let cancelled = false
+    fetch('/api/rep/pipeline-config')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        setStages(d.stages ?? [])
+        setOnboardingSteps(d.steps ?? [])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [loggedIn])
+
+  return shapeConfig(stages, onboardingSteps)
 }
 
 export interface LeadFieldOption {

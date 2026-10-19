@@ -1,34 +1,33 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Kanban, BarChart3, Plug, KeyRound, Building2, Calendar, ShieldCheck } from 'lucide-react'
+import Image from 'next/image'
+import { Kanban, BarChart3, Plug, KeyRound, Building2, Calendar, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react'
 import { GenericPipelineChart } from './GenericPipelineChart'
-import { SourceROI } from '@/components/dashboard/SourceROI'
 import { ActivityFeedView } from '@/components/dashboard/ActivityFeed'
 import { RepPerformance } from '@/components/dashboard/RepPerformance'
 import {
   GENERIC_STAGE_DATA,
   ACTIVITY_DEMO,
   REPS_DEMO,
-  SOURCES_DEMO,
-  CompaniesSurface,
   CalendarSurface,
   AuditLogSurface,
 } from './RealAppShowcase'
 
-// "Everything else" as a pinned scroll carousel, same mechanism as
-// HorizontalTour: the section pins while the page scrolls, and one big card
-// fades/slides into the next. This covers every remaining feature inside a
-// fixed amount of page height instead of a long static list, and every card
-// carries the actual product component, not an icon tile.
+// "Everything else," as an auto-rotating carousel: one card at a time,
+// advancing on a timer and looping back to the first after the last, with
+// arrows and dots for manual control. Pauses on hover/focus and under
+// prefers-reduced-motion so it never fights a visitor reading a card. This
+// replaces both the earlier scroll-pinned version (ghosting/dead-space
+// bugs) and a later plain-grid version — a single auto-advancing card is
+// what was actually asked for here.
 
 type Card = {
   id: string
   Icon: React.ElementType
   name: string
   description: string
-  render: () => React.ReactNode
-}
+} & ({ render: () => React.ReactNode; image?: never } | { image: string; render?: never })
 
 const CARDS: Card[] = [
   {
@@ -37,7 +36,13 @@ const CARDS: Card[] = [
     name: 'Pipeline',
     description: 'Stages your team already uses.',
     render: () => (
-      <div className="rounded-lg bg-background p-4 text-foreground">
+      // .light pins --background/--foreground to the app's real light-theme
+      // values regardless of the marketing page's own theme state (same
+      // idiom as Frame.tsx's product-preview wrapper) — without it, these
+      // tokens follow whatever the visitor's site-wide theme happens to be
+      // (dark by default), rendering near-black text on a near-transparent
+      // dark card instead of a light app-screenshot-style preview.
+      <div className="light rounded-lg bg-background p-4 text-foreground">
         <GenericPipelineChart data={GENERIC_STAGE_DATA} />
       </div>
     ),
@@ -47,11 +52,7 @@ const CARDS: Card[] = [
     Icon: BarChart3,
     name: 'Reports',
     description: 'Pipeline, conversion, source ROI. Exportable.',
-    render: () => (
-      <div className="rounded-lg bg-background p-4 text-foreground">
-        <SourceROI rows={SOURCES_DEMO} />
-      </div>
-    ),
+    image: '/marketing/reports-screenshot.png',
   },
   {
     id: 'agent-api',
@@ -59,7 +60,7 @@ const CARDS: Card[] = [
     name: 'Agent API',
     description: 'Six tools over MCP. Every call lands here, on the real activity log.',
     render: () => (
-      <div className="rounded-lg bg-background p-4 text-foreground">
+      <div className="light rounded-lg bg-background p-4 text-foreground">
         <ActivityFeedView items={ACTIVITY_DEMO} live={false} interactive={false} />
       </div>
     ),
@@ -70,7 +71,7 @@ const CARDS: Card[] = [
     name: 'Rep access',
     description: 'Field reps log in with a PIN, no email needed.',
     render: () => (
-      <div className="rounded-lg bg-background p-4 text-foreground">
+      <div className="light rounded-lg bg-background p-4 text-foreground">
         <RepPerformance rows={REPS_DEMO} />
       </div>
     ),
@@ -80,7 +81,7 @@ const CARDS: Card[] = [
     Icon: Building2,
     name: 'Companies',
     description: 'One record per company, every lead and contact linked to it.',
-    render: () => <CompaniesSurface />,
+    image: '/marketing/companies-screenshot.png',
   },
   {
     id: 'calendar',
@@ -98,104 +99,135 @@ const CARDS: Card[] = [
   },
 ]
 
+// 1 second per card, GSAP-driven crossfade (fade + small vertical shift on
+// both the outgoing and incoming card) rather than the CSS keyframe this
+// used at the previous 4.5s pace — a plain remount-triggered CSS animation
+// is fine at a slow pace, but a GSAP timeline gives precise control over
+// exactly how the swap feels at a much faster 1s cadence (e.g. tuning the
+// fade duration independently of the interval, overwriting an in-flight
+// tween if the user manually advances mid-transition).
+const AUTO_ADVANCE_MS = 1000
+
 export function FeatureCarousel() {
-  const sectionRef = useRef<HTMLDivElement>(null)
-  const [progress, setProgress] = useState(0)
-  const [enabled, setEnabled] = useState(false)
-  const frame = useRef(0)
+  const n = CARDS.length
+  const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
+  const prevIndex = useRef(0)
 
   useEffect(() => {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const decide = () => setEnabled(!reduce.matches)
-    decide()
-    reduce.addEventListener('change', decide)
-    return () => reduce.removeEventListener('change', decide)
-  }, [])
-
-  useEffect(() => {
-    if (!enabled) return
-    const el = sectionRef.current
-    if (!el) return
-
-    const onScroll = () => {
-      cancelAnimationFrame(frame.current)
-      frame.current = requestAnimationFrame(() => {
-        const rect = el.getBoundingClientRect()
-        const total = el.offsetHeight - window.innerHeight
-        if (total <= 0) return
-        const p = Math.min(1, Math.max(0, -rect.top / total))
-        setProgress(p)
-      })
-    }
-
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll)
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (paused || reduce) return
+    timer.current = setInterval(() => {
+      setIndex((i) => (i + 1) % n)
+    }, AUTO_ADVANCE_MS)
     return () => {
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
-      cancelAnimationFrame(frame.current)
+      if (timer.current) clearInterval(timer.current)
     }
-  }, [enabled])
+  }, [paused, n])
 
-  // Stacked fallback: reduced motion, or JS hasn't run yet (this is also
-  // what search engines and no-JS visitors see).
-  if (!enabled) {
-    return (
-      <div className="mx-auto max-w-4xl space-y-6 px-6">
-        {CARDS.map((c) => (
-          <CardFrame key={c.id} card={c} active />
-        ))}
-      </div>
-    )
+  useEffect(() => {
+    if (index === prevIndex.current) return
+    prevIndex.current = index
+    const el = frameRef.current
+    if (!el) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    let cancelled = false
+    import('gsap').then(({ default: gsap }) => {
+      if (cancelled) return
+      gsap.fromTo(el, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out', overwrite: true })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [index])
+
+  function go(delta: number) {
+    setIndex((i) => (i + delta + n) % n)
   }
 
-  const n = CARDS.length
-  const index = Math.min(n - 1, Math.floor(progress * n))
-
   return (
-    <div ref={sectionRef} style={{ height: `${n * 70}vh` }}>
-      <div className="sticky top-24 mx-auto max-w-4xl px-6">
-        <div className="relative" style={{ height: '26rem' }}>
-          {CARDS.map((c, i) => {
-            const offset = i - index
-            return (
-              <div
-                key={c.id}
-                className="absolute inset-0 transition-all duration-500 ease-out"
-                style={{
-                  gridArea: '1 / 1',
-                  transform: `translateY(${offset * 24}px) scale(${offset === 0 ? 1 : 0.94})`,
-                  opacity: offset === 0 ? 1 : offset < 0 ? 0 : 0.0,
-                  zIndex: n - Math.abs(offset),
-                  pointerEvents: offset === 0 ? 'auto' : 'none',
-                }}
-              >
-                <CardFrame card={c} active={offset === 0} />
-              </div>
-            )
-          })}
+    <div
+      className="mx-auto max-w-4xl px-6"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <div className="relative">
+        <div ref={frameRef}>
+          <CardFrame card={CARDS[index]} />
         </div>
 
-        <div className="mt-8 flex gap-1.5">
-          {CARDS.map((c, i) => (
-            <span
-              key={c.id}
-              className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                i === index ? 'bg-[#5b8cff]' : 'bg-white/12'
-              }`}
-            />
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => go(-1)}
+          aria-label="Previous feature"
+          className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-[#0b0d14] p-2 text-white/70 shadow-lg transition-colors hover:text-white"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => go(1)}
+          aria-label="Next feature"
+          className="absolute right-0 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-[#0b0d14] p-2 text-white/70 shadow-lg transition-colors hover:text-white"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-6 flex items-center justify-center gap-2">
+        {CARDS.map((c, i) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setIndex(i)}
+            aria-label={`Show ${c.name}`}
+            aria-current={i === index}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              i === index ? 'w-6 bg-[#5b8cff]' : 'w-1.5 bg-white/20'
+            }`}
+          />
+        ))}
       </div>
     </div>
   )
 }
 
-function CardFrame({ card, active }: { card: Card; active: boolean }) {
+function CardFrame({ card }: { card: Card }) {
   const { Icon } = card
+
+  if (card.image) {
+    return (
+      <div className="relative h-[26rem] overflow-hidden rounded-xl border border-white/[0.09] shadow-2xl shadow-black/40">
+        <Image
+          src={card.image}
+          alt={`${card.name} in the real app`}
+          fill
+          sizes="(min-width: 768px) 56rem, 100vw"
+          className="object-cover object-top"
+        />
+        {/* Bottom gradient so the title/description stay legible over
+            whatever's in the screenshot, same signature move as Notion's
+            own real-in-product-screenshot cards. */}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#07080c] via-[#07080c]/80 to-transparent px-6 pb-5 pt-16">
+          <div className="flex items-center gap-3">
+            <Icon className="h-5 w-5 text-[#5b8cff]" strokeWidth={1.6} />
+            <div>
+              <h3 className="text-base font-semibold text-white">{card.name}</h3>
+              <p className="text-xs text-white/70">{card.description}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-white/[0.09] bg-[#0b0d14] shadow-2xl shadow-black/40">
+    <div className="flex h-[26rem] flex-col overflow-hidden rounded-xl border border-white/[0.09] bg-[#0b0d14] shadow-2xl shadow-black/40">
       <div className="flex items-center gap-3 border-b border-white/[0.07] px-6 py-4">
         <Icon className="h-5 w-5 text-[#5b8cff]" strokeWidth={1.6} />
         <div>
@@ -203,7 +235,7 @@ function CardFrame({ card, active }: { card: Card; active: boolean }) {
           <p className="text-xs text-white/50">{card.description}</p>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-5">{active ? card.render() : null}</div>
+      <div className="min-h-0 flex-1 overflow-auto p-5">{card.render!()}</div>
     </div>
   )
 }

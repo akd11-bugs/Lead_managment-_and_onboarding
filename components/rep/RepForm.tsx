@@ -31,7 +31,7 @@ import {
   type Stage,
 } from '@/lib/types'
 import { PipelineProgressBar } from '@/components/leads/PipelineProgressBar'
-import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
+import { useRepPipelineConfig } from '@/lib/hooks/usePipelineConfig'
 
 interface LeadSummary {
   id: string
@@ -73,9 +73,9 @@ function formatCurrency(n: number) {
 }
 
 export function RepForm({ orgSlug }: { orgSlug: string }) {
-  const { columns } = usePipelineConfig()
-  const columnLabels = Object.fromEntries(columns.map((c) => [c.key, c.label]))
   const [loggedIn, setLoggedIn] = useState(false)
+  const { columns } = useRepPipelineConfig(loggedIn)
+  const columnLabels = Object.fromEntries(columns.map((c) => [c.key, c.label]))
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)

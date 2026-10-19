@@ -3,52 +3,81 @@
 @tailwind utilities;
 
 @layer base {
+  /* Motion.dev-inspired palette — warm near-black/off-white neutrals (never
+     pure black/white or blue-tinted slate) with one saturated yellow accent
+     for primary actions, carried over both themes so the toggle only swaps
+     which end of the neutral scale is "ground." */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 60 16.7% 97.6%;
+    --foreground: 60 6.2% 6.3%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 60 6.2% 6.3%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --popover-foreground: 60 6.2% 6.3%;
+    --primary: 47 91.7% 52.7%;
+    --primary-foreground: 60 6.2% 6.3%;
+    --secondary: 60 10% 93%;
+    --secondary-foreground: 60 6.2% 6.3%;
+    --muted: 60 10% 93%;
+    --muted-foreground: 60 4% 40%;
+    --accent: 60 10% 91%;
+    --accent-foreground: 60 6.2% 6.3%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 8% 88%;
+    --input: 60 8% 88%;
+    --ring: 47 91.7% 52.7%;
     --radius: 0.5rem;
   }
 
-  /* Attio-style dark palette — neutral near-black (not blue-tinted slate),
-     a clean blue accent for primary actions/links/focus, and a card surface
-     one step lighter than the page background for clear elevation. */
   .dark {
-    --background: 0 0% 7%;
-    --foreground: 0 0% 95%;
-    --card: 0 0% 9.5%;
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 0 0% 16%;
-    --accent-foreground: 0 0% 95%;
+    --background: 168 15.2% 6.5%;
+    --foreground: 60 2.7% 92.7%;
+    --card: 168 11.1% 8.8%;
+    --card-foreground: 60 2.7% 92.7%;
+    --popover: 168 9.4% 10.4%;
+    --popover-foreground: 60 2.7% 92.7%;
+    --primary: 47 91.7% 52.7%;
+    --primary-foreground: 60 6.2% 6.3%;
+    --secondary: 168 8% 13%;
+    --secondary-foreground: 60 2.7% 92.7%;
+    --muted: 168 8% 13%;
+    --muted-foreground: 60 2% 63%;
+    --accent: 168 8% 15%;
+    --accent-foreground: 60 2.7% 92.7%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 217 91% 60%;
+    --border: 168 7% 17%;
+    --input: 168 7% 17%;
+    --ring: 47 91.7% 52.7%;
+  }
+
+  /* Explicit re-assertion of the light values, scoped so it wins even when
+     nested inside a `.dark`-classed ancestor (components/marketing/Frame.tsx
+     pins its product-preview surface to `.light` regardless of the
+     marketing page's own theme) — `:root`'s own light values only apply
+     when nothing closer overrides them, which `.dark` on <html> always does
+     site-wide. */
+  .light {
+    --background: 60 16.7% 97.6%;
+    --foreground: 60 6.2% 6.3%;
+    --card: 0 0% 100%;
+    --card-foreground: 60 6.2% 6.3%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 60 6.2% 6.3%;
+    --primary: 47 91.7% 52.7%;
+    --primary-foreground: 60 6.2% 6.3%;
+    --secondary: 60 10% 93%;
+    --secondary-foreground: 60 6.2% 6.3%;
+    --muted: 60 10% 93%;
+    --muted-foreground: 60 4% 40%;
+    --accent: 60 10% 91%;
+    --accent-foreground: 60 6.2% 6.3%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 8% 88%;
+    --input: 60 8% 88%;
+    --ring: 47 91.7% 52.7%;
   }
 }
 
@@ -142,6 +171,25 @@
   }
 }
 
+/* Crossfade between cards in the "Everything else" auto-rotating carousel
+   (components/marketing/FeatureCarousel.tsx). */
+@keyframes carousel-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[carousel-fade-in_400ms_ease-out\] {
+    animation: none !important;
+  }
+}
+
 /* Scrollbar styling for kanban */
 .kanban-scroll::-webkit-scrollbar {
   height: 10px;
@@ -155,4 +203,30 @@
 }
 .kanban-scroll::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
+}
+/* Marketing page only: square off card/container corners, including inside
+   the real dashboard components it borrows (Card ships rounded-xl by
+   design, for the signed-in app) — scoped so the app itself is untouched.
+   Pills and round indicator dots (rounded-full) are deliberately exempt:
+   the "Start free" button, the hero's status pill and the carousel's
+   progress dots stay round, only boxy containers go sharp. */
+.marketing-square .rounded-xl,
+.marketing-square .rounded-lg,
+.marketing-square .rounded-md,
+.marketing-square .rounded {
+  border-radius: 0 !important;
+}
+
+/* Marketing page only: the footer's mono typeface (HalftoneWordmarkFooter,
+   already matched by the eyebrow labels via font-mono) becomes the page's
+   one typeface — headlines and body copy included, not just labels — so
+   the whole landing page reads as one considered system instead of the
+   footer feeling like a different design. The signed-in app keeps its own
+   sans (--font-sans/Inter) untouched; this rule is scoped to the marketing
+   root same as the rounded-corner override above. Letter-spacing/uppercase
+   stay opt-in per element (already set on eyebrows/nav) rather than forced
+   here — a mono face holds up fine at headline/body sizes in its normal
+   case, but uppercase tracked-out body paragraphs would be unreadable. */
+.marketing-square {
+  font-family: var(--font-mono), ui-monospace, monospace;
 }

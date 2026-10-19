@@ -1,0 +1,16 @@
+// Tremor useOnWindowResize [v0.0.2]
+// Vendored for components/charts/BarChart.tsx (Tremor's Bar Chart component).
+
+import * as React from 'react'
+
+export const useOnWindowResize = (handler: () => void) => {
+  React.useEffect(() => {
+    const handleResize = () => {
+      handler()
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => window.removeEventListener('resize', handleResize)
+  }, [handler])
+}

@@ -95,6 +95,16 @@ const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
 // quantifier has to allow for that minimum, not just longer full numbers.
 const PHONE_RE = /(\+?\d[\d\s().-]{5,}\d)/
 
+// How long to wait on the NER model (download + inference) before giving up
+// and returning whatever regex already found. Without this, a slow/blocked
+// model load (flaky network, a CDN the browser can't reach, an ONNX runtime
+// init that silently never resolves — observed in at least one headless
+// Chromium environment) loses the email/phone regex already matched above,
+// since the function was awaiting the model before returning anything at
+// all. 8s covers a cold model download on a normal connection; this is a
+// best-effort enhancement on top of regex, never the only source of truth.
+const NER_TIMEOUT_MS = 8000
+
 export async function extractLeadFields(text: string): Promise<ExtractedLeadFields> {
   const result: ExtractedLeadFields = {}
   const trimmed = text.trim()
@@ -106,14 +116,20 @@ export async function extractLeadFields(text: string): Promise<ExtractedLeadFiel
   const phoneMatch = trimmed.match(PHONE_RE)
   if (phoneMatch) result.phone = phoneMatch[0].trim()
 
-  const ner = await getNerPipeline()
-  const tokens = await ner(trimmed)
-  const entities = mergeEntities(tokens)
+  try {
+    const entities = await Promise.race([
+      getNerPipeline().then((ner) => ner(trimmed)).then(mergeEntities),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('NER model timed out')), NER_TIMEOUT_MS)),
+    ])
 
-  const org = entities.find((e) => e.type === 'ORG')
-  const person = entities.find((e) => e.type === 'PER')
-  if (org) result.company = org.text
-  if (person) result.poc = person.text
+    const org = entities.find((e) => e.type === 'ORG')
+    const person = entities.find((e) => e.type === 'PER')
+    if (org) result.company = org.text
+    if (person) result.poc = person.text
+  } catch {
+    // Model failed to load/run or timed out — the caller still gets
+    // whatever regex found above (email/phone), rather than nothing.
+  }
 
   return result
 }

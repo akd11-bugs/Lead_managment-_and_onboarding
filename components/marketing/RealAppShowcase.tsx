@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { StatTile, CurrencyTile } from '@/components/dashboard/StatTile'
 import { ActivityFeedView, type ActivityItem } from '@/components/dashboard/ActivityFeed'
 import { AlertBanner } from '@/components/dashboard/AlertBanner'
@@ -17,6 +18,7 @@ import { BRAND_NAME } from '@/lib/branding'
 import { Frame } from './Frame'
 import { DraggablePipelineSurface } from './DraggablePipelineSurface'
 import { GenericPipelineChart } from './GenericPipelineChart'
+import { Reveal } from './Reveal'
 
 // The product surfaces, rendered with the REAL dashboard components
 // (StatTile, CurrencyTile, ActivityFeedView) rather than hand-written
@@ -119,32 +121,48 @@ const BD: BDSummaryData = {
 export function DashboardSurface({ compact = false }: { compact?: boolean }) {
   return (
     <Frame path="/dashboard">
-      <AlertBanner alerts={ALERTS} />
+      <Reveal y={12} force>
+        <AlertBanner alerts={ALERTS} />
+      </Reveal>
       <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <CurrencyTile label="Open pipeline" value={383_000} hint="9 open leads" />
-        <StatTile label="Total leads" value={11} hint="2 won · 0 lost" />
-        <StatTile label="Won this month" value={2} hint="₹1.8L" trend={{ direction: 'up', text: 'up from last month' }} />
-        <StatTile label="Conversion" value="18%" hint="2 / 11 won" />
+        {[
+          <CurrencyTile key="open" label="Open pipeline" value={383_000} hint="9 open leads" />,
+          <StatTile key="total" label="Total leads" value={11} hint="2 won · 0 lost" />,
+          <StatTile key="won" label="Won this month" value={2} hint="₹1.8L" trend={{ direction: 'up', text: 'up from last month' }} />,
+          <StatTile key="conv" label="Conversion" value="18%" hint="2 / 11 won" />,
+        ].map((tile, i) => (
+          <Reveal key={tile.key} delay={0.05 + i * 0.05} y={12} force>
+            {tile}
+          </Reveal>
+        ))}
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Pipeline by stage</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GenericPipelineChart data={GENERIC_STAGE_DATA} />
-          </CardContent>
-        </Card>
-        <ActivityFeedView items={ACTIVITY_DEMO} live={false} interactive={false} />
+        <Reveal delay={0.25} y={16} force>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Pipeline by stage</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GenericPipelineChart data={GENERIC_STAGE_DATA} />
+            </CardContent>
+          </Card>
+        </Reveal>
+        <Reveal delay={0.3} y={16} force>
+          <ActivityFeedView items={ACTIVITY_DEMO} live={false} interactive={false} />
+        </Reveal>
       </div>
       {!compact && (
         <>
-          <div className="mt-3">
+          <Reveal delay={0.35} y={16} className="mt-3" force>
             <BDSummary data={BD} />
-          </div>
+          </Reveal>
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            <RepPerformance rows={REPS_DEMO} />
-            <SourceROI rows={SOURCES_DEMO} />
+            <Reveal delay={0.4} y={16} force>
+              <RepPerformance rows={REPS_DEMO} />
+            </Reveal>
+            <Reveal delay={0.4} y={16} force>
+              <SourceROI rows={SOURCES_DEMO} />
+            </Reveal>
           </div>
         </>
       )}
@@ -156,55 +174,194 @@ export function LeadSurface() {
   return (
     <Frame path="/leads/ardent-studio">
       <div className="space-y-4">
-        <div>
+        <Reveal y={12} force>
           <h3 className="text-lg font-semibold tracking-tight">Ardent Studio</h3>
           <p className="text-sm text-muted-foreground">Meera Raghavan · Referral</p>
-        </div>
+        </Reveal>
         <div className="flex gap-1.5">
           {['New', 'Pending', 'Proposal', 'Onboarding'].map((s, i) => (
-            <div key={s} className="flex-1">
+            <Reveal key={s} delay={0.1 + i * 0.06} y={10} className="flex-1" force>
               <div className={`h-1.5 rounded-full ${i < 3 ? 'bg-blue-500' : 'bg-muted'}`} />
               <p className="mt-1.5 text-[11px] text-muted-foreground">{s}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
-        <ActivityFeedView items={ACTIVITY_DEMO.slice(0, 3)} live={false} interactive={false} />
+        <Reveal delay={0.35} y={14} force>
+          <ActivityFeedView items={ACTIVITY_DEMO.slice(0, 3)} live={false} interactive={false} />
+        </Reveal>
       </div>
     </Frame>
   )
 }
 
+// A real draggable whiteboard, not a diagram of one — same spirit as
+// DraggablePipelineSurface. No pipeline funnel sits on it by default (the
+// real /whiteboard page doesn't seed one either, see
+// app/api/whiteboard/elements/route.ts): just sticky notes, a loose
+// connector and a scribble, scattered the way an actual working board
+// looks, not a tidy auto-generated layout. State is local to this demo —
+// nothing persists or touches the real whiteboard API.
+const NOTE_TONE: Record<string, string> = {
+  yellow: 'bg-amber-200 text-amber-950 border-amber-400',
+  pink: 'bg-pink-200 text-pink-950 border-pink-400',
+  green: 'bg-emerald-200 text-emerald-950 border-emerald-400',
+  blue: 'bg-sky-200 text-sky-950 border-sky-400',
+}
+
+interface DemoNote {
+  id: string
+  x: number
+  y: number
+  rotate: number
+  tone: keyof typeof NOTE_TONE
+  text: string
+  by?: string
+  byColor?: string
+}
+
+const INITIAL_NOTES: DemoNote[] = [
+  { id: 'n1', x: 24, y: 28, rotate: -4, tone: 'yellow', text: 'Call back Ardent Studio Thu', by: 'Priya', byColor: '#2fcf7a' },
+  { id: 'n2', x: 168, y: 10, rotate: 3, tone: 'pink', text: 'Ask about budget sign-off' },
+  { id: 'n3', x: 108, y: 118, rotate: -2, tone: 'green', text: 'Send updated proposal', by: 'Arjun', byColor: '#f0ff3d' },
+  { id: 'n4', x: 256, y: 96, rotate: 5, tone: 'blue', text: "Loop in their ops lead" },
+]
+
 export function WhiteboardSurface() {
-  const cols = [
-    { label: 'NEW', n: 4, v: '₹96,000' },
-    { label: 'PENDING', n: 3, v: '₹1.3L' },
-    { label: 'PROPOSAL', n: 2, v: '₹1.6L' },
-    { label: 'ONBOARDING', n: 2, v: '₹1.8L' },
-  ]
+  const [notes, setNotes] = useState<DemoNote[]>(INITIAL_NOTES)
+  const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+  // Notes drop onto the board one at a time as it scrolls into view, rather
+  // than all appearing at once — matches the piece-by-piece reveal used
+  // elsewhere in this tour (KPI tiles, kanban cards).
+  const [revealedCount, setRevealedCount] = useState(0)
+
+  useEffect(() => {
+    const el = boardRef.current
+    if (!el) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setRevealedCount(INITIAL_NOTES.length)
+      return
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          io.disconnect()
+          INITIAL_NOTES.forEach((_, i) => {
+            setTimeout(() => setRevealedCount((c) => Math.max(c, i + 1)), i * 140)
+          })
+        }
+      },
+      { rootMargin: '-80px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
+  function onPointerDown(e: React.PointerEvent, note: DemoNote) {
+    const board = boardRef.current?.getBoundingClientRect()
+    if (!board) return
+    dragRef.current = { id: note.id, dx: e.clientX - board.left - note.x, dy: e.clientY - board.top - note.y }
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const drag = dragRef.current
+    const board = boardRef.current?.getBoundingClientRect()
+    if (!drag || !board) return
+    const x = e.clientX - board.left - drag.dx
+    const y = e.clientY - board.top - drag.dy
+    setNotes((ns) => ns.map((n) => (n.id === drag.id ? { ...n, x, y } : n)))
+  }
+
+  function onPointerUp() {
+    dragRef.current = null
+  }
+
+  function addNote() {
+    const id = `n${Date.now()}`
+    const tones = Object.keys(NOTE_TONE) as (keyof typeof NOTE_TONE)[]
+    setNotes((ns) => [
+      ...ns,
+      {
+        id,
+        x: 40 + Math.random() * 220,
+        y: 20 + Math.random() * 100,
+        rotate: Math.random() * 8 - 4,
+        tone: tones[Math.floor(Math.random() * tones.length)],
+        text: 'New note',
+      },
+    ])
+  }
+
   return (
     <Frame path="/whiteboard">
-      <Card className="border-muted">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Funnel · live from your pipeline</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {cols.map((c, i) => (
-              <div key={c.label} className="flex items-center gap-2">
-                <div className="min-w-[88px] rounded-md border border-muted p-3 text-center">
-                  <p className="text-[10px] tracking-wide text-muted-foreground">{c.label}</p>
-                  <p className="mt-0.5 text-xl font-semibold tabular-nums">{c.n}</p>
-                  <p className="text-[10px] text-muted-foreground">{c.v}</p>
-                </div>
-                {i < cols.length - 1 && <span className="text-muted-foreground">→</span>}
-              </div>
-            ))}
+      <div
+        ref={boardRef}
+        className="relative h-[260px] overflow-hidden rounded-md bg-[radial-gradient(circle,hsl(var(--border))_1px,transparent_1px)] [background-size:20px_20px]"
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        {/* Loose hand-drawn connector — a wandering path, not a straight arrow. */}
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+          <path
+            d="M 90 70 C 140 40, 150 110, 200 90 S 250 60, 290 110"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="text-foreground/25"
+          />
+          {/* Scribble accent. */}
+          <path
+            d="M 300 150 c 6 -10 14 -10 18 0 s 12 10 18 0 s 12 -10 18 0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="text-foreground/20"
+          />
+        </svg>
+
+        {notes.map((note, i) => (
+          <div
+            key={note.id}
+            className={`absolute w-[120px] cursor-grab select-none rounded-sm border px-2.5 py-2 text-[11px] font-medium leading-snug shadow-md transition-[opacity,transform] duration-500 ease-out active:cursor-grabbing ${NOTE_TONE[note.tone]} ${
+              i < INITIAL_NOTES.length && i >= revealedCount ? 'pointer-events-none opacity-0' : 'opacity-100'
+            }`}
+            style={{
+              left: note.x,
+              top: note.y,
+              transitionDelay: `${i * 140}ms`,
+              transform:
+                i < INITIAL_NOTES.length && i >= revealedCount
+                  ? `rotate(${note.rotate}deg) scale(0.85) translateY(10px)`
+                  : `rotate(${note.rotate}deg)`,
+            }}
+            onPointerDown={(e) => onPointerDown(e, note)}
+          >
+            {note.by && (
+              <span
+                className="absolute -top-2 right-1.5 rounded px-1 py-0.5 text-[8px] font-semibold text-white shadow-sm"
+                style={{ background: note.byColor }}
+              >
+                {note.by}
+              </span>
+            )}
+            {note.text}
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Shared with your whole {BRAND_NAME} org. Cursors update live.
-          </p>
-        </CardContent>
-      </Card>
+        ))}
+
+        <button
+          type="button"
+          onClick={addNote}
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border bg-background px-3 py-1.5 text-[11px] font-medium shadow-sm transition-colors hover:bg-accent"
+        >
+          + Sticky note
+        </button>
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Drag the notes around. Shared with your whole {BRAND_NAME} org on the real board — cursors update live.
+      </p>
     </Frame>
   )
 }
@@ -244,8 +401,13 @@ export function AuditLogSurface() {
 }
 
 export const SURFACES = [
-  { id: 'dashboard', title: 'Your pipeline, at a glance.', render: () => <DashboardSurface /> },
-  { id: 'pipeline', title: 'Stages that match how you sell.', render: () => <DraggablePipelineSurface /> },
-  { id: 'lead', title: "Every lead's full story.", render: () => <LeadSurface /> },
-  { id: 'whiteboard', title: 'A funnel your team can draw on.', render: () => <WhiteboardSurface /> },
+  // compact={true} stops after the KPI tiles + "Pipeline by stage" chart —
+  // the content this rail item is actually named after — rather than
+  // running on through BD Summary/Rep/Source, which made this panel much
+  // taller than the other three and pushed the page into a lot of
+  // otherwise-empty scroll distance for no extra value.
+  { id: 'dashboard', label: 'Pipeline by stage', title: 'Pipeline by stage.', render: () => <DashboardSurface compact /> },
+  { id: 'pipeline', label: 'Match how you sell', title: 'Stages that match how you sell.', render: () => <DraggablePipelineSurface /> },
+  { id: 'lead', label: "Every lead's story", title: "Every lead's full story.", render: () => <LeadSurface /> },
+  { id: 'whiteboard', label: 'Draw it out', title: 'A funnel your team can draw on.', render: () => <WhiteboardSurface /> },
 ]

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { neonAuth } from '@/lib/auth'
+import { DEV_BYPASS_COOKIE } from '@/lib/devBypass'
 
 // Reads/validates the session cookie straight from the request — unlike
 // neonAuth.getSession() (ambient next/headers-based), which only works in
@@ -27,7 +28,21 @@ export default async function proxy(req: NextRequest) {
   // on session there (marketing page vs dashboard), so the middleware can't
   // blanket-redirect it to /login the way every other route still should.
   const isRootPage = pathname === '/'
-  const isPublicPage = pathname === '/login' || isInviteRedeemPage || isSignupPage || isRepPage || isRootPage
+  // Local dev-only auth bypass (lib/session.ts, app/api/dev-login) — sets a
+  // cookie Neon Auth's own middleware knows nothing about, so it must be
+  // reachable while logged out too. The route itself 404s outside
+  // development; this check only decides whether middleware lets the
+  // request through to it.
+  const isDevLoginRoute = pathname === '/api/dev-login' && process.env.NODE_ENV !== 'production'
+  // Once the cookie is set (via /api/dev-login), every route needs to skip
+  // Neon Auth's own middleware too, not just the root page — otherwise only
+  // "/" would honor the bypass and every other page would still 307 to
+  // /login before lib/session.ts's resolveDevBypass() ever got a chance to
+  // run. Same NODE_ENV guard as the cookie's own set-path.
+  const hasDevBypassCookie =
+    process.env.NODE_ENV !== 'production' && req.cookies.get(DEV_BYPASS_COOKIE)?.value === '1'
+  const isPublicPage =
+    pathname === '/login' || isInviteRedeemPage || isSignupPage || isRepPage || isRootPage || isDevLoginRoute || hasDevBypassCookie
 
   // Defense-in-depth beyond the session cookie's own sameSite=lax setting
   // (which already blocks the cookie from riding along on a genuine
