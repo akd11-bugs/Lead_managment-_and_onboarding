@@ -131,13 +131,27 @@ async function runAction(rule: WorkflowRule, lead: Lead): Promise<void> {
       // hostname that resolved to a public IP when the rule was saved can be
       // re-pointed at an internal address by the time it actually fires
       // (DNS rebinding), so this is the enforcement point that actually matters.
+      //
+      // redirect: 'manual' closes the more practical bypass: a validated,
+      // genuinely-public endpoint responding with a 3xx to an internal
+      // Location header, which fetch's default redirect:'follow' would
+      // otherwise chase with no re-validation at all. A narrower DNS-rebinding
+      // race between this lookup and fetch()'s own internal resolution
+      // remains (fetch does not expose a way to pin a connection to a
+      // specific IP without a custom dispatcher), but requires an attacker
+      // who controls authoritative DNS for the hostname with aggressive TTLs.
       await assertSafeWebhookUrl(config.url)
       const res = await fetch(config.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-webhook-signature': `sha256=${signature}` },
         body: payload,
+        redirect: 'manual',
         signal: AbortSignal.timeout(5_000),
       })
+      if (res.status >= 300 && res.status < 400) {
+        console.error(`workflow webhook call failed (rule ${rule.id}): refused to follow redirect (HTTP ${res.status})`)
+        return
+      }
       if (!res.ok) {
         console.error(`workflow webhook call failed (rule ${rule.id}): HTTP ${res.status}`)
         return

@@ -59,4 +59,21 @@ brag-output-*/
 # Per-machine MCP server config; may reference local endpoints or keys.
 .mcp.json
 
+# Claude Code / agent tooling — skills, plugins, design-system scaffolding.
+# Per-developer-machine setup, not part of the shipped product; keeping it
+# out of the repo means a stray `git add -A`/`git add .` can't pull in a
+# third-party skill's full source (e.g. a downloaded design/taste skill)
+# alongside real app code.
+.agents/
+.claude/agents/
+.claude/skills/
+.claude/settings.json
+.github/agents/
+.github/skills/
+.github/hooks/
+.impeccable/
+DESIGN.md
+PRODUCT.md
+skills-lock.json
+
 

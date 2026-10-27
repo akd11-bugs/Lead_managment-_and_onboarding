@@ -37,8 +37,14 @@ function isPrivateOrReservedIp(ip: string): boolean {
  * re-pointed at an internal address by the time it actually fires (DNS
  * rebinding), so this must run again immediately before every fetch, not
  * just once at config-save time.
+ *
+ * Returns the validated address so the caller can pin its outbound
+ * connection to this exact IP (see lib/workflow.ts) — otherwise this
+ * function's own dns.lookup() and fetch()'s independent internal resolution
+ * are two separately-timed lookups against the same attacker-controlled
+ * hostname, and a rebinding attacker can answer them differently.
  */
-export async function assertSafeWebhookUrl(rawUrl: string): Promise<void> {
+export async function assertSafeWebhookUrl(rawUrl: string): Promise<string> {
   const url = new URL(rawUrl)
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error('URL must be http or https')
@@ -49,8 +55,9 @@ export async function assertSafeWebhookUrl(rawUrl: string): Promise<void> {
   }
   if (net.isIP(hostname)) {
     if (isPrivateOrReservedIp(hostname)) throw new Error('That host is not allowed')
-    return
+    return hostname
   }
   const { address } = await dns.lookup(hostname)
   if (isPrivateOrReservedIp(address)) throw new Error('That host is not allowed')
+  return address
 }

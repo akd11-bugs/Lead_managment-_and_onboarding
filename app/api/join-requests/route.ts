@@ -5,6 +5,7 @@ import { requireApiUser, isAdmin } from '@/lib/session'
 import { readJsonBody } from '@/lib/http'
 import { sendEmail } from '@/lib/email'
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
+import { findOrgByEmailDomain } from '@/lib/org'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,8 +49,16 @@ export async function POST(req: Request) {
   const requesterName = String(body.name ?? data.user.name ?? '').trim() || requesterEmail
   if (!orgId) return NextResponse.json({ error: 'orgId is required' }, { status: 400 })
 
-  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true, name: true } })
-  if (!org) return NextResponse.json({ error: 'That organization no longer exists' }, { status: 404 })
+  // Re-derive the org from the requester's OWN verified email domain — the
+  // client-supplied orgId is never trusted as proof of a domain match on its
+  // own (findOrgByEmailDomain is otherwise only used by account-not-found's
+  // page component to pick which button to show, which is UI only, not
+  // enforcement).
+  const matchedOrg = await findOrgByEmailDomain(requesterEmail)
+  if (!matchedOrg || matchedOrg.id !== orgId) {
+    return NextResponse.json({ error: 'That organization no longer exists' }, { status: 404 })
+  }
+  const org = matchedOrg
 
   // Don't pile up duplicate pending requests from the same person clicking twice.
   const existingRequest = await prisma.joinRequest.findFirst({ where: { orgId, requesterEmail, status: 'pending' } })

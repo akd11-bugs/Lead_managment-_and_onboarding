@@ -52,7 +52,12 @@ const SECURITY_HEADERS = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  // camera=(self) allows the in-page getUserMedia() live-preview capture
+  // used by the desktop business-card-scan flow (components/leads/
+  // NewLeadDialog.tsx) — mobile's camera=(), file-input capture path never
+  // needed this, since capture="environment" delegates to the OS camera app
+  // rather than an in-page stream. Still denied to every other origin.
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=()' },
   // Render terminates TLS at the edge — safe to tell browsers to always use
   // https for this origin going forward.
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
@@ -64,6 +69,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '5mb',
     },
+    // Set by `next upgrade --agent=security` (16.4.0 -> 16.4.3) — tells
+    // Next's own tooling this app opted into automated security-patch
+    // upgrades, so future advisories can be applied the same way.
+    agentUpgrade: 'security',
   },
   async headers() {
     return [

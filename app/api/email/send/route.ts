@@ -77,6 +77,16 @@ export async function POST(req: Request) {
   if (typeof to !== 'string' || !isValidEmail(to)) {
     return NextResponse.json({ error: 'A valid "to" address is required' }, { status: 400 })
   }
+  // The per-user limit above bounds one account's abuse, but doesn't bound
+  // the org's aggregate reputation exposure as headcount grows (N users each
+  // get their own 20/hour budget). This org-scoped cap is the backstop.
+  const orgRateLimit = checkRateLimit(`email-send-org:${user.orgId}`, 200, 60 * 60 * 1000)
+  if (!orgRateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'This organization has reached its hourly email sending limit — try again later' },
+      { status: 429, headers: { 'Retry-After': String(orgRateLimit.retryAfterSeconds) } },
+    )
+  }
   try {
     const result = await sendEmailAs(user.id, { to, subject, body: emailBody })
     await logAudit({ action: 'custom_email_sent', actorUserId: user.id, metadata: { to } })

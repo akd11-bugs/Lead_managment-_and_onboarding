@@ -2,6 +2,7 @@
 // The catalog tells the runner which path to take.
 
 import { promises as fs } from 'fs'
+import os from 'os'
 import path from 'path'
 import { spawn } from 'child_process'
 import Anthropic from '@anthropic-ai/sdk'
@@ -106,39 +107,46 @@ async function runPipelineHygiene(
   input: RunSkillInput,
   start: number,
 ): Promise<RunSkillResult> {
-  // Export open leads to CSV and shell out to the Python script.
+  // Export open leads to CSV and shell out to the Python script. Uses
+  // fs.mkdtemp (unpredictable path, not a guessable Date.now() name) and a
+  // try/finally so the directory is always removed, even if the first
+  // runPython call below throws — previously that throw propagated past the
+  // cleanup call, orphaning a cleartext copy of the org's pipeline data.
   const openLeads = input.leads.filter((l) => l.stage !== 'onboarding' && l.stage !== 'not_interested')
   const csv = leadsToCsv(openLeads)
-  const tmpCsv = `/tmp/lrm_pipeline_${Date.now()}.csv`
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lrm_pipeline_'))
+  const tmpCsv = path.join(tmpDir, 'pipeline.csv')
   await fs.writeFile(tmpCsv, csv, 'utf-8')
 
-  const scriptPath = path.join(SKILL_LIBRARY_PATH, 'scripts', 'pipeline_hygiene.py')
-  const args = [scriptPath, tmpCsv, '--json']
-
-  const json = await runPython(args)
-
-  // Try to also get the human-readable text version
-  let text: string = ''
   try {
-    const out = await runPython([scriptPath, tmpCsv])
-    if (typeof out === 'string') text = out
-  } catch {
-    // ignore — we have JSON
-  }
+    const scriptPath = path.join(SKILL_LIBRARY_PATH, 'scripts', 'pipeline_hygiene.py')
+    const args = [scriptPath, tmpCsv, '--json']
 
-  // Convert JSON to a presentable markdown report
-  const md = jsonToMarkdown(json, text)
+    const json = await runPython(args)
 
-  await fs.unlink(tmpCsv).catch(() => {})
+    // Try to also get the human-readable text version
+    let text: string = ''
+    try {
+      const out = await runPython([scriptPath, tmpCsv])
+      if (typeof out === 'string') text = out
+    } catch {
+      // ignore — we have JSON
+    }
 
-  return {
-    ok: true,
-    skillId,
-    skillName,
-    runnerType: 'script',
-    outputMarkdown: md,
-    outputStructured: typeof json === 'object' ? json : undefined,
-    durationMs: Date.now() - start,
+    // Convert JSON to a presentable markdown report
+    const md = jsonToMarkdown(json, text)
+
+    return {
+      ok: true,
+      skillId,
+      skillName,
+      runnerType: 'script',
+      outputMarkdown: md,
+      outputStructured: typeof json === 'object' ? json : undefined,
+      durationMs: Date.now() - start,
+    }
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
   }
 }
 
