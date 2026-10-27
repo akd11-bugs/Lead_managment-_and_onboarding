@@ -32,7 +32,16 @@ export default async function proxy(req: NextRequest) {
   // "/" itself must be reachable while logged out too — app/page.tsx branches
   // on session there (marketing page vs dashboard), so the middleware can't
   // blanket-redirect it to /login the way every other route still should.
-  const isRootPage = pathname === '/'
+  //
+  // Exception: a request carrying Neon Auth's OAuth verifier param (the
+  // callbackURL every sign-in flow uses is '/') must NOT be treated as
+  // public — neonAuth.middleware() is what actually exchanges that verifier
+  // for a real session and strips the param via its "redirect_oauth" case.
+  // Short-circuiting "/" before that middleware runs meant the exchange
+  // never happened: the verifier param and the session_challenge cookie
+  // were left dangling, no session cookie was ever set, and every OAuth
+  // sign-in silently landed back on the logged-out marketing page.
+  const isRootPage = pathname === '/' && !req.nextUrl.searchParams.has('neon_auth_session_verifier')
   // Local dev-only auth bypass (lib/session.ts, app/api/dev-login) — sets a
   // cookie Neon Auth's own middleware knows nothing about, so it must be
   // reachable while logged out too. The route itself 404s outside
