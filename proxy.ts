@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { neonAuth } from '@/lib/auth'
 import { DEV_BYPASS_COOKIE } from '@/lib/devBypass'
+import { isPublicPathPrefix } from '@/lib/publicRoutes'
 
 // Reads/validates the session cookie straight from the request — unlike
 // neonAuth.getSession() (ambient next/headers-based), which only works in
@@ -11,24 +12,20 @@ const protect = neonAuth.middleware({ loginUrl: '/login' })
 export default async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname
 
-  // Where an invited person redeems their one-time code and sets their own
-  // password — must be reachable while logged out, like /login.
-  const isInviteRedeemPage = pathname === '/invite/redeem'
-  // Self-serve email+password signup — request a link, then set name/password.
-  // Lands as 'pending' just like the invite/Google flows; must be reachable
-  // while logged out, like /login.
-  const isSignupPage = pathname === '/signup' || pathname === '/signup/complete'
-  // The lightweight rep-facing form — its own PIN-based auth lives entirely
-  // inside app/api/rep/* route handlers (the rep_session cookie), never here.
-  // Covers /rep and the per-org /rep/<slug> login pages. Was an exact match
-  // before the slug route existed, which would have redirected /rep/acme to
-  // /login and broken field sign-in entirely.
-  const isRepPage = pathname === '/rep' || pathname.startsWith('/rep/')
-  // The public lead-intake form (/intake/<slug>) — no login, resolves its
-  // org from the slug the same way the rep portal does. Its own write route
-  // (app/api/intake/[slug]/route.ts) is excluded from the matcher below,
-  // same treatment as api/rep.
-  const isIntakePage = pathname === '/intake' || pathname.startsWith('/intake/')
+  // /invite/redeem (one-time invite code + password setup), /signup and
+  // /signup/complete (self-serve email+password signup), /rep and /rep/*
+  // (the field-rep portal — its own PIN-based auth lives entirely inside
+  // app/api/rep/* route handlers, the rep_session cookie, never here; was an
+  // exact match before the slug route existed, which would have redirected
+  // /rep/acme to /login and broken field sign-in entirely), and /intake and
+  // /intake/* (the public lead-intake form, no login, resolves its org from
+  // the slug the same way the rep portal does — its own write route,
+  // app/api/intake/[slug]/route.ts, is excluded from the matcher below, same
+  // treatment as api/rep) — all must be reachable while logged out, like
+  // /login. Shared with app/login/page.tsx's redirect-target validation (see
+  // lib/publicRoutes.ts) so the two can't drift apart again the way they did
+  // when this bug shipped.
+  const isPublicPathMatch = isPublicPathPrefix(pathname)
   // "/" itself must be reachable while logged out too — app/page.tsx branches
   // on session there (marketing page vs dashboard), so the middleware can't
   // blanket-redirect it to /login the way every other route still should.
@@ -57,10 +54,7 @@ export default async function proxy(req: NextRequest) {
     process.env.NODE_ENV !== 'production' && req.cookies.get(DEV_BYPASS_COOKIE)?.value === '1'
   const isPublicPage =
     pathname === '/login' ||
-    isInviteRedeemPage ||
-    isSignupPage ||
-    isRepPage ||
-    isIntakePage ||
+    isPublicPathMatch ||
     isRootPage ||
     isDevLoginRoute ||
     hasDevBypassCookie

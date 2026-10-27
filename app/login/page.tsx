@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { BRAND_NAME } from '@/lib/branding'
+import { isSafeRedirectTarget } from '@/lib/publicRoutes'
 
 export default async function LoginPage({
   searchParams,
@@ -15,7 +16,7 @@ export default async function LoginPage({
 }) {
   const { from, error, reason, redeemed } = await searchParams
   const googleEnabled = !!process.env.GOOGLE_CLIENT_ID
-  const redirectTo = from && from !== '/login' ? from : '/'
+  const redirectTo = isSafeRedirectTarget(from) ? from : '/'
 
   // Neon Auth middleware (proxy.ts) can't do this check itself — see its
   // comment — so it happens here instead, in a plain Server Component.
