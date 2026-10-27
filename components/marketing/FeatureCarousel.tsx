@@ -6,13 +6,9 @@ import { Kanban, BarChart3, Plug, KeyRound, Building2, Calendar, ShieldCheck, Ch
 import { GenericPipelineChart } from './GenericPipelineChart'
 import { ActivityFeedView } from '@/components/dashboard/ActivityFeed'
 import { RepPerformance } from '@/components/dashboard/RepPerformance'
-import {
-  GENERIC_STAGE_DATA,
-  ACTIVITY_DEMO,
-  REPS_DEMO,
-  CalendarSurface,
-  AuditLogSurface,
-} from './RealAppShowcase'
+import { CalendarMonth } from '@/components/calendar/CalendarMonth'
+import { AuditLogTable } from '@/components/settings/AuditLogTable'
+import { GENERIC_STAGE_DATA, ACTIVITY_DEMO, REPS_DEMO, CALENDAR_DEMO, AUDIT_DEMO } from './RealAppShowcase'
 
 // "Everything else," as an auto-rotating carousel: one card at a time,
 // advancing on a timer and looping back to the first after the last, with
@@ -35,17 +31,17 @@ const CARDS: Card[] = [
     Icon: Kanban,
     name: 'Pipeline',
     description: 'Stages your team already uses.',
-    render: () => (
-      // .light pins --background/--foreground to the app's real light-theme
-      // values regardless of the marketing page's own theme state (same
-      // idiom as Frame.tsx's product-preview wrapper) — without it, these
-      // tokens follow whatever the visitor's site-wide theme happens to be
-      // (dark by default), rendering near-black text on a near-transparent
-      // dark card instead of a light app-screenshot-style preview.
-      <div className="light rounded-lg bg-background p-4 text-foreground">
-        <GenericPipelineChart data={GENERIC_STAGE_DATA} />
-      </div>
-    ),
+    // No rounded-lg/p-4/Frame chrome here — CardFrame below is the only
+    // card surface. Each render-type card used to wrap itself in its own
+    // nested card (a bare .light bg-background box for some, Frame.tsx's
+    // full browser-window chrome — border + title bar + its own padding —
+    // for others), which left a visible gap of plain dark card background
+    // around an inset panel instead of the content reaching the card's
+    // edges the way a real screenshot (Reports, Companies) does. .light
+    // still pins --background/--foreground to the app's real light-theme
+    // values regardless of the marketing page's own theme state; it's now
+    // applied once, to the scroll wrapper in CardFrame, not per-card.
+    render: () => <GenericPipelineChart data={GENERIC_STAGE_DATA} />,
   },
   {
     id: 'reports',
@@ -59,22 +55,17 @@ const CARDS: Card[] = [
     Icon: Plug,
     name: 'Agent API',
     description: 'Six tools over MCP. Every call lands here, on the real activity log.',
-    render: () => (
-      <div className="light rounded-lg bg-background p-4 text-foreground">
-        <ActivityFeedView items={ACTIVITY_DEMO} live={false} interactive={false} />
-      </div>
-    ),
+    // Sliced to 3, same as RealAppShowcase.tsx's own narrower usage of this
+    // data — the full 4-item list runs into this card's bottom gradient
+    // overlay with a hard-edged cutoff instead of fading out cleanly.
+    render: () => <ActivityFeedView items={ACTIVITY_DEMO.slice(0, 3)} live={false} interactive={false} />,
   },
   {
     id: 'rep-access',
     Icon: KeyRound,
     name: 'Rep access',
     description: 'Field reps log in with a PIN, no email needed.',
-    render: () => (
-      <div className="light rounded-lg bg-background p-4 text-foreground">
-        <RepPerformance rows={REPS_DEMO} />
-      </div>
-    ),
+    render: () => <RepPerformance rows={REPS_DEMO} />,
   },
   {
     id: 'companies',
@@ -88,14 +79,14 @@ const CARDS: Card[] = [
     Icon: Calendar,
     name: 'Calendar',
     description: 'Every task with a due date, in one view.',
-    render: () => <CalendarSurface />,
+    render: () => <CalendarMonth days={CALENDAR_DEMO} />,
   },
   {
     id: 'audit-log',
     Icon: ShieldCheck,
     name: 'Audit log',
     description: 'Every login and role change, kept for the admin who needs it.',
-    render: () => <AuditLogSurface />,
+    render: () => <AuditLogTable rows={AUDIT_DEMO} />,
   },
 ]
 
@@ -202,7 +193,7 @@ function CardFrame({ card }: { card: Card }) {
 
   if (card.image) {
     return (
-      <div className="relative h-[26rem] overflow-hidden rounded-xl border border-white/[0.09] shadow-2xl shadow-black/40">
+      <div className="relative h-[26rem] overflow-hidden rounded-xl">
         <Image
           src={card.image}
           alt={`${card.name} in the real app`}
@@ -226,16 +217,27 @@ function CardFrame({ card }: { card: Card }) {
     )
   }
 
+  // Same bottom-gradient-overlay chrome as the image branch above — title/
+  // icon/description float over the full-bleed content instead of sitting
+  // in their own header bar, so a live-rendered demo card and a real
+  // screenshot card read as one consistent card type, not two. .light here
+  // (not per-card) pins --background/--foreground to the app's real
+  // light-theme values regardless of the marketing page's own theme state,
+  // and fills the WHOLE card the way a screenshot's pixels do — no nested
+  // rounded-lg/border/title-bar of its own, which previously left a ring of
+  // plain dark card background visible around an inset panel.
   return (
-    <div className="flex h-[26rem] flex-col overflow-hidden rounded-xl border border-white/[0.09] bg-[#0b0d14] shadow-2xl shadow-black/40">
-      <div className="flex items-center gap-3 border-b border-white/[0.07] px-6 py-4">
-        <Icon className="h-5 w-5 text-[#5b8cff]" strokeWidth={1.6} />
-        <div>
-          <h3 className="text-base font-semibold text-white">{card.name}</h3>
-          <p className="text-xs text-white/50">{card.description}</p>
+    <div className="relative h-[26rem] overflow-hidden rounded-xl">
+      <div className="light h-full overflow-auto bg-background p-5 pb-24 text-foreground">{card.render!()}</div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#07080c] via-[#07080c]/80 to-transparent px-6 pb-5 pt-16">
+        <div className="flex items-center gap-3">
+          <Icon className="h-5 w-5 text-[#5b8cff]" strokeWidth={1.6} />
+          <div>
+            <h3 className="text-base font-semibold text-white">{card.name}</h3>
+            <p className="text-xs text-white/70">{card.description}</p>
+          </div>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-5">{card.render!()}</div>
     </div>
   )
 }

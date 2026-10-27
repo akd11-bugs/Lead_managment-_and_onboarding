@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MAX_VISIBLE_TASKS = 3
+const MAX_VISIBLE_LEADS = 2
 
 export interface CalendarDayTask {
   id: string
@@ -12,12 +13,19 @@ export interface CalendarDayTask {
   leadCompany: string | null
 }
 
+export interface CalendarDayLead {
+  id: string
+  company: string
+  stageColor: string
+}
+
 export interface CalendarDay {
   date: string
   label: string
   isCurrentMonth: boolean
   isToday: boolean
   tasks: CalendarDayTask[]
+  leads: CalendarDayLead[]
 }
 
 export function CalendarMonth({ days }: { days: CalendarDay[] }) {
@@ -35,6 +43,8 @@ export function CalendarMonth({ days }: { days: CalendarDay[] }) {
           {days.map((day) => {
             const visible = day.tasks.slice(0, MAX_VISIBLE_TASKS)
             const overflow = day.tasks.length - visible.length
+            const visibleLeads = day.leads.slice(0, MAX_VISIBLE_LEADS)
+            const leadOverflow = day.leads.length - visibleLeads.length
             return (
               <div
                 key={day.date}
@@ -77,6 +87,20 @@ export function CalendarMonth({ days }: { days: CalendarDay[] }) {
                   })}
                   {overflow > 0 && (
                     <span className="px-1 text-[11px] text-muted-foreground">+{overflow} more</span>
+                  )}
+                  {visibleLeads.map((lead) => (
+                    <Link key={lead.id} href={`/leads/${lead.id}`} className="flex items-center gap-1 truncate px-1 py-0.5">
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: lead.stageColor }}
+                      />
+                      <span className="truncate text-[11px] leading-tight text-foreground/80" title={`${lead.company} — expected close`}>
+                        {lead.company}
+                      </span>
+                    </Link>
+                  ))}
+                  {leadOverflow > 0 && (
+                    <span className="px-1 text-[11px] text-muted-foreground">+{leadOverflow} more</span>
                   )}
                 </div>
               </div>

@@ -15,6 +15,7 @@ const SOURCE_COLORS: Record<LeadSource, string> = {
   event: '#eda100',
   referral: '#e87ba4',
   other: '#008300',
+  form: '#6250d6', // next slot (7, violet) in the same validated 8-hue order
 }
 
 export interface SourceROIRow {

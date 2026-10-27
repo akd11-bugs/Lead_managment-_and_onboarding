@@ -5,7 +5,7 @@
 // decision) → Onboarding (won) or Not Interested (lost, reason required).
 export type Stage = 'new' | 'pending' | 'proposal' | 'onboarding' | 'not_interested'
 
-export type LeadSource = 'website' | 'referral' | 'linkedin' | 'cold_outreach' | 'event' | 'other'
+export type LeadSource = 'website' | 'referral' | 'linkedin' | 'cold_outreach' | 'event' | 'form' | 'other'
 
 // 'onboarding_step' and 'stage_change' are written server-side only (never
 // user-selectable in the manual activity form):
@@ -49,6 +49,8 @@ export interface LeadPerson {
   email: string | null
   phone: string | null
   jobTitle: string | null
+  linkedinUrl: string | null
+  otherLinksJson: string
 }
 
 export interface Lead {
@@ -77,6 +79,8 @@ export interface Lead {
   onboardingSubStage: OnboardingSubStage | null
   assignedOpsId: string | null
   assignedOpsName: string | null
+  intakeFormId: string | null
+  intakeFormName: string | null
   painPoints: string
   whatTheyWant: string
   notes: string
@@ -150,10 +154,11 @@ export const SOURCE_LABELS: Record<LeadSource, string> = {
   linkedin: 'LinkedIn',
   cold_outreach: 'Cold Outreach',
   event: 'Event',
+  form: 'Form',
   other: 'Other',
 }
 
-export const SOURCES: LeadSource[] = ['website', 'referral', 'linkedin', 'cold_outreach', 'event', 'other']
+export const SOURCES: LeadSource[] = ['website', 'referral', 'linkedin', 'cold_outreach', 'event', 'form', 'other']
 
 export const QUALITY_LEVELS: QualityLevel[] = ['low', 'medium', 'high']
 
@@ -295,6 +300,21 @@ export function isValidWebsite(value: string): boolean {
   return WEBSITE_PATTERN.test(value.trim())
 }
 
+// Scheme allowlist for any value that will be rendered as an <a href> —
+// rejects javascript:/data:/vbscript: URIs, which React does NOT sanitize
+// in attribute position (only text content gets HTML-escaped). Used for
+// Person.linkedinUrl and Person.otherLinksJson entries, both of which can
+// originate from a scanned QR code's vCard URL field as well as free text.
+export function isSafeUrl(value: string): boolean {
+  const trimmed = value.trim()
+  try {
+    const u = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 // Deliberately simple (no full RFC 5322 parsing) — this is a sanity check
 // against garbage input, not a mailbox-existence guarantee.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -347,6 +367,13 @@ export function validateLeadFields(
   }
   if (body.email != null && body.email !== '' && !isValidEmail(String(body.email))) {
     return `Invalid email: ${body.email}`
+  }
+  if (body.linkedinUrl != null && body.linkedinUrl !== '' && !isSafeUrl(String(body.linkedinUrl))) {
+    return `Invalid linkedinUrl: ${body.linkedinUrl}`
+  }
+  if (Array.isArray(body.otherLinks)) {
+    const badLink = body.otherLinks.find((l) => typeof l !== 'string' || !isSafeUrl(l))
+    if (badLink !== undefined) return `Invalid otherLinks entry: ${badLink}`
   }
   for (const [field, max] of Object.entries(FIELD_MAX_LENGTHS)) {
     const value = body[field]

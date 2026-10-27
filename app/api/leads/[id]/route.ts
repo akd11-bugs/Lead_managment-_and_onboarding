@@ -47,7 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
-    select: { orgId: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true, customFieldsJson: true, companyId: true },
+    select: { orgId: true, stage: true, wonAt: true, onboardedAt: true, onboardingSubStage: true, pendingSubStatus: true, customFieldsJson: true, companyId: true, personId: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -149,6 +149,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.poc !== undefined) {
     const pocName = body.poc ? String(body.poc).trim() : ''
     nextPersonId = pocName ? (await findOrCreatePerson(existing.orgId, nextCompanyId ?? existing.companyId!, pocName)).id : null
+  }
+
+  // Editing LinkedIn/other links on an already-linked contact — a direct
+  // field update on the existing Person row, not a find-or-create (the
+  // person already exists; this isn't re-resolving who they are, just
+  // changing data on them, the same way editing their name would need a
+  // different path than creating a new person).
+  const personIdForLinks = nextPersonId !== undefined ? nextPersonId : existing.personId
+  if (personIdForLinks && (body.linkedinUrl !== undefined || body.otherLinks !== undefined)) {
+    await prisma.person.update({
+      where: { id: personIdForLinks },
+      data: {
+        ...(body.linkedinUrl !== undefined && { linkedinUrl: body.linkedinUrl || null }),
+        ...(body.otherLinks !== undefined && {
+          otherLinksJson: JSON.stringify(Array.isArray(body.otherLinks) ? body.otherLinks.filter((l: unknown) => typeof l === 'string') : []),
+        }),
+      },
+    })
   }
 
   const lead = await prisma.lead.update({

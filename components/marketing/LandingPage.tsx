@@ -12,7 +12,7 @@ import { BridgeSection } from './BridgeSection'
 import { StickyCta } from './StickyCta'
 import { HorizontalTour } from './HorizontalTour'
 import { BentoGrid, BentoCell } from './Bento'
-import { ShieldCheck, Wallet, KeyRound } from 'lucide-react'
+import { GoogleLogo } from './GoogleLogo'
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer'
 
 // Public marketing page, shown at "/" only when there's no session (see
@@ -45,25 +45,32 @@ export function LandingPage() {
       <Manifesto />
       <HowItWorks />
       <Privacy />
-      <FinalCta />
       <Footer />
     </KineticGrid>
   )
 }
 
+// No hairline border between sections (house-style no-hairline rule) —
+// the padding alone is the section break. Was py-32/py-40 (128px/160px
+// each side — 256-320px of pure gap between any two adjacent sections,
+// stacked across 7 sections down the page) — cut roughly in half so
+// there's still a clear break between sections without that much dead
+// space accumulating down the whole page.
 function Section({ children, id }: { children: React.ReactNode; id?: string }) {
   return (
-    <section id={id} className="border-t border-white/[0.07] py-32 sm:py-40">
+    <section id={id} className="py-16 sm:py-20">
       {children}
     </section>
   )
 }
 
-function SectionHead({ eyebrow, title, body }: { eyebrow: string; title: string; body?: string }) {
+// No eyebrow label above the heading (house-style no-eyebrow rule) — each
+// call site below folds what the eyebrow used to say into the heading or
+// supporting sentence instead of a separate small-caps tag.
+function SectionHead({ title, body }: { title: string; body?: string }) {
   return (
     <div className="mx-auto max-w-7xl px-6">
-      <span className="font-mono text-xs uppercase tracking-[0.18em] text-[#5b8cff]">{eyebrow}</span>
-      <h2 className="mt-5 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
+      <h2 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
       {body && <p className="mt-6 max-w-xl leading-relaxed text-white/55">{body}</p>}
     </div>
   )
@@ -83,9 +90,13 @@ function Nav() {
         </span>
 
         <div className="flex items-center">
+          {/* Hidden below sm — at 390px the wordmark + both buttons don't fit in
+              one row without the wordmark clipping behind them. "Start free"
+              alone is the one action that matters on a narrow screen; sign-in
+              is one tap away from there anyway. */}
           <Link
             href="/login"
-            className="rounded-full bg-[#161616] px-4 py-2 text-sm text-white/70 transition-colors hover:bg-[#1e1e1e] hover:text-white"
+            className="hidden rounded-full bg-[#161616] px-4 py-2 text-sm text-white/70 transition-colors hover:bg-[#1e1e1e] hover:text-white sm:inline-block"
           >
             Sign in
           </Link>
@@ -125,35 +136,30 @@ function Hero() {
     // match the rest of the page's convention instead of reacting to a
     // toggle this page was never designed to support.
     <header className="relative isolate overflow-hidden text-white">
-      {/* pb-32 sm:pb-40 matches Section's own py-32 sm:py-40 rhythm — Hero
+      {/* pb-16 sm:pb-20 matches Section's own py-16 sm:py-20 rhythm — Hero
           isn't wrapped in Section (it needs its own top spacing, tighter
           than the rest since it's the page's very first thing), but its
           bottom gap into the next section (the pipeline tour) must still
           match the uniform rhythm every other section-to-section gap uses. */}
-      <div className="relative mx-auto max-w-7xl px-6 pb-32 pt-20 sm:pb-40 sm:pt-24">
-        <RevealOnMount>
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-xs text-white/75 backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#5b8cff]" />
-            Built for the agents you are already using
-          </span>
-        </RevealOnMount>
-
+      <div className="relative mx-auto max-w-7xl px-6 pb-16 pt-20 sm:pb-20 sm:pt-24">
+        {/* The eyebrow pill above the headline and the inline pill around
+            "step" are both gone — the no-eyebrow/no-pill house rule. Cut to
+            4 words (the house style's own research note: studied gallery
+            heroes median 5 words / 32 characters) so it genuinely holds to
+            two lines at every tested width (1440/768/390) — the previous
+            6-word version still wrapped to 3 lines at 1440px because
+            "Between a spreadsheet" alone overflowed the line at this size.
+            "Built for the agents you are already using" folds into the
+            supporting sentence below instead of its own label. */}
         <RevealOnMount delay={0.08}>
-          <h1 className="mt-7 max-w-4xl text-5xl font-semibold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
-            The{' '}
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#5b8cff]/15 px-4 py-1 align-middle text-[#5b8cff] dark:text-[#8fb0ff]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#5b8cff]" />
-              step
-            </span>{' '}
-            between
-            <br />
-            a spreadsheet and a CRM.
+          <h1 className="max-w-2xl text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
+            Spreadsheet to CRM.
           </h1>
         </RevealOnMount>
 
         <RevealOnMount delay={0.16}>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/60">
-            Outgrown the sheet. Not ready for Salesforce. Start here.
+            Outgrown the sheet. Not ready for Salesforce. Built for the agents you&apos;re already using.
           </p>
         </RevealOnMount>
 
@@ -161,10 +167,11 @@ function Hero() {
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <Link
               href="/signup"
-              className="group rounded-full bg-white px-6 py-3 text-sm font-medium text-[#07080c] transition-transform hover:scale-[1.03] active:scale-[0.98]"
+              className="group inline-flex items-center gap-2.5 rounded-full bg-white px-6 py-3 text-sm font-medium text-[#07080c] transition-transform hover:scale-[1.03] active:scale-[0.98]"
             >
-              Start free with Google
-              <span className="ml-1.5 inline-block transition-transform group-hover:translate-x-0.5">→</span>
+              <GoogleLogo className="h-4 w-4" />
+              Start free
+              <span className="ml-0.5 inline-block transition-transform group-hover:translate-x-0.5">→</span>
             </Link>
             <Link
               href="#how-it-works"
@@ -189,9 +196,8 @@ function Bridge() {
     <Section id="bridge">
       <Reveal>
         <SectionHead
-          eyebrow="Where this sits"
           title="We are not replacing your CRM."
-          body="We are getting you ready for one."
+          body="Where this sits: we are getting you ready for one."
         />
       </Reveal>
       <div className="mt-16">
@@ -214,9 +220,8 @@ function AgentSection() {
     <Section id="agents">
       <Reveal>
         <SectionHead
-          eyebrow="Agent native"
           title="Your agent is a first-class user."
-          body="Your agent reads and writes your pipeline over a real protocol."
+          body="Agent-native: it reads and writes your pipeline over a real protocol."
         />
       </Reveal>
       <div className="mx-auto mt-16 max-w-7xl px-6">
@@ -247,8 +252,7 @@ function EverythingElse() {
     <Section>
       <Reveal>
         <SectionHead
-          eyebrow="Everything else"
-          title="The rest of it is already here."
+          title="Everything else is already here."
           body="All of it, free."
         />
       </Reveal>
@@ -265,9 +269,8 @@ function Manifesto() {
   return (
     <Section>
       <div className="mx-auto max-w-4xl px-6">
-        <span className="font-mono text-xs uppercase tracking-[0.18em] text-[#5b8cff]">The honest version</span>
-        <ScrollWordReveal className="mt-6 text-2xl font-medium leading-[1.45] tracking-tight sm:text-3xl sm:leading-[1.4]">
-          Every CRM pitch starts by telling you the spreadsheet was the problem. It was not. The spreadsheet got you here. What it cannot do is remember who promised what, or hand a machine a clean place to write. So we built the smallest thing that can: real stages, real owners, a real trail, and an agent that can read and write all of it. Use it until a bigger system earns your money, then take your data and go.
+        <ScrollWordReveal className="text-2xl font-medium leading-[1.45] tracking-tight sm:text-3xl sm:leading-[1.4]">
+          The honest version: every CRM pitch starts by telling you the spreadsheet was the problem. It was not. The spreadsheet got you here. What it cannot do is remember who promised what, or hand a machine a clean place to write. So we built the smallest thing that can: real stages, real owners, a real trail, and an agent that can read and write all of it. Use it until a bigger system earns your money, then take your data and go.
         </ScrollWordReveal>
       </div>
     </Section>
@@ -279,9 +282,8 @@ function HowItWorks() {
     <Section id="how-it-works">
       <Reveal>
         <SectionHead
-          eyebrow="How it works"
           title="From signup to a running pipeline."
-          body="The longest step is pasting an email."
+          body="How it works: the longest step is pasting an email."
         />
       </Reveal>
       <div className="mt-16">
@@ -293,59 +295,73 @@ function HowItWorks() {
 
 // The local-AI claim is a privacy story, not just a cost story — the original
 // page only sold the cost half.
+//
+// A narrative list, not icon-topped cards — identical icon+label+caption
+// cells in a row is exactly the "icon-topped feature card" tell a
+// design-taste review flags. Each point gets its own heading and sentence,
+// stacked, no card boundary and no icon.
 function Privacy() {
   const points = [
-    { Icon: ShieldCheck, k: 'On-device extraction', v: 'Your pasted text never leaves the browser.', span: 2 as const },
-    { Icon: Wallet, k: 'No per-seat AI fee', v: 'No subscription, no token metering.', span: 2 as const },
-    { Icon: KeyRound, k: 'Google sign-in only', v: 'No password for us to store or leak.', span: 2 as const },
+    { k: 'On-device extraction', v: 'Your pasted text never leaves the browser.' },
+    { k: 'No per-seat AI fee', v: 'No subscription, no token metering.' },
+    { k: 'Google sign-in only', v: 'No password for us to store or leak.' },
   ]
   return (
     <Section>
       <Reveal>
         <SectionHead
-          eyebrow="Why it's free"
           title="Free because of where the model runs."
-          body="The model runs on your machine, so it costs us nothing."
+          body="Why it's free: the model runs on your machine, so it costs us nothing."
         />
       </Reveal>
       <div className="mx-auto mt-16 max-w-7xl px-6">
-        <BentoGrid>
+        {/* A flat tone-step fill per item (same surface language Bento.tsx
+            cells use elsewhere on the page), not an outlined box — gives
+            the three points real visual weight as one grouped unit
+            instead of reading as three disconnected floating captions. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {points.map((p, i) => (
-            <BentoCell key={p.k} span={p.span}>
-              <Reveal delay={i * 0.08}>
-                <p.Icon className="h-5 w-5 text-[#5b8cff]" strokeWidth={1.75} aria-hidden="true" />
-                <h3 className="mt-4 text-sm font-semibold text-white">{p.k}</h3>
-                <p className="mt-2.5 text-sm leading-relaxed text-white/55">{p.v}</p>
-              </Reveal>
-            </BentoCell>
+            <Reveal key={p.k} delay={i * 0.08} className="h-full">
+              <div className="h-full bg-white/[0.03] p-6">
+                <h3 className="text-base font-semibold text-white">{p.k}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/55">{p.v}</p>
+              </div>
+            </Reveal>
           ))}
-        </BentoGrid>
+        </div>
       </div>
     </Section>
   )
 }
 
-function FinalCta() {
+// The closing CTA — previously its own section with a blue (#0e1430)
+// background block; that background is gone and the heading + button now
+// sit directly on the page's own ground, right above the footer, as a
+// lead-in to it rather than a separate colored block. Plain text/button on
+// the page background, no section of its own — the footer's wordmark
+// The closing CTA — previously its own section with a blue (#0e1430)
+// background block, then a separate section before/after the footer. Now
+// rendered via HalftoneWordmarkFooter's own ctaSlot prop, landing in the
+// gap it already has between the link/back-to-top row and the wordmark
+// art below — inside the same black footer box, between those rows and
+// the animation, as asked. The animation's own canvas/rendering code is
+// completely untouched; ctaSlot only adds a plain content slot drawn over
+// it, the same way .hwf-top/.hwf-rule already are.
+function FooterCtaContent() {
   return (
-    <section className="relative isolate overflow-hidden border-t border-white/[0.07] py-32 sm:py-40 text-center">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[radial-gradient(70%_120%_at_50%_100%,#16224d_0%,#07080c_70%)]"
-      />
-      <Reveal>
-        <div className="mx-auto max-w-2xl px-6">
-          <h2 className="text-4xl font-semibold tracking-tight sm:text-5xl">Stop managing leads. Start running them.</h2>
-          <p className="mt-4 text-white/55">Free to start.</p>
-          <Link
-            href="/signup"
-            className="group mt-9 inline-block rounded-full bg-white px-7 py-3.5 text-sm font-medium text-[#07080c] transition-transform hover:scale-[1.03] active:scale-[0.98]"
-          >
-            Start free with Google
-            <span className="ml-1.5 inline-block transition-transform group-hover:translate-x-0.5">→</span>
-          </Link>
-        </div>
-      </Reveal>
-    </section>
+    <Reveal>
+      <div className="mx-auto max-w-2xl px-6 pb-6 pt-2 text-center sm:pb-8">
+        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Stop managing. Start running.</h2>
+        <Link
+          href="/signup"
+          className="group mt-5 inline-flex items-center gap-2.5 rounded-full bg-white px-6 py-3 text-sm font-medium text-[#07080c] transition-transform hover:scale-[1.03] active:scale-[0.98]"
+        >
+          <GoogleLogo className="h-4 w-4" />
+          Start free
+          <span className="ml-0.5 inline-block transition-transform group-hover:translate-x-0.5">→</span>
+        </Link>
+      </div>
+    </Reveal>
   )
 }
 
@@ -356,6 +372,18 @@ function Footer() {
       label={BRAND_NAME}
       meta="© 2026 · The step between a spreadsheet and a CRM"
       palette={{ background: '#07080c', ink: '#ededec', warm: '#5b8cff' }}
+      ctaSlot={<FooterCtaContent />}
+      // Shorter than the previous 620px, and crop raised from the
+      // component's own 0.2 default to 0.35 so more of the wordmark's
+      // height is cropped below the fold — reads as a visibly smaller,
+      // more contained footer overall, not just less empty space above it.
+      height="520px"
+      crop={0.35}
+      // Override the component's own mono-labels default — the rest of the
+      // page no longer uses mono as its typeface (house-style no-mono
+      // rule), so the footer's tiny uppercase link labels would otherwise
+      // be the one remaining mono element on the page.
+      monoFamily='"Inter Tight", "Inter Variable", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif'
       columns={[
         {
           title: 'Product',

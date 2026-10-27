@@ -50,7 +50,13 @@ function Word({
   progress: MotionValue<number>
   range: [number, number]
 }) {
-  const opacity = useTransform(progress, range, [0.15, 1])
+  // 0.15 measured as a real contrast failure against the dark page (a
+  // design-review tool caught it, and it's correct: a visitor who never
+  // scrolls past this point, or any static capture of the page, sees
+  // unread words as effectively invisible rather than just dim). 0.55
+  // keeps the same lit/unlit contrast the reveal is built around while
+  // staying legible on its own.
+  const opacity = useTransform(progress, range, [0.55, 1])
   return (
     <>
       {/* The trailing space is outside the animated span so the browser can

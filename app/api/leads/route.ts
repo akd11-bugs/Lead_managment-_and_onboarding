@@ -72,7 +72,12 @@ export async function POST(req: Request) {
     }
   }
 
-  const person = body.poc?.trim() ? await findOrCreatePerson(user.orgId, company.id, body.poc) : null
+  const person = body.poc?.trim()
+    ? await findOrCreatePerson(user.orgId, company.id, body.poc, {
+        linkedinUrl: body.linkedinUrl || null,
+        otherLinks: Array.isArray(body.otherLinks) ? body.otherLinks.filter((l: unknown) => typeof l === 'string') : undefined,
+      })
+    : null
 
   const lead = await prisma.lead.create({
     data: {

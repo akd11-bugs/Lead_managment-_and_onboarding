@@ -22,8 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Wand2, Loader2 } from 'lucide-react'
-import { extractLeadFields } from '@/lib/aiExtraction'
+import { Plus, Wand2, Loader2, ScanLine, X } from 'lucide-react'
+import { extractLeadFields, extractLinks } from '@/lib/aiExtraction'
+import { decodeCardQr } from '@/lib/cardScan/decodeQr'
+import { WebcamCapture } from './WebcamCapture'
 import {
   SOURCES,
   SOURCE_LABELS,
@@ -66,6 +68,8 @@ export function NewLeadDialog({
   const [tasks, setTasks] = useState<DraftTask[]>([])
   const [pasteText, setPasteText] = useState('')
   const [extracting, setExtracting] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
   const [form, setForm] = useState({
     poc: '',
     company: '',
@@ -79,6 +83,8 @@ export function NewLeadDialog({
     type: 'merchant' as LeadType,
     estimatedVolume: '5000',
     notes: '',
+    linkedinUrl: '',
+    otherLinks: [] as string[],
   })
 
   // Runs entirely in the browser (lib/aiExtraction.ts) — a small NER model
@@ -103,6 +109,70 @@ export function NewLeadDialog({
       }))
     } finally {
       setExtracting(false)
+    }
+  }
+
+  // Scan path: QR/barcode decoding happens on-device first (lib/cardScan/
+  // decodeQr.ts — instant, no network call), then the photo goes to
+  // Cloud Vision OCR server-side (/api/leads/scan-card) for the printed
+  // text, which gets run through the same extractLeadFields() the paste-
+  // text flow above already uses, plus the new extractLinks(). Every
+  // result merges into form state the same "only fill empty fields" way
+  // handleExtract already does — this is a second way to trigger the same
+  // merge-fill behavior, not a parallel/competing code path. Never
+  // auto-submits: the rep still reviews every field before saving.
+  async function handleScanCard(file: File) {
+    setScanning(true)
+    setScanError(null)
+    try {
+      const qr = await decodeCardQr(file)
+
+      let ocrText = ''
+      try {
+        const res = await fetch('/api/leads/scan-card', {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'image/jpeg' },
+          body: file,
+        })
+        if (res.ok) {
+          const data = await res.json()
+          ocrText = data.text ?? ''
+          console.log('[scan-card debug] OCR text:', JSON.stringify(ocrText))
+        } else if (!qr) {
+          // Only surface the OCR failure if the QR path also found nothing
+          // — a card with a working QR code still fills useful fields even
+          // when the OCR call itself failed (rate limit, network, etc.).
+          const data = await res.json().catch(() => null)
+          setScanError(data?.error ?? 'Could not read that card.')
+        }
+      } catch {
+        if (!qr) setScanError('Could not reach the server to read that card.')
+      }
+
+      const extracted = ocrText ? await extractLeadFields(ocrText) : {}
+      console.log('[scan-card debug] extracted fields:', JSON.stringify(extracted))
+      const links = ocrText ? extractLinks(ocrText) : { other: [] }
+
+      setForm((prev) => ({
+        ...prev,
+        company: qr?.vcard?.company || extracted.company || prev.company,
+        poc: qr?.vcard?.name || extracted.poc || prev.poc,
+        email: qr?.vcard?.email || extracted.email || prev.email,
+        phone: qr?.vcard?.phone || extracted.phone || prev.phone,
+        linkedinUrl: links.linkedin || prev.linkedinUrl,
+        otherLinks: [
+          ...prev.otherLinks,
+          ...[qr?.vcard?.url, qr?.url, ...links.other].filter(
+            (l): l is string => !!l && !prev.otherLinks.includes(l),
+          ),
+        ],
+      }))
+
+      if (!qr && !ocrText) {
+        setScanError('No text or QR code found on that photo. Try a clearer shot, or fill the fields in manually.')
+      }
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -152,9 +222,13 @@ export function NewLeadDialog({
           type: 'merchant',
           estimatedVolume: '5000',
           notes: '',
+          linkedinUrl: '',
+          otherLinks: [],
         })
         setCustomFields({})
         setTasks([])
+        setPasteText('')
+        setScanError(null)
         router.refresh()
         return
       }
@@ -211,6 +285,51 @@ export function NewLeadDialog({
               </Button>
             </div>
           </div>
+          {/* Phone/tablet only — no user-agent sniffing (none exists
+              anywhere in this codebase), just the same CSS-breakpoint
+              visibility pattern already used site-wide (TopBar.tsx,
+              Sidebar.tsx). Desktop simply never sees this entry point;
+              nothing breaks if a desktop browser reached it directly. */}
+          <div className="space-y-1.5 rounded-md border border-dashed p-2.5 md:hidden">
+            <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ScanLine className="h-3.5 w-3.5" />
+              Scan a business card to auto-fill the fields below
+            </Label>
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant="outline" disabled={scanning} asChild>
+                <label className="cursor-pointer">
+                  {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />}
+                  {scanning ? 'Reading card…' : 'Scan card'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    disabled={scanning}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (file) handleScanCard(file)
+                    }}
+                  />
+                </label>
+              </Button>
+              {scanError && <p className="text-xs text-destructive">{scanError}</p>}
+            </div>
+          </div>
+          {/* Desktop counterpart — mobile's capture="environment" delegates
+              to the OS camera app, which has no equivalent on desktop
+              browsers (they just show a file picker), so this opens an
+              in-page getUserMedia() live preview instead. Both feed the
+              exact same handleScanCard/OCR/QR pipeline. */}
+          <div className="hidden space-y-1.5 rounded-md border border-dashed p-2.5 md:block">
+            <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ScanLine className="h-3.5 w-3.5" />
+              Scan a business card with your webcam to auto-fill the fields below
+            </Label>
+            <WebcamCapture disabled={scanning} onCapture={handleScanCard} />
+            {scanError && <p className="text-xs text-destructive">{scanError}</p>}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="company">Company</Label>
@@ -251,6 +370,41 @@ export function NewLeadDialog({
               />
             </div>
           </div>
+          {/* Only shown once there's something to show — a manually-entered
+              lead never needs these; a scanned card usually fills one or
+              both. */}
+          {(form.linkedinUrl || form.otherLinks.length > 0) && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="linkedinUrl">LinkedIn (optional)</Label>
+                <Input
+                  id="linkedinUrl"
+                  placeholder="https://linkedin.com/in/…"
+                  value={form.linkedinUrl}
+                  onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Other links</Label>
+                <div className="flex flex-wrap gap-1.5 rounded-md border border-input px-2 py-1.5">
+                  {form.otherLinks.length === 0 && <span className="text-xs text-muted-foreground">None found</span>}
+                  {form.otherLinks.map((link) => (
+                    <span key={link} className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs">
+                      {link}
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, otherLinks: form.otherLinks.filter((l) => l !== link) })}
+                        aria-label={`Remove ${link}`}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Business type</Label>

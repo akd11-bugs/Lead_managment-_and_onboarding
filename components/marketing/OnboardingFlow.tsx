@@ -7,18 +7,26 @@ import { BentoGrid, BentoCell } from './Bento'
 // is more important or detailed than another).
 
 type Step = {
-  n: string
   title: string
   body: string
 }
 
+// Order genuinely matters here (sign in, THEN paste a lead, THEN invite a
+// team, THEN run the pipeline) — the house style's own exception for a
+// real sequence is a real <ol>, but this grid's cells aren't block-level
+// list items in the semantic HTML sense (Bento.tsx's cells are plain
+// divs), so instead the number is kept as plain text in the normal
+// typeface — no mono, no padStart("01"), no drawn badge — which still
+// communicates sequence without dressing a digit up as a UI chrome tell.
 export function OnboardingFlow() {
   return (
     <div className="mx-auto max-w-7xl px-6">
       <BentoGrid>
-        {STEPS.map((s) => (
-          <BentoCell key={s.n} span={3} className="flex items-start gap-5">
-            <span className="mt-0.5 font-mono text-xs font-semibold text-[#8fb0ff]">{s.n}</span>
+        {STEPS.map((s, i) => (
+          <BentoCell key={s.title} span={3} className="flex items-start gap-5">
+            <span className="mt-0.5 text-lg font-semibold text-white/30 [font-variant-numeric:tabular-nums]">
+              {i + 1}
+            </span>
             <div>
               <h3 className="text-lg font-semibold text-white">{s.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-white/55">{s.body}</p>
@@ -32,22 +40,18 @@ export function OnboardingFlow() {
 
 const STEPS: Step[] = [
   {
-    n: '01',
     title: 'Sign in with Google',
     body: 'No password, no setup call.',
   },
   {
-    n: '02',
     title: 'Paste your first lead',
     body: 'We pull out the details for you.',
   },
   {
-    n: '03',
     title: 'Bring your team in',
     body: 'Invite by email, done.',
   },
   {
-    n: '04',
     title: 'Run your pipeline',
     body: 'Drag deals through your stages.',
   },

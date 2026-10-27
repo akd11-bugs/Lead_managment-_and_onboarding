@@ -7,11 +7,12 @@ import { CommandPalette } from './CommandPalette'
 import type { SessionUser } from '@/lib/session'
 
 // The login page renders standalone — no nav shell around a sign-in form.
-// /rep is the separate PIN-authenticated rep form — it must never show the
-// dashboard shell, even for someone who also happens to be logged into the
-// dashboard in the same browser (an admin testing it, for instance). Reps
-// themselves never have a NextAuth session at all, but that alone isn't
-// enough to guarantee isolation, so this checks the path explicitly.
+// /rep and /rep/<slug> are the separate PIN-authenticated rep form, and
+// /intake/<slug> is the public lead-capture form — neither must ever show
+// the dashboard shell, even for someone who also happens to be logged into
+// the dashboard in the same browser (an admin testing one of these, for
+// instance). Must be startsWith, not an exact match — an exact match on
+// '/rep' alone would miss every per-org '/rep/<slug>' page.
 export function AppShell({
   user,
   signOutButton,
@@ -22,7 +23,9 @@ export function AppShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  if (pathname === '/login' || pathname === '/rep' || !user) {
+  const isStandalonePage =
+    pathname === '/login' || pathname === '/rep' || pathname.startsWith('/rep/') || pathname.startsWith('/intake/')
+  if (isStandalonePage || !user) {
     return <>{children}</>
   }
   return (

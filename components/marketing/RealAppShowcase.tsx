@@ -89,6 +89,7 @@ export const CALENDAR_DEMO: CalendarDay[] = (() => {
         : i === 2
           ? [{ id: 't2', title: 'Send proposal', done: false, leadId: null, leadCompany: 'Northwind Traders' }]
           : [],
+      leads: [],
     })
   }
   return days

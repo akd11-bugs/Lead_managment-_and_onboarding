@@ -217,16 +217,20 @@
   border-radius: 0 !important;
 }
 
-/* Marketing page only: the footer's mono typeface (HalftoneWordmarkFooter,
-   already matched by the eyebrow labels via font-mono) becomes the page's
-   one typeface — headlines and body copy included, not just labels — so
-   the whole landing page reads as one considered system instead of the
-   footer feeling like a different design. The signed-in app keeps its own
-   sans (--font-sans/Inter) untouched; this rule is scoped to the marketing
-   root same as the rounded-corner override above. Letter-spacing/uppercase
-   stay opt-in per element (already set on eyebrows/nav) rather than forced
-   here — a mono face holds up fine at headline/body sizes in its normal
-   case, but uppercase tracked-out body paragraphs would be unreadable. */
+/* Marketing page only: match the signed-in app's own typeface
+   (--font-sans/Inter) rather than mono — a design-taste review flagged
+   monospace-as-primary-typeface as a house-style violation ("two typefaces
+   at most, usually one"; the app's own body text is Inter), and the
+   previous all-mono treatment was also why several real-product preview
+   panels further down the page (Frame.tsx, FeatureCarousel's render
+   cards, HorizontalTour's surfaces — all pinned to the app's real
+   light-theme tokens via .light) were inheriting mono by accident instead
+   of rendering in their own correct typeface. The explicit .light reset
+   below is belt-and-suspenders against that same leak recurring. */
 .marketing-square {
-  font-family: var(--font-mono), ui-monospace, monospace;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.marketing-square .light {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }

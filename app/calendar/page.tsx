@@ -15,7 +15,8 @@ import {
 } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { prisma } from '@/lib/db'
-import { requireUser, isAdmin } from '@/lib/session'
+import { requireUser, leadScope, isAdmin, isOperations } from '@/lib/session'
+import { boardColumnFor, BOARD_COLUMN_COLORS } from '@/lib/types'
 import { CalendarMonth, type CalendarDay } from '@/components/calendar/CalendarMonth'
 
 export const dynamic = 'force-dynamic'
@@ -40,11 +41,18 @@ export default async function CalendarPage({
 
   const tasks = await prisma.task.findMany({
     where: {
-      ...(isAdmin(user) ? {} : { ownerId: user.id }),
+      orgId: { in: user.visibleOrgIds },
+      ...(isAdmin(user) || isOperations(user) ? {} : { ownerId: user.id }),
       dueDate: { gte: gridStart, lte: gridEnd },
     },
     orderBy: { dueDate: 'asc' },
     include: { lead: { select: { id: true, company: { select: { name: true } } } } },
+  })
+
+  const leadsClosing = await prisma.lead.findMany({
+    where: { ...leadScope(user), expectedCloseDate: { gte: gridStart, lte: gridEnd } },
+    orderBy: { expectedCloseDate: 'asc' },
+    select: { id: true, stage: true, pendingSubStatus: true, expectedCloseDate: true, company: { select: { name: true } } },
   })
 
   const days: CalendarDay[] = eachDayOfInterval({ start: gridStart, end: gridEnd }).map((date) => ({
@@ -61,6 +69,13 @@ export default async function CalendarPage({
         leadId: t.leadId,
         leadCompany: t.lead?.company?.name ?? null,
       })),
+    leads: leadsClosing
+      .filter((l) => l.expectedCloseDate && isSameDay(l.expectedCloseDate, date))
+      .map((l) => ({
+        id: l.id,
+        company: l.company.name,
+        stageColor: BOARD_COLUMN_COLORS[boardColumnFor(l)] ?? BOARD_COLUMN_COLORS.new,
+      })),
   }))
 
   const prev = subMonths(anchor, 1)
@@ -71,7 +86,7 @@ export default async function CalendarPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
-          <p className="text-sm text-muted-foreground">Task due dates at a glance.</p>
+          <p className="text-sm text-muted-foreground">Task due dates and lead close forecasts at a glance.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href={`/calendar?y=${prev.getFullYear()}&m=${prev.getMonth() + 1}`}>

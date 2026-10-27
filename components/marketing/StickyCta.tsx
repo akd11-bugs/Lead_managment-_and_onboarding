@@ -41,7 +41,11 @@ export function StickyCta() {
       }`}
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="mx-auto mb-4 flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-full border border-white/12 bg-[#0b0d14]/92 px-5 py-3 shadow-2xl shadow-black/50 backdrop-blur-xl sm:mx-auto sm:px-6">
+      {/* Flat, opaque surface — no blur (the house style allows one blurred
+          sticky bar at most; that's Nav, not this one), no border, no
+          static shadow. A fully opaque fill does the same "sits above the
+          page" job a glass/shadow treatment was doing. */}
+      <div className="mx-auto mb-4 flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-full bg-[#15171f] px-5 py-3 sm:mx-auto sm:px-6">
         <p className="min-w-0 text-sm text-white/70">
           <span className="font-medium text-white">Still on a spreadsheet?</span>{' '}
           <span className="hidden sm:inline">Bring it across in a paste.</span>

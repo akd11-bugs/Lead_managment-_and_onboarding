@@ -115,10 +115,12 @@ export function AgentTerminal() {
   }, [])
 
   return (
-    <div
-      ref={ref}
-      className="overflow-hidden rounded-xl border border-white/[0.09] bg-[#0b0d14] shadow-2xl shadow-black/40"
-    >
+    // No static border/shadow on this resting panel (house-style rule) —
+    // a flat fill against the dark page is still a clear surface. The
+    // transcript body below stays monospace: it's a real terminal
+    // simulation, the one case the house style itself carves out
+    // ("real code... monospace is correct there").
+    <div ref={ref} className="overflow-hidden rounded-xl bg-[#0b0d14]">
       <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-3">
         <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
@@ -144,7 +146,6 @@ export function AgentTerminal() {
           if (line.kind === 'tool') {
             return (
               <p key={i} className="text-white/45">
-                <span className="mr-2 select-none text-white/25">⚙</span>
                 {text}
                 {isLast && <Caret />}
               </p>
@@ -153,7 +154,6 @@ export function AgentTerminal() {
           if (line.kind === 'ok') {
             return (
               <p key={i} className="text-[#2ecc9b]">
-                <span className="mr-2 select-none">✓</span>
                 {text}
               </p>
             )

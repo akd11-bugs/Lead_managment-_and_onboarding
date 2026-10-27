@@ -52,6 +52,7 @@ import { CustomFieldsSection } from './CustomFieldsSection'
 import { HighlightsGrid, type Highlight } from '@/components/shared/HighlightsGrid'
 import { usePipelineConfig, useLeadFieldDefinitions } from '@/lib/hooks/usePipelineConfig'
 import { suggestStage } from '@/lib/aiExtraction'
+import { isSafeUrl } from '@/lib/types'
 
 interface SkillRunEntry {
   id: string
@@ -337,6 +338,43 @@ export function LeadRecordView({
                 disabled={saving}
               />
             </Field>
+            {lead.person && (lead.person.linkedinUrl || JSON.parse(lead.person.otherLinksJson || '[]').length > 0) && (
+              <>
+                <Field label="LinkedIn">
+                  {lead.person.linkedinUrl && isSafeUrl(lead.person.linkedinUrl) ? (
+                    <a
+                      href={lead.person.linkedinUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block h-8 truncate text-sm leading-8 text-primary underline-offset-2 hover:underline"
+                    >
+                      {lead.person.linkedinUrl}
+                    </a>
+                  ) : lead.person.linkedinUrl ? (
+                    <span className="block h-8 text-sm leading-8 text-destructive">Invalid link (not shown)</span>
+                  ) : (
+                    <span className="block h-8 text-sm leading-8 text-muted-foreground">Not set</span>
+                  )}
+                </Field>
+                <Field label="Other links">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(JSON.parse(lead.person.otherLinksJson || '[]') as string[])
+                      .filter(isSafeUrl)
+                      .map((link) => (
+                        <a
+                          key={link}
+                          href={link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate rounded bg-muted px-1.5 py-0.5 text-xs text-primary hover:underline"
+                        >
+                          {link}
+                        </a>
+                      ))}
+                  </div>
+                </Field>
+              </>
+            )}
             <Field label="Business type">
               <Select
                 value={lead.businessType ?? 'unset'}
@@ -392,6 +430,13 @@ export function LeadRecordView({
                 </SelectContent>
               </Select>
             </Field>
+            {lead.intakeFormName && (
+              <Field label="Via form">
+                <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+                  {lead.intakeFormName}
+                </Link>
+              </Field>
+            )}
             <Field label="Type">
               <Select value={lead.type} onValueChange={(v) => patchLead({ type: v as LeadType })} disabled={saving}>
                 <SelectTrigger className="h-8">

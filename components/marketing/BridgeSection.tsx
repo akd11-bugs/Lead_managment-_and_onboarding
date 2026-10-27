@@ -40,15 +40,16 @@ export function BridgeSection() {
   return (
     <div className="mx-auto max-w-7xl px-6">
       <BentoGrid>
-        {STAGES.map((s, i) => (
+        {STAGES.map((s) => (
           <BentoCell key={s.title} span={s.span}>
             <div className={s.wide ? 'flex items-center gap-8' : ''}>
               <div className={s.wide ? 'shrink-0' : ''}>
+                {/* No decorative 01/02/03 numbering (position in the row
+                    already shows order) and no mono/tracked-caps label —
+                    plain sentence-case text in the sans typeface. */}
                 <div className="flex items-center gap-3">
                   <s.icon className="h-5 w-5 text-white/35" strokeWidth={1.75} aria-hidden="true" />
-                  <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-white/35">
-                    {String(i + 1).padStart(2, '0')} / {s.where}
-                  </span>
+                  <span className="text-sm text-white/35">{s.where}</span>
                 </div>
                 <h3 className="mt-5 text-lg font-semibold tracking-tight text-white sm:text-xl">{s.title}</h3>
               </div>

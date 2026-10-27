@@ -140,41 +140,42 @@ export function HorizontalTour() {
 
   return (
     <div className="mx-auto max-w-7xl px-6">
-      {/* A single bordered panel, not floating cards in empty page space —
-          rail and content both sit flush inside it with a hairline divider
-          between them (border-r on the rail column), matching the Full-
-          Bleed Hairline Rule the rest of the page already follows
-          (DESIGN.md) and the Attio reference's own partitioned layout: no
-          dead margin around a centered card, the panel itself IS the
-          structure. No rounded corners / overflow-hidden here: clipping to
-          a radius needs overflow-hidden on this wrapper, which silently
-          breaks position:sticky for the rail nested inside it — same root
-          cause already found and fixed once this session in KineticGrid's
+      {/* A single flat panel, not floating cards in empty page space — rail
+          and content sit together with a tone step between columns instead
+          of a hairline border (house-style no-hairline rule). No rounded
+          corners / overflow-hidden here: clipping to a radius needs
+          overflow-hidden on this wrapper, which silently breaks
+          position:sticky for the rail nested inside it — same root cause
+          already found and fixed once this session in KineticGrid's
           wrapper, since overflow other than visible changes which ancestor
-          becomes the sticky containing block. Square corners read fine
-          here anyway — it's a full-bleed grid panel, not a floating card,
-          and every other full-bleed hairline on this page (Section's own
-          border-t) is also unrounded. */}
-      <div className="grid border border-white/[0.09] lg:grid-cols-[240px_1fr]">
+          becomes the sticky containing block. */}
+      <div className="grid lg:grid-cols-[240px_1fr]">
         {/* Label rail — every surface name always visible, sticky for the
-            whole tour, fill line tracks which panel is actually pinned. */}
-        <div className="hidden border-white/[0.07] bg-white/[0.02] lg:block lg:border-r">
+            whole tour. The active surface's fill is now a real filled
+            track segment, not a 1px line: a column of flat blocks, one per
+            surface, with the active one (and everything before it) filled
+            solid — no hairline anywhere. */}
+        <div className="hidden bg-white/[0.02] lg:block">
           <div className="sticky px-6 py-8" style={{ top: NAV_HEIGHT }}>
-            <div className="relative">
-              <div className="absolute bottom-2 left-0 top-2 w-px bg-white/10" aria-hidden="true">
-                <div
-                  className="w-px bg-[#5b8cff] transition-[height] duration-300 ease-out"
-                  style={{ height: `${(active / Math.max(SURFACES.length - 1, 1)) * 100}%` }}
-                />
+            <div className="flex gap-5">
+              <div className="flex flex-col gap-1.5" aria-hidden="true">
+                {SURFACES.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-6 w-1 rounded-full transition-colors duration-300 ${
+                      i <= active ? 'bg-[#5b8cff]' : 'bg-white/10'
+                    }`}
+                  />
+                ))}
               </div>
-              <div className="divide-y divide-white/[0.07]">
+              <div className="flex flex-col gap-1.5">
                 {SURFACES.map((s, i) => (
                   <button
                     key={s.id}
                     type="button"
                     onClick={() => goTo(i)}
-                    className={`-ml-px block w-full border-l-2 py-3 pl-5 text-left text-sm transition-colors duration-300 ${
-                      i === active ? 'border-[#5b8cff] font-medium text-white' : 'border-transparent text-white/40 hover:text-white/70'
+                    className={`block py-1.5 text-left text-sm transition-colors duration-300 ${
+                      i === active ? 'font-medium text-white' : 'text-white/40 hover:text-white/70'
                     }`}
                   >
                     {s.label}
@@ -185,12 +186,10 @@ export function HorizontalTour() {
           </div>
         </div>
 
-        {/* One pinned block per surface, stacked in normal flow, each full-
-            bleed within the content column (no card border/radius of its
-            own — the outer panel already draws that edge) and separated by
-            a hairline rather than a gap, so there's no empty strip between
-            one panel's end and the next one's start. */}
-        <div className="divide-y divide-white/[0.07]">
+        {/* One pinned block per surface, stacked in normal flow, each
+            full-bleed within the content column, separated by the normal
+            section spacing rather than a hairline divider. */}
+        <div className="flex flex-col gap-2">
           {SURFACES.map((s, i) => (
             <div
               key={s.id}
@@ -205,9 +204,11 @@ export function HorizontalTour() {
                 }}
                 className="bg-[#07080c] px-6 py-8 sm:px-10 sm:py-10"
               >
-                <span className="mb-3 block font-mono text-xs uppercase tracking-[0.18em] text-[#5b8cff] lg:hidden">
-                  {s.label}
-                </span>
+                {/* s.label (shown in the desktop rail) is dropped here below
+                    lg — it duplicated s.title as a small label directly
+                    above the real heading, reading exactly like the
+                    eyebrow pattern the rest of the page removed. The
+                    heading alone carries the same information. */}
                 <h3 className="mb-6 text-2xl font-semibold tracking-tight sm:text-3xl">{s.title}</h3>
                 {s.render()}
               </div>

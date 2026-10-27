@@ -70,6 +70,11 @@ export interface HalftoneWordmarkFooterProps {
   height?: string
   /** Extra root class names. */
   className?: string
+  /** Optional content placed in the gap between the link rule and the
+   *  wordmark art below it — a closing CTA, for instance. Rendered over
+   *  the canvas (same stacking as .hwf-top/.hwf-rule), never inside it;
+   *  the animation itself takes no prop and is never touched by this. */
+  ctaSlot?: React.ReactNode
 }
 
 const PRESETS: { [K in HalftonePreset]: HalftonePalette } = {
@@ -172,6 +177,7 @@ const HWF_CSS = `
   font-family: var(--hwf-mono); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
 }
 .hwf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.hwf-cta { position: relative; z-index: 1; padding: clamp(18px, 2.6vw, 30px) clamp(20px, 3.4vw, 44px) 0; }
 @media (max-width: 720px) {
   .hwf-top { gap: 18px 32px; }
   .hwf-brand { flex-basis: 100%; }
@@ -199,6 +205,7 @@ export default function HalftoneWordmarkFooter({
   monoFamily = MONO_STACK,
   height = "560px",
   className = "",
+  ctaSlot,
 }: HalftoneWordmarkFooterProps) {
   const colors = { ...(PRESETS[preset] || PRESETS.night), ...(palette || {}) }
   const rootRef = React.useRef(null as HTMLElement | null)
@@ -494,6 +501,7 @@ export default function HalftoneWordmarkFooter({
           </button>
         ) : null}
       </div>
+      {ctaSlot ? <div className="hwf-cta">{ctaSlot}</div> : null}
     </footer>
   )
 }

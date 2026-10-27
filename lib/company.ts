@@ -46,14 +46,39 @@ export async function findOrCreatePerson(
   orgId: string,
   companyId: string,
   name: string,
-  extra?: { email?: string | null; phone?: string | null; jobTitle?: string | null },
+  extra?: {
+    email?: string | null
+    phone?: string | null
+    jobTitle?: string | null
+    linkedinUrl?: string | null
+    otherLinks?: string[]
+  },
 ): Promise<Person> {
   const trimmedName = name.trim()
 
   const existing = await prisma.person.findFirst({
     where: { orgId, companyId, name: { equals: trimmedName, mode: 'insensitive' } },
   })
-  if (existing) return existing
+  if (existing) {
+    // A card scan matching an existing Person (same name, same company)
+    // still carries real new data — without this, a rescanned or
+    // previously-manually-entered contact would silently drop the
+    // LinkedIn/other links a scan just found, since create() below never
+    // runs for a match. Only touches the two link fields; every other
+    // field keeps this function's existing create-only behavior.
+    if (extra?.linkedinUrl || (extra?.otherLinks && extra.otherLinks.length > 0)) {
+      const existingOtherLinks: string[] = JSON.parse(existing.otherLinksJson || '[]')
+      const mergedOtherLinks = Array.from(new Set([...existingOtherLinks, ...(extra.otherLinks ?? [])]))
+      return prisma.person.update({
+        where: { id: existing.id },
+        data: {
+          linkedinUrl: existing.linkedinUrl ?? extra.linkedinUrl ?? null,
+          otherLinksJson: JSON.stringify(mergedOtherLinks),
+        },
+      })
+    }
+    return existing
+  }
 
   return prisma.person.create({
     data: {
@@ -63,6 +88,8 @@ export async function findOrCreatePerson(
       email: extra?.email ?? null,
       phone: extra?.phone ?? null,
       jobTitle: extra?.jobTitle ?? null,
+      linkedinUrl: extra?.linkedinUrl ?? null,
+      otherLinksJson: JSON.stringify(extra?.otherLinks ?? []),
     },
   })
 }

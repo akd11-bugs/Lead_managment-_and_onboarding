@@ -24,6 +24,11 @@ export default async function proxy(req: NextRequest) {
   // before the slug route existed, which would have redirected /rep/acme to
   // /login and broken field sign-in entirely.
   const isRepPage = pathname === '/rep' || pathname.startsWith('/rep/')
+  // The public lead-intake form (/intake/<slug>) — no login, resolves its
+  // org from the slug the same way the rep portal does. Its own write route
+  // (app/api/intake/[slug]/route.ts) is excluded from the matcher below,
+  // same treatment as api/rep.
+  const isIntakePage = pathname === '/intake' || pathname.startsWith('/intake/')
   // "/" itself must be reachable while logged out too — app/page.tsx branches
   // on session there (marketing page vs dashboard), so the middleware can't
   // blanket-redirect it to /login the way every other route still should.
@@ -42,7 +47,14 @@ export default async function proxy(req: NextRequest) {
   const hasDevBypassCookie =
     process.env.NODE_ENV !== 'production' && req.cookies.get(DEV_BYPASS_COOKIE)?.value === '1'
   const isPublicPage =
-    pathname === '/login' || isInviteRedeemPage || isSignupPage || isRepPage || isRootPage || isDevLoginRoute || hasDevBypassCookie
+    pathname === '/login' ||
+    isInviteRedeemPage ||
+    isSignupPage ||
+    isRepPage ||
+    isIntakePage ||
+    isRootPage ||
+    isDevLoginRoute ||
+    hasDevBypassCookie
 
   // Defense-in-depth beyond the session cookie's own sameSite=lax setting
   // (which already blocks the cookie from riding along on a genuine
@@ -86,11 +98,13 @@ export const config = {
   // callable while logged out), the external reports API + the
   // leads-sheet sync cron route + the agent-facing write API (all three
   // authenticate callers with their own per-org API key, not a browser
-  // session), the rep-form API (its own rep_session cookie), and the health
-  // probe (the hosting platform calls it with no session and must get a
-  // real status, not a redirect to /login) — everything else (pages and our
-  // own /api/* routes) requires a Neon Auth session.
+  // session), the rep-form API (its own rep_session cookie), the public
+  // lead-intake API (no auth at all — it's meant for anonymous submitters,
+  // protected by its own rate limiting instead), and the health probe (the
+  // hosting platform calls it with no session and must get a real status,
+  // not a redirect to /login) — everything else (pages and our own /api/*
+  // routes) requires a Neon Auth session.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/agent|api/rep|api/health).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/agent|api/rep|api/intake|api/health).*)',
   ],
 }

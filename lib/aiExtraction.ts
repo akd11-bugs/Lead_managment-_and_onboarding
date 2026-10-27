@@ -134,6 +134,52 @@ export async function extractLeadFields(text: string): Promise<ExtractedLeadFiel
   return result
 }
 
+export interface ExtractedLinks {
+  linkedin?: string
+  other: string[]
+}
+
+// Matches a bare domain ("acme.com", "www.acme.com/team") or a full
+// https?:// URL, whichever appears first in the scanned text — global so
+// every URL-shaped token on the card is found, not just the first.
+const URL_RE = /https?:\/\/\S+|(?:www\.)?[a-z0-9-]+\.[a-z]{2,}(?:\/\S*)?/gi
+
+// LinkedIn is reliably detectable by domain alone — every other match goes
+// into `other` rather than being guessed at (e.g. "is this the company's
+// website?"): nothing on a printed card distinguishes a company site from
+// a personal portfolio or any other link, so labelling anything beyond
+// LinkedIn would be a guess dressed up as a fact. Purely regex, no model —
+// runs synchronously, same deterministic-first-pass spirit as the
+// email/phone regex above.
+export function extractLinks(text: string): ExtractedLinks {
+  const result: ExtractedLinks = { other: [] }
+  const trimmed = text.trim()
+  if (!trimmed) return result
+
+  // Strip email addresses first — otherwise a bare-domain match like
+  // "acme.com" fires on the domain half of "jane@acme.com" too, surfacing
+  // someone's email provider as if it were a found website link. EMAIL_RE
+  // itself has no /g flag (its other use is a single match()), so a fresh
+  // global copy is used here to strip every email, not just the first.
+  const withoutEmails = trimmed.replace(new RegExp(EMAIL_RE.source, 'g'), ' ')
+
+  const matches = withoutEmails.match(URL_RE) ?? []
+  const seen = new Set<string>()
+  for (const raw of matches) {
+    const url = raw.replace(/[.,;:)\]]+$/, '') // trailing punctuation from running card text, not part of the URL
+    if (seen.has(url.toLowerCase())) continue
+    seen.add(url.toLowerCase())
+
+    if (/linkedin\.com/i.test(url)) {
+      if (!result.linkedin) result.linkedin = url
+    } else {
+      result.other.push(url)
+    }
+  }
+
+  return result
+}
+
 export interface StageSuggestion {
   stageKey: string
   confidence: number

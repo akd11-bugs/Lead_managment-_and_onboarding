@@ -245,18 +245,20 @@ model Company {
 // Company (enforced in application code at the two write sites, not the DB,
 // since Prisma has no cross-field constraint).
 model Person {
-  id        String   @id @default(cuid())
-  orgId     String
-  org       Organization @relation(fields: [orgId], references: [id])
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
-  name      String
-  email     String?
-  phone     String?
-  jobTitle  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  leads     Lead[]
+  id             String   @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id])
+  companyId      String?
+  company        Company? @relation(fields: [companyId], references: [id])
+  name           String
+  email          String?
+  phone          String?
+  jobTitle       String?
+  linkedinUrl    String?  // detected from a scanned business card (QR payload or printed text) — reliably classified by domain match, so it gets its own scalar column, same convention as Lead.website
+  otherLinksJson String   @default("[]") // JSON.stringify(string[]) — every other non-LinkedIn URL found on a scanned card (company site, portfolio, etc.) — no reliable way to label a bare URL's purpose from a card alone, so these are kept as a flat list rather than guessed at
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  leads          Lead[]
 
   @@index([orgId, companyId])
   @@index([orgId, name])
@@ -274,7 +276,7 @@ model Lead {
   website         String?
   industry        String?      // free text vertical, e.g. "Fashion", "Apparel" — filled by sales
   businessType    String?      // b2b | b2c
-  source          String       // website | referral | linkedin | cold_outreach | event | other
+  source          String       // website | referral | linkedin | cold_outreach | event | form | other
   stage           String       // new | pending | proposal | onboarding | not_interested
   estimatedVolume Float        @default(0)
   ownerId         String       @default("self")
@@ -290,6 +292,8 @@ model Lead {
   onboardingSubStage String?   // document_submission | document_verification | psp_verification | final_onboarded — only meaningful when stage == "onboarding"
   assignedOpsId    String?     // operations User.id handling this lead's onboarding — set the moment stage enters "onboarding", cleared on leaving
   assignedOpsName  String?     // denormalized, same convention as ownerName
+  intakeFormId     String?     // OrgLeadIntakeForm.id this lead was submitted through — only set when source == "form". No hard FK, same convention as assignedOpsId: a deleted form must never block/cascade-break a lead it already created.
+  intakeFormName   String?     // denormalized at submission time, same convention as assignedOpsName — survives the form being renamed or deleted later
   painPoints      String       @default("") // discovery: what's hurting them today
   whatTheyWant    String       @default("") // discovery: what they're actually asking for
   notes           String       @default("")
@@ -395,6 +399,27 @@ model Task {
   @@index([leadId])
   @@index([done, dueDate])
   @@index([orgId, ownerId])
+}
+
+// A public, no-login lead-capture link — handed to a partner, printed on a
+// flyer, posted at an event booth. One org can run several (different
+// campaigns/channels need different default owners/sources), unlike
+// OrgSheetConnector's one-per-org shape. `slug` is the public URL segment
+// (/intake/<slug>) and is globally unique the same way OrgSheetConnector's
+// sheetId is — it's an external-facing identifier, not an internal id.
+model OrgLeadIntakeForm {
+  id                 String   @id @default(cuid())
+  orgId              String
+  name               String // admin-facing label, e.g. "Shopify Unite booth"
+  slug               String   @unique
+  enabled            Boolean  @default(true)
+  defaultOwnerUserId String // new leads from this form are assigned here
+  defaultSource      String   @default("form") // reuses Lead.source's existing enum values
+  configuredByUserId String
+  configuredAt       DateTime @default(now())
+  submissionCount    Int      @default(0)
+
+  @@index([orgId])
 }
 
 model Activity {
