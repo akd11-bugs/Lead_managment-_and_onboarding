@@ -11,6 +11,7 @@ import { OrgEmailSettingsCard } from '@/components/settings/OrgEmailSettingsCard
 import { OrgSheetConnectorCard } from '@/components/settings/OrgSheetConnectorCard'
 import { LeadIntakeFormsCard } from '@/components/settings/LeadIntakeFormsCard'
 import { AgentApiKeyCard } from '@/components/settings/AgentApiKeyCard'
+import { McpConnectionsCard } from '@/components/settings/McpConnectionsCard'
 import { ReportsApiKeyCard } from '@/components/settings/ReportsApiKeyCard'
 import { WorkflowRulesCard } from '@/components/settings/WorkflowRulesCard'
 import { PipelineConfigCard } from '@/components/settings/PipelineConfigCard'
@@ -161,6 +162,7 @@ export function SettingsTabs({
       {isAdminUser && (
         <TabsContent value="connectors" className="space-y-6 pt-2">
           <AgentApiKeyCard />
+          <McpConnectionsCard />
           <OrgSheetConnectorCard />
           <LeadIntakeFormsCard />
           <ReportsApiKeyCard />

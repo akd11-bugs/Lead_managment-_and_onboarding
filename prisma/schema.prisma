@@ -59,6 +59,7 @@ model Organization {
 
   emailConfig    OrgEmailConfig?
   sheetConnector OrgSheetConnector?
+  mcpConnections OrgMcpConnection[]
   companies      Company[]
   people         Person[]
 }
@@ -110,6 +111,33 @@ model OrgSheetConnector {
   lastSyncedAt       DateTime?
   configuredAt         DateTime  @default(now())
   configuredByUserId   String?
+}
+
+// An org's connection to a third-party MCP server (e.g. treg.to) — lets a
+// rep's existing Claude session, already connected to Steadfast's own MCP
+// endpoint (app/api/agent/mcp/route.ts), also see that server's tools
+// merged in automatically, with no second connector/sign-in of their own.
+// Many per org (not @unique on orgId) — an admin can connect several
+// providers. The third party owns its own auth: `tokenEnc` is that
+// provider's own API key/token, AES-256-GCM encrypted the same way
+// OrgEmailConfig.smtpPassEnc is, never OAuth-brokered by Steadfast itself
+// (see lib/mcp/connections.ts's doc comment for why bring-your-own-key was
+// chosen over building a per-provider OAuth client).
+model OrgMcpConnection {
+  id                 String    @id @default(cuid())
+  orgId              String
+  org                Organization @relation(fields: [orgId], references: [id])
+  name               String // admin-facing label, e.g. "treg"
+  serverUrl          String
+  tokenEnc           String? // null if the server needs no auth at all
+  enabled            Boolean   @default(true)
+  lastToolCount       Int?     // set on each successful tools/list handshake — shown in Settings so a broken connection is visible before a rep hits it
+  lastCheckedAt      DateTime?
+  lastError          String? // the last handshake/tools-list failure, if any — never a raw response body (see lib/mcp/connections.ts)
+  configuredAt       DateTime  @default(now())
+  configuredByUserId String?
+
+  @@index([orgId])
 }
 
 // Per-org pipeline stage configuration. `key` is what Lead.stage actually

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAgentOrg } from '@/lib/agentAuth'
 import { handleRpc, isSupportedVersion, rpcError, RpcError, type JsonRpcRequest } from '@/lib/mcp/protocol'
 import { TOOLS, type McpCtx } from '@/lib/mcp/tools'
+import { buildProxyToolsForOrg } from '@/lib/mcp/connections'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,8 +72,18 @@ export async function POST(req: Request) {
 
   const ctx: McpCtx = { orgId: agentOrg.orgId }
 
+  // Only tools/list and tools/call need the merged tool set — every other
+  // method (initialize, ping, notifications) never touches `tools` at all,
+  // so skip the live handshake against every connected third-party server
+  // on those. tools/call still re-handshakes on every call rather than
+  // caching: no caching layer exists yet, and correctness (never calling a
+  // tool a connection no longer actually exposes) matters more than the
+  // extra round-trip for a first version of this feature.
+  const needsTools = message.method === 'tools/list' || message.method === 'tools/call'
+  const tools = needsTools ? [...TOOLS, ...(await buildProxyToolsForOrg(agentOrg.orgId))] : TOOLS
+
   try {
-    const response = await handleRpc(message, TOOLS, SERVER_INFO, ctx)
+    const response = await handleRpc(message, tools, SERVER_INFO, ctx)
     // Notifications get 202 with no body, per the transport spec.
     if (response === null) return new NextResponse(null, { status: 202 })
     return NextResponse.json(response)
