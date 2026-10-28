@@ -75,7 +75,7 @@ function formatCurrency(n: number) {
 
 export function RepForm({ orgSlug }: { orgSlug: string }) {
   const [loggedIn, setLoggedIn] = useState(false)
-  const { columns } = useRepPipelineConfig(loggedIn)
+  const { columns, pendingSubStatuses } = useRepPipelineConfig(loggedIn)
   const columnLabels = Object.fromEntries(columns.map((c) => [c.key, c.label]))
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
@@ -209,7 +209,7 @@ export function RepForm({ orgSlug }: { orgSlug: string }) {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          ...boardColumnToInput(column),
+          ...boardColumnToInput(column, pendingSubStatuses.map((s) => s.key)),
           remark: stageRemark.trim(),
           ...(movingToOnboarding && { assignedOpsId }),
         }),

@@ -4,9 +4,7 @@ import { FunnelChart, type FunnelStage } from '@/components/charts/funnel-chart'
 
 export interface PipelineFunnelData {
   new: number
-  pendingOurs: number
-  pendingMerchant: number
-  pendingPsp: number
+  pending: { key: string; label: string; count: number }[]
   onboarded: number
   live: number
 }
@@ -14,9 +12,7 @@ export interface PipelineFunnelData {
 export function PipelineFunnel({ data }: { data: PipelineFunnelData }) {
   const stages: FunnelStage[] = [
     { label: 'New', value: data.new },
-    { label: 'Pending — Our Side', value: data.pendingOurs },
-    { label: 'Pending — Merchant', value: data.pendingMerchant },
-    { label: 'Pending — PSP', value: data.pendingPsp },
+    ...data.pending.map((p) => ({ label: p.label, value: p.count })),
     { label: 'Onboarded', value: data.onboarded },
     { label: 'Live', value: data.live },
   ]

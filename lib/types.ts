@@ -28,8 +28,12 @@ export type BusinessType = 'b2b' | 'b2c'
 
 // Only meaningful when stage === 'pending'. Freely switchable in either
 // direction (not a sequential checklist) — it just records whose turn it is
-// to act next.
-export type PendingSubStatus = 'pending_ours' | 'pending_merchant' | 'pending_psp'
+// to act next. Loosened from a fixed 3-value union to `string`, same
+// reasoning as BoardColumnKey below: an org's actual sub-statuses come from
+// PendingSubStatusDefinition (prisma/schema.prisma), fully admin
+// add/remove/rename-able — 'pending_ours'/'pending_merchant'/'pending_psp'
+// are just the seeded defaults, not a closed set.
+export type PendingSubStatus = string
 
 // Won leads go straight into onboarding — there is no separate "Won" resting
 // state. Operated by the sales team for now; ops-team access comes later.
@@ -189,15 +193,19 @@ export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
   b2c: 'B2C',
 }
 
-// Only meaningful when stage === 'pending'. Not sequential — any value can
-// switch to any other.
+// Seeded defaults only (PendingSubStatusDefinition, lib/pipelineConfig.ts)
+// — every real validation/lookup against an org's actual sub-statuses goes
+// through that org's rows, never this constant directly, except as the
+// fallback value used only where no org context is available at all.
 export const PENDING_SUB_STATUSES: PendingSubStatus[] = ['pending_ours', 'pending_merchant', 'pending_psp']
 
-export const PENDING_SUB_STATUS_LABELS: Record<PendingSubStatus, string> = {
+export const PENDING_SUB_STATUS_LABELS: Record<string, string> = {
   pending_ours: 'Pending — our side',
   pending_merchant: 'Pending — merchant side',
   pending_psp: 'Pending — PSP side',
 }
+
+export type SubStatusOwner = 'us' | 'external'
 
 // A "board column" is the actual unit Kanban, the Leads filter, and every
 // stage-picking dropdown work in — it's `Stage` with 'pending' expanded into
@@ -256,10 +264,15 @@ export const BOARD_COLUMN_COLORS: Record<BoardColumnKey, string> = {
   not_interested: '#a93226',
 }
 
-// Where a lead currently sits, expanded to sub-column granularity.
+// Where a lead currently sits, expanded to sub-column granularity. No
+// hardcoded fallback sub-status here — this function has no org context to
+// know which sub-status is actually the org's default, so a pending lead
+// with no pendingSubStatus set (a transient state applyStageChange should
+// always resolve before it's ever read back) just falls back to the bare
+// 'pending' stage name as its column key.
 export function boardColumnFor(lead: { stage: string; pendingSubStatus?: string | null }): BoardColumnKey {
-  if (lead.stage === 'pending') {
-    return (lead.pendingSubStatus as BoardColumnKey) || 'pending_ours'
+  if (lead.stage === 'pending' && lead.pendingSubStatus) {
+    return lead.pendingSubStatus
   }
   return lead.stage as BoardColumnKey
 }
@@ -267,10 +280,15 @@ export function boardColumnFor(lead: { stage: string; pendingSubStatus?: string 
 // Reverse mapping — what to PATCH to move a lead into this column. Always
 // includes `stage` (harmless if unchanged) so a single call can move a lead
 // from any column to any other, including New straight into a specific
-// pending sub-status, in one request.
-export function boardColumnToInput(column: BoardColumnKey): { stage: Stage; pendingSubStatus?: PendingSubStatus } {
-  if ((PENDING_SUB_STATUSES as string[]).includes(column)) {
-    return { stage: 'pending', pendingSubStatus: column as PendingSubStatus }
+// pending sub-status, in one request. `pendingSubStatusKeys` is the org's
+// actual current set (PendingSubStatusDefinition) — falls back to the
+// seeded-default constant only where no org context is available.
+export function boardColumnToInput(
+  column: BoardColumnKey,
+  pendingSubStatusKeys: string[] = PENDING_SUB_STATUSES,
+): { stage: Stage; pendingSubStatus?: PendingSubStatus } {
+  if (pendingSubStatusKeys.includes(column)) {
+    return { stage: 'pending', pendingSubStatus: column }
   }
   return { stage: column as Stage }
 }
@@ -344,20 +362,21 @@ const FIELD_MAX_LENGTHS: Record<string, number> = {
 // valid. Fields absent from the body are left untouched (PATCH semantics).
 export function validateLeadFields(
   body: Record<string, unknown>,
-  options?: { validStageKeys?: string[]; validOnboardingStepKeys?: string[] }
+  options?: { validStageKeys?: string[]; validOnboardingStepKeys?: string[]; validPendingSubStatusKeys?: string[] }
 ): string | null {
   // Falls back to the static built-in lists when no org-scoped definitions are
   // passed (e.g. a caller that hasn't been updated yet) — every org starts
   // seeded with exactly these values anyway, see lib/pipelineConfig.ts.
   const stageKeys = options?.validStageKeys ?? STAGES
   const onboardingStepKeys = options?.validOnboardingStepKeys ?? ONBOARDING_SUB_STAGES
+  const pendingSubStatusKeys = options?.validPendingSubStatusKeys ?? PENDING_SUB_STATUSES
   if (body.stage !== undefined && !stageKeys.includes(body.stage as string)) return `Invalid stage: ${body.stage}`
   if (body.source !== undefined && !SOURCES.includes(body.source as LeadSource)) return `Invalid source: ${body.source}`
   if (body.type !== undefined && !LEAD_TYPES.includes(body.type as LeadType)) return `Invalid type: ${body.type}`
   if (body.quality !== undefined && !QUALITY_LEVELS.includes(body.quality as QualityLevel)) return `Invalid quality: ${body.quality}`
   if (body.effort !== undefined && !QUALITY_LEVELS.includes(body.effort as QualityLevel)) return `Invalid effort: ${body.effort}`
   if (body.businessType != null && !BUSINESS_TYPES.includes(body.businessType as BusinessType)) return `Invalid businessType: ${body.businessType}`
-  if (body.pendingSubStatus != null && !PENDING_SUB_STATUSES.includes(body.pendingSubStatus as PendingSubStatus)) return `Invalid pendingSubStatus: ${body.pendingSubStatus}`
+  if (body.pendingSubStatus != null && !pendingSubStatusKeys.includes(body.pendingSubStatus as string)) return `Invalid pendingSubStatus: ${body.pendingSubStatus}`
   if (body.onboardingSubStage != null && !onboardingStepKeys.includes(body.onboardingSubStage as string)) return `Invalid onboardingSubStage: ${body.onboardingSubStage}`
   if (body.estimatedVolume !== undefined && !Number.isFinite(Number(body.estimatedVolume))) {
     return `Invalid estimatedVolume: ${body.estimatedVolume}`

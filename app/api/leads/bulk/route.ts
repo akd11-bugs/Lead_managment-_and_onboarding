@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireApiUser, leadScope, isAdmin } from '@/lib/session'
-import { validateLeadFields, PENDING_SUB_STATUSES, type PendingSubStatus } from '@/lib/types'
+import { validateLeadFields, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
-import { getStageDefinitions } from '@/lib/pipelineConfig'
+import { getStageDefinitions, getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,10 +37,14 @@ export async function PATCH(req: Request) {
   }
 
   if (action === 'stage') {
-    const stageDefs = await getStageDefinitions(user.orgId)
+    const [stageDefs, pendingSubStatusDefs] = await Promise.all([
+      getStageDefinitions(user.orgId),
+      getPendingSubStatusDefinitions(user.orgId),
+    ])
+    const pendingSubStatusKeys = pendingSubStatusDefs.map((s) => s.key)
     const validationError = validateLeadFields(
       { stage: body.stage, pendingSubStatus: body.pendingSubStatus },
-      { validStageKeys: stageDefs.map((s) => s.key) }
+      { validStageKeys: stageDefs.map((s) => s.key), validPendingSubStatusKeys: pendingSubStatusKeys }
     )
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
     const remark = typeof body.remark === 'string' ? body.remark.trim() : ''
@@ -48,9 +52,11 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'A remark is required when changing stage' }, { status: 400 })
     }
     const pendingSubStatus =
-      body.pendingSubStatus != null && (PENDING_SUB_STATUSES as string[]).includes(body.pendingSubStatus)
+      body.pendingSubStatus != null && pendingSubStatusKeys.includes(body.pendingSubStatus)
         ? (body.pendingSubStatus as PendingSubStatus)
         : undefined
+    const pendingSubStatusLabels = Object.fromEntries(pendingSubStatusDefs.map((s) => [s.key, s.label]))
+    const defaultPendingSubStatusKey = pendingSubStatusDefs.find((s) => s.isDefault)?.key
 
     const scopedLeads = await prisma.lead.findMany({
       where: { id: { in: scopedIds } },
@@ -77,7 +83,15 @@ export async function PATCH(req: Request) {
       await applyStageChange(
         lead.id,
         lead,
-        { stage: body.stage, pendingSubStatus, remark, assignedOpsId: assignedOps?.id, assignedOpsName: assignedOps?.name },
+        {
+          stage: body.stage,
+          pendingSubStatus,
+          remark,
+          assignedOpsId: assignedOps?.id,
+          assignedOpsName: assignedOps?.name,
+          defaultPendingSubStatusKey,
+          pendingSubStatusLabels,
+        },
         user,
       )
     }

@@ -15,12 +15,20 @@ import { ReportsApiKeyCard } from '@/components/settings/ReportsApiKeyCard'
 import { WorkflowRulesCard } from '@/components/settings/WorkflowRulesCard'
 import { PipelineConfigCard } from '@/components/settings/PipelineConfigCard'
 import { CustomFieldsCard } from '@/components/settings/CustomFieldsCard'
+import { PendingSubStatusCard } from '@/components/settings/PendingSubStatusCard'
 
 interface StageDef {
   id: string
   key: string
   label: string
   isCore: boolean
+}
+interface PendingSubStatusDef {
+  id: string
+  key: string
+  label: string
+  owner: 'us' | 'external'
+  isDefault: boolean
 }
 interface FieldDef {
   id: string
@@ -50,6 +58,7 @@ interface SettingsTabsProps {
   stageDefs: StageDef[]
   stepDefs: StageDef[]
   fieldDefs: FieldDef[]
+  pendingSubStatusDefs: PendingSubStatusDef[]
 }
 
 // Groups the settings page's cards by what they're actually for, rather than
@@ -71,6 +80,7 @@ export function SettingsTabs({
   stageDefs,
   stepDefs,
   fieldDefs,
+  pendingSubStatusDefs,
 }: SettingsTabsProps) {
   return (
     <Tabs defaultValue="general">
@@ -105,6 +115,7 @@ export function SettingsTabs({
               initialStages={stageDefs.map((s) => ({ id: s.id, key: s.key, label: s.label, isCore: s.isCore }))}
               initialSteps={stepDefs.map((s) => ({ id: s.id, key: s.key, label: s.label, isCore: s.isCore }))}
             />
+            <PendingSubStatusCard initialSubStatuses={pendingSubStatusDefs} />
             <CustomFieldsCard initialFields={fieldDefs} />
           </>
         ) : (

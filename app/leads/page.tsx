@@ -3,8 +3,9 @@ import { X } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { LeadsTable } from '@/components/leads/LeadsTable'
 import { requireUser, leadScope, isAdmin } from '@/lib/session'
-import { BOARD_COLUMN_LABELS, boardColumnToInput, PENDING_SUB_STATUSES, SOURCE_LABELS, type BoardColumnKey, type LeadSource } from '@/lib/types'
+import { BOARD_COLUMN_LABELS, boardColumnToInput, SOURCE_LABELS, type BoardColumnKey, type LeadSource } from '@/lib/types'
 import { getRange, parseRangeKey, RANGE_LABELS, type RangeKey } from '@/lib/reportRange'
+import { getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,8 @@ export default async function LeadsPage({
   const user = await requireUser()
   const { filter, owner, source, stage, q, metric, range: rawRange } = await searchParams
   const matched = filter ? FILTERS[filter] : undefined
+  const pendingSubStatusDefs = await getPendingSubStatusDefinitions(user.orgId)
+  const pendingSubStatusKeys = pendingSubStatusDefs.map((s) => s.key)
 
   // Period-scoped drill-down from Reports — e.g. "leads created this week" —
   // distinct from the static, always-current-month FILTERS above.
@@ -86,8 +89,8 @@ export default async function LeadsPage({
   // links generated off boardColumnFor() elsewhere (funnel charts, Kanban).
   // boardColumnToInput() maps either back to the real {stage, pendingSubStatus}.
   const stageWhere = stage
-    ? (PENDING_SUB_STATUSES as string[]).includes(stage)
-      ? boardColumnToInput(stage as BoardColumnKey)
+    ? pendingSubStatusKeys.includes(stage)
+      ? boardColumnToInput(stage as BoardColumnKey, pendingSubStatusKeys)
       : { stage }
     : {}
 

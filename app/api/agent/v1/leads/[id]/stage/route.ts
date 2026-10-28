@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireAgentOrg, AGENT_ACTOR_NAME } from '@/lib/agentAuth'
 import { readJsonBody } from '@/lib/http'
 import { validateLeadFields } from '@/lib/types'
-import { getStageDefinitions } from '@/lib/pipelineConfig'
+import { getStageDefinitions, getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
 
 export const dynamic = 'force-dynamic'
@@ -30,8 +30,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   })
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
 
-  const stageDefs = await getStageDefinitions(agentOrg.orgId)
-  const validationError = validateLeadFields(body, { validStageKeys: stageDefs.map((s) => s.key) })
+  const [stageDefs, pendingSubStatusDefs] = await Promise.all([
+    getStageDefinitions(agentOrg.orgId),
+    getPendingSubStatusDefinitions(agentOrg.orgId),
+  ])
+  const validationError = validateLeadFields(body, {
+    validStageKeys: stageDefs.map((s) => s.key),
+    validPendingSubStatusKeys: pendingSubStatusDefs.map((s) => s.key),
+  })
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
   let assignedOpsName: string | undefined
@@ -50,6 +56,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       remark: String(body.remark),
       assignedOpsId: body.assignedOpsId,
       assignedOpsName,
+      defaultPendingSubStatusKey: pendingSubStatusDefs.find((s) => s.isDefault)?.key,
+      pendingSubStatusLabels: Object.fromEntries(pendingSubStatusDefs.map((s) => [s.key, s.label])),
     },
     { name: AGENT_ACTOR_NAME },
   )

@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { leadScope } from '@/lib/session'
 import { getRepSessionUser } from '@/lib/repSession'
-import { PENDING_SUB_STATUSES, type Stage, type PendingSubStatus } from '@/lib/types'
+import { type Stage, type PendingSubStatus } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
-import { getStageDefinitions } from '@/lib/pipelineConfig'
+import { getStageDefinitions, getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 import { checkRateLimit } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
@@ -52,10 +52,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: `Invalid stage: ${nextStage}` }, { status: 400 })
     }
   }
+  const pendingSubStatusDefs = await getPendingSubStatusDefinitions(user.orgId)
   const nextPendingSubStatus = body?.pendingSubStatus
   if (
     nextPendingSubStatus !== undefined &&
-    (typeof nextPendingSubStatus !== 'string' || !PENDING_SUB_STATUSES.includes(nextPendingSubStatus as PendingSubStatus))
+    (typeof nextPendingSubStatus !== 'string' || !pendingSubStatusDefs.some((s) => s.key === nextPendingSubStatus))
   ) {
     return NextResponse.json({ error: `Invalid pendingSubStatus: ${nextPendingSubStatus}` }, { status: 400 })
   }
@@ -95,6 +96,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       remark,
       assignedOpsId: assignedOps?.id,
       assignedOpsName: assignedOps?.name,
+      defaultPendingSubStatusKey: pendingSubStatusDefs.find((s) => s.isDefault)?.key,
+      pendingSubStatusLabels: Object.fromEntries(pendingSubStatusDefs.map((s) => [s.key, s.label])),
     },
     { name: user.name },
   )

@@ -152,6 +152,32 @@ model OnboardingStepDefinition {
   @@index([orgId, position])
 }
 
+// Per-org configuration for Lead.pendingSubStatus — unlike the two
+// definitions above, no row here is locked/isCore: every sub-status is fully
+// admin add/remove/rename-able, since different businesses split up "who's
+// turn is it to act" differently (not every org sells through a PSP).
+// `owner` is what makes the generic alert/reporting logic keep working
+// across arbitrary renames: lib/alerts.ts's "follow-up needed" alert fires
+// for any 'us'-owned sub-status, "ghosted" fires for any 'external'-owned
+// one — neither alert needs to know the literal key, just whose turn it
+// represents. Exactly one row per org should have `isDefault: true` (enforced
+// in the API route, not the DB) — that's what lib/leadStage.ts assigns a lead
+// entering 'pending' with no explicit sub-status, and what the "Mark
+// Contacted" quick-action buttons target.
+model PendingSubStatusDefinition {
+  id        String   @id @default(cuid())
+  orgId     String
+  key       String
+  label     String
+  owner     String   // 'us' | 'external'
+  isDefault Boolean  @default(false)
+  position  Int
+  createdAt DateTime @default(now())
+
+  @@unique([orgId, key])
+  @@index([orgId, position])
+}
+
 // Per-org custom fields on a Lead. `key` is immutable after creation —
 // stored values in Lead.customFieldsJson are keyed by it, so renaming would
 // orphan data (label is the editable, user-facing name instead).

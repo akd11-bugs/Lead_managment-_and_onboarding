@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { validateLeadFields, STAGES } from '@/lib/types'
-import { getStageDefinitions } from '@/lib/pipelineConfig'
+import { getStageDefinitions, getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 import { findOrCreateCompany } from '@/lib/company'
 import { applyStageChange } from '@/lib/leadStage'
 import { AGENT_ACTOR_NAME } from '@/lib/agentAuth'
@@ -307,7 +307,18 @@ export const TOOLS: ToolDef<McpCtx>[] = [
         throw new Error(`Unknown stage "${stage}". Valid stages: ${STAGES.join(', ')}`)
       }
 
-      const updated = await applyStageChange(lead.id, lead, { stage: typedStage, remark }, { name: AGENT_ACTOR_NAME })
+      const pendingSubStatusDefs = await getPendingSubStatusDefinitions(ctx.orgId)
+      const updated = await applyStageChange(
+        lead.id,
+        lead,
+        {
+          stage: typedStage,
+          remark,
+          defaultPendingSubStatusKey: pendingSubStatusDefs.find((s) => s.isDefault)?.key,
+          pendingSubStatusLabels: Object.fromEntries(pendingSubStatusDefs.map((s) => [s.key, s.label])),
+        },
+        { name: AGENT_ACTOR_NAME },
+      )
 
       return JSON.stringify({ moved: true, leadId: updated.id, from: lead.stage, to: updated.stage })
     },

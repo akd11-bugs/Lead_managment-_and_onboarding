@@ -61,6 +61,7 @@ export const prismaStub = {
   onboardingDocument: model('onboardingDocument'),
   stageDefinition: model('stageDefinition'),
   onboardingStepDefinition: model('onboardingStepDefinition'),
+  pendingSubStatusDefinition: model('pendingSubStatusDefinition'),
   leadFieldDefinition: model('leadFieldDefinition'),
   $transaction: async (arg: unknown) =>
     typeof arg === 'function' ? (arg as (tx: unknown) => unknown)(prismaStub) : arg,

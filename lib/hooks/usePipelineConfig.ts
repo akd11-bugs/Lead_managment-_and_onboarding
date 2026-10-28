@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BOARD_COLUMN_LABELS, BOARD_COLUMN_DESCRIPTIONS, BOARD_COLUMN_COLORS, PENDING_SUB_STATUSES } from '@/lib/types'
+import { BOARD_COLUMN_COLORS } from '@/lib/types'
 
 export interface StageOption {
   id: string
@@ -19,6 +19,14 @@ export interface OnboardingStepOption {
   isCore: boolean
 }
 
+export interface PendingSubStatusOption {
+  id: string
+  key: string
+  label: string
+  owner: 'us' | 'external'
+  isDefault: boolean
+}
+
 export interface BoardColumn {
   key: string
   label: string
@@ -34,21 +42,20 @@ export interface BoardColumn {
 // what a stage's color means). A custom (non-core) stage with no color set
 // falls back to BOARD_COLUMN_COLORS.new — the same neutral 'new' uses.
 
-// Pending's 3 sub-statuses aren't part of this round's per-org
-// configuration (only stages/onboarding-steps/custom-fields were asked
-// for) — they stay the static values already in lib/types.ts. A custom
-// stage never expands this way; only the literal 'pending' core stage does.
-const PENDING_SUB_COLUMNS: BoardColumn[] = PENDING_SUB_STATUSES.map((key) => ({
-  key,
-  label: BOARD_COLUMN_LABELS[key],
-  description: BOARD_COLUMN_DESCRIPTIONS[key],
-  color: BOARD_COLUMN_COLORS[key],
-}))
-
-function buildBoardColumns(stages: StageOption[]): BoardColumn[] {
+// Pending's sub-statuses expand into one column per the org's actual
+// PendingSubStatusDefinition rows (fully admin add/remove/rename-able — see
+// that model's doc comment in prisma/schema.prisma) instead of a fixed
+// 3-column list. All share the same neutral pending color since they're not
+// individually colorable the way top-level stages are.
+function buildBoardColumns(stages: StageOption[], pendingSubStatuses: PendingSubStatusOption[]): BoardColumn[] {
   return stages.flatMap((s) =>
     s.key === 'pending'
-      ? PENDING_SUB_COLUMNS
+      ? pendingSubStatuses.map((p) => ({
+          key: p.key,
+          label: p.label,
+          description: p.owner === 'us' ? 'Our turn to follow up' : 'Waiting on them to act',
+          color: BOARD_COLUMN_COLORS.pending_ours,
+        }))
       : [{
           key: s.key,
           label: s.label,
@@ -58,16 +65,22 @@ function buildBoardColumns(stages: StageOption[]): BoardColumn[] {
   )
 }
 
-function shapeConfig(stages: StageOption[] | null, onboardingSteps: OnboardingStepOption[] | null) {
+function shapeConfig(
+  stages: StageOption[] | null,
+  onboardingSteps: OnboardingStepOption[] | null,
+  pendingSubStatuses: PendingSubStatusOption[] | null,
+) {
   const resolvedStages = stages ?? []
   const resolvedSteps = onboardingSteps ?? []
+  const resolvedPendingSubStatuses = pendingSubStatuses ?? []
 
   return {
     stages: resolvedStages,
     onboardingSteps: resolvedSteps,
-    columns: buildBoardColumns(resolvedStages),
+    pendingSubStatuses: resolvedPendingSubStatuses,
+    columns: buildBoardColumns(resolvedStages, resolvedPendingSubStatuses),
     finalOnboardingStepKey: resolvedSteps.find((s) => s.isCore)?.key ?? 'final_onboarded',
-    loading: stages === null || onboardingSteps === null,
+    loading: stages === null || onboardingSteps === null || pendingSubStatuses === null,
   }
 }
 
@@ -84,6 +97,7 @@ function shapeConfig(stages: StageOption[] | null, onboardingSteps: OnboardingSt
 export function usePipelineConfig() {
   const [stages, setStages] = useState<StageOption[] | null>(null)
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepOption[] | null>(null)
+  const [pendingSubStatuses, setPendingSubStatuses] = useState<PendingSubStatusOption[] | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -93,12 +107,15 @@ export function usePipelineConfig() {
     fetch('/api/pipeline-config/onboarding-steps')
       .then((r) => r.json())
       .then((d) => !cancelled && setOnboardingSteps(d.steps ?? []))
+    fetch('/api/pipeline-config/pending-sub-statuses')
+      .then((r) => r.json())
+      .then((d) => !cancelled && setPendingSubStatuses(d.subStatuses ?? []))
     return () => {
       cancelled = true
     }
   }, [])
 
-  return shapeConfig(stages, onboardingSteps)
+  return shapeConfig(stages, onboardingSteps, pendingSubStatuses)
 }
 
 // Rep-session equivalent, backed by the single combined
@@ -110,6 +127,7 @@ export function usePipelineConfig() {
 export function useRepPipelineConfig(loggedIn: boolean) {
   const [stages, setStages] = useState<StageOption[] | null>(null)
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepOption[] | null>(null)
+  const [pendingSubStatuses, setPendingSubStatuses] = useState<PendingSubStatusOption[] | null>(null)
 
   useEffect(() => {
     if (!loggedIn) return
@@ -120,13 +138,14 @@ export function useRepPipelineConfig(loggedIn: boolean) {
         if (cancelled) return
         setStages(d.stages ?? [])
         setOnboardingSteps(d.steps ?? [])
+        setPendingSubStatuses(d.pendingSubStatuses ?? [])
       })
     return () => {
       cancelled = true
     }
   }, [loggedIn])
 
-  return shapeConfig(stages, onboardingSteps)
+  return shapeConfig(stages, onboardingSteps, pendingSubStatuses)
 }
 
 export interface LeadFieldOption {

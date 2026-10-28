@@ -32,7 +32,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
   const [detailLead, setDetailLead] = useState<Lead | null>(null)
   const [stageChange, setStageChange] = useState<{ leadId: string; target: BoardColumnKey; targetLabel: string } | null>(null)
-  const { columns, loading: columnsLoading } = usePipelineConfig()
+  const { columns, pendingSubStatuses, loading: columnsLoading } = usePipelineConfig()
 
   function applyUpdatedLead(updated: Lead) {
     setLeads((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)))
@@ -142,6 +142,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
           onOpenChange={(open) => !open && setStageChange(null)}
           target={stageChange.target}
           targetLabel={stageChange.targetLabel}
+          pendingSubStatusKeys={pendingSubStatuses.map((s) => s.key)}
           onDone={applyUpdatedLead}
         />
       )}

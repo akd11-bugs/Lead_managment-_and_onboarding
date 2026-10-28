@@ -14,7 +14,21 @@ export interface Alert {
   severity: 'low' | 'medium' | 'high'
 }
 
-export function computeAlerts(leads: Lead[]): Alert[] {
+// Maps a pending sub-status key to who it's waiting on — 'us' or
+// 'external' — so the Ghosted/Follow-up alerts below work for any org's
+// actual sub-statuses, not just the 3 seeded defaults. Falls back to the
+// seeded defaults' own owner (pending_ours → us, everything else →
+// external) for a caller that hasn't fetched PendingSubStatusDefinition
+// rows, or for a key this org has since renamed/removed.
+export type SubStatusOwnerMap = Record<string, 'us' | 'external'>
+
+function ownerFor(key: string | null, ownerByKey: SubStatusOwnerMap): 'us' | 'external' | null {
+  if (!key) return null
+  if (key in ownerByKey) return ownerByKey[key]
+  return key === 'pending_ours' ? 'us' : 'external'
+}
+
+export function computeAlerts(leads: Lead[], pendingSubStatusOwners: SubStatusOwnerMap = {}): Alert[] {
   const now = Date.now()
   const alerts: Alert[] = []
 
@@ -50,10 +64,11 @@ export function computeAlerts(leads: Lead[]): Alert[] {
     })
   }
 
-  // Ghosted — pending on the merchant or PSP's side with no activity 21+ days
+  // Ghosted — pending on an external party's side (merchant, PSP, or
+  // whatever an org has renamed/added) with no activity 21+ days
   const ghosted = leads.filter((l) => {
     if (l.stage !== 'pending') return false
-    if (l.pendingSubStatus !== 'pending_merchant' && l.pendingSubStatus !== 'pending_psp') return false
+    if (ownerFor(l.pendingSubStatus, pendingSubStatusOwners) !== 'external') return false
     if (!l.lastActivityAt) return true
     return now - new Date(l.lastActivityAt).getTime() > 21 * DAY
   })
@@ -68,9 +83,10 @@ export function computeAlerts(leads: Lead[]): Alert[] {
     })
   }
 
-  // Follow-up needed — it's our turn and we haven't touched it in 14+ days
+  // Follow-up needed — it's our turn (any 'us'-owned sub-status) and we
+  // haven't touched it in 14+ days
   const followUpOverdue = leads.filter((l) => {
-    if (l.stage !== 'pending' || l.pendingSubStatus !== 'pending_ours') return false
+    if (l.stage !== 'pending' || ownerFor(l.pendingSubStatus, pendingSubStatusOwners) !== 'us') return false
     if (!l.lastActivityAt) return true
     return now - new Date(l.lastActivityAt).getTime() > 14 * DAY
   })

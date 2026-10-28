@@ -125,7 +125,7 @@ export function LeadRecordView({
     type: 'note',
     description: '',
   })
-  const { columns, onboardingSteps } = usePipelineConfig()
+  const { columns, onboardingSteps, pendingSubStatuses } = usePipelineConfig()
   const onboardingStepLabels = Object.fromEntries(onboardingSteps.map((s) => [s.key, s.label]))
   const { fields: customFieldDefs } = useLeadFieldDefinitions()
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, unknown>>(() => {
@@ -579,7 +579,10 @@ export function LeadRecordView({
             leadEmail={lead.email}
             isNewStage={lead.stage === 'new'}
             onSent={handleEmailSent}
-            onMarkContacted={() => setStageChangeTarget({ key: 'pending_ours', label: 'Pending — Our Side' })}
+            onMarkContacted={() => {
+              const defaultSubStatus = pendingSubStatuses.find((s) => s.isDefault) ?? pendingSubStatuses[0]
+              if (defaultSubStatus) setStageChangeTarget({ key: defaultSubStatus.key, label: defaultSubStatus.label })
+            }}
           />
 
           {stageNudge && (
@@ -772,6 +775,7 @@ export function LeadRecordView({
           onOpenChange={(o) => !o && setStageChangeTarget(null)}
           target={stageChangeTarget.key}
           targetLabel={stageChangeTarget.label}
+          pendingSubStatusKeys={pendingSubStatuses.map((s) => s.key)}
           onDone={handleStageChangeDone}
         />
       )}

@@ -15,6 +15,7 @@ import { boardColumnFor, type LeadSource } from '@/lib/types'
 import { redirect } from 'next/navigation'
 import { requireUser, resolveSession, leadScope, isOperations } from '@/lib/session'
 import { LandingPage } from '@/components/marketing/LandingPage'
+import { getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,12 +32,15 @@ export default async function DashboardPage() {
 
   const user = await requireUser()
   if (isOperations(user)) redirect('/onboarding')
-  const leads = await prisma.lead.findMany({
-    where: leadScope(user),
-    orderBy: { updatedAt: 'desc' },
-  })
+  const [leads, pendingSubStatusDefs] = await Promise.all([
+    prisma.lead.findMany({ where: leadScope(user), orderBy: { updatedAt: 'desc' } }),
+    getPendingSubStatusDefinitions(user.orgId),
+  ])
+  const pendingSubStatusOwners = Object.fromEntries(
+    pendingSubStatusDefs.map((s) => [s.key, s.owner as 'us' | 'external']),
+  )
 
-  const alerts = computeAlerts(leads as any)
+  const alerts = computeAlerts(leads as any, pendingSubStatusOwners)
 
   // Getting-started steps, derived live from data that already exists.
   // Sample leads seeded for brand-new orgs (lib/org.ts's seedSampleLeads)

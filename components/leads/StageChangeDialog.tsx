@@ -40,6 +40,7 @@ export function StageChangeDialog({
   onOpenChange,
   target,
   targetLabel,
+  pendingSubStatusKeys,
   onDone,
 }: {
   leadId: string
@@ -47,6 +48,12 @@ export function StageChangeDialog({
   onOpenChange: (open: boolean) => void
   target: BoardColumnKey
   targetLabel: string
+  // The org's actual current pending-sub-status keys (from
+  // usePipelineConfig()/useRepPipelineConfig()) — boardColumnToInput needs
+  // these to tell a custom sub-status apart from a custom stage, since both
+  // are plain, non-literal BoardColumnKey strings. Falls back to the 3
+  // seeded defaults if a caller hasn't been updated to pass this.
+  pendingSubStatusKeys?: string[]
   onDone: (lead: Lead) => void
 }) {
   const [remark, setRemark] = useState('')
@@ -80,7 +87,7 @@ export function StageChangeDialog({
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          ...boardColumnToInput(target),
+          ...boardColumnToInput(target, pendingSubStatusKeys),
           remark: trimmed,
           ...(isOnboarding && { assignedOpsId }),
         }),

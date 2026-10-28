@@ -17,6 +17,7 @@ import { getSkill } from '@/lib/skills/catalog'
 import { cn } from '@/lib/utils'
 import { STAGE_LABELS, type Stage, type Lead } from '@/lib/types'
 import { StageChangeDialog } from '@/components/leads/StageChangeDialog'
+import { usePipelineConfig } from '@/lib/hooks/usePipelineConfig'
 
 export interface SlimLead {
   id: string
@@ -37,6 +38,8 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
   const [markPendingOpen, setMarkPendingOpen] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   const [emailConfig, setEmailConfig] = useState<{ configured: boolean; emailFromAddress: string | null } | null>(null)
+  const { pendingSubStatuses } = usePipelineConfig()
+  const defaultPendingSubStatus = pendingSubStatuses.find((s) => s.isDefault) ?? pendingSubStatuses[0]
 
   function refreshEmailConfig() {
     fetch('/api/settings/email')
@@ -194,13 +197,14 @@ export function EmailServicePanel({ leads: initialLeads }: { leads: SlimLead[] }
         </div>
       </section>
 
-      {selected && (
+      {selected && defaultPendingSubStatus && (
         <StageChangeDialog
           leadId={selected.id}
           open={markPendingOpen}
           onOpenChange={setMarkPendingOpen}
-          target="pending_ours"
-          targetLabel="Pending — Our Side"
+          target={defaultPendingSubStatus.key}
+          targetLabel={defaultPendingSubStatus.label}
+          pendingSubStatusKeys={pendingSubStatuses.map((s) => s.key)}
           onDone={handleMarkPendingDone}
         />
       )}

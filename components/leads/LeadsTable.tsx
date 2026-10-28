@@ -64,9 +64,10 @@ export function LeadsTable({
   ownerOptions?: OwnerOption[]
 }) {
   const router = useRouter()
-  const { columns } = usePipelineConfig()
+  const { columns, pendingSubStatuses } = usePipelineConfig()
   const columnLabels = useMemo(() => Object.fromEntries(columns.map((c) => [c.key, c.label])), [columns])
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns])
+  const pendingSubStatusKeys = useMemo(() => pendingSubStatuses.map((s) => s.key), [pendingSubStatuses])
   const [search, setSearch] = useState(initialQuery ?? '')
   const [stageFilter, setStageFilter] = useState<BoardColumnKey | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<LeadSource | 'all'>('all')
@@ -143,7 +144,7 @@ export function LeadsTable({
         body: JSON.stringify({
           leadIds: Array.from(selected),
           action,
-          ...(action === 'stage' && bulkStage && { ...boardColumnToInput(bulkStage), remark }),
+          ...(action === 'stage' && bulkStage && { ...boardColumnToInput(bulkStage, pendingSubStatusKeys), remark }),
           ...(action === 'reassign' && { ownerId: owner?.id }),
         }),
       })

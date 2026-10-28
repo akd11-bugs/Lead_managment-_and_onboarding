@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import { getRange, getWeeklyBuckets, getMonthlyBuckets, getDailyBuckets, type RangeKey, type TrendBucket } from '@/lib/reportRange'
 import type { TrendPoint } from '@/components/reports/TrendChart'
+import { getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 
 const ACTOR_ACTIVITY_TYPES = ['call', 'email', 'meeting', 'note', 'stage_change']
 
@@ -15,7 +16,11 @@ export interface ReportsData {
   salesByRep: { name: string; created: number; won: number; activities: number }[]
   operationsOnboarded: { name: string; count: number }[]
   trend: { weekly: TrendPoint[]; monthly: TrendPoint[] }
-  funnel: { new: number; pendingOurs: number; pendingMerchant: number; pendingPsp: number; onboarded: number; live: number }
+  // One bucket per the org's actual PendingSubStatusDefinition rows, in
+  // their configured order — replaces the old fixed pendingOurs/
+  // pendingMerchant/pendingPsp fields so this stays accurate for any org's
+  // custom sub-statuses, not just the 3 seeded defaults.
+  funnel: { new: number; pending: { key: string; label: string; count: number }[]; onboarded: number; live: number }
   dailyActivityByRep: {
     reps: string[]
     rows: { day: string; counts: Record<string, number>; total: number }[]
@@ -29,6 +34,11 @@ export interface ReportsData {
 // query below is scoped to it, so a report never mixes another org's data in.
 export async function getReportsData(range: RangeKey, orgIds: string[]): Promise<ReportsData> {
   const { start, end, label } = getRange(range)
+  // Orgs are flat, never hierarchical (lib/session.ts's resolveVisibleOrgIds
+  // always returns exactly [orgId]) — orgIds[0] is always the one real org
+  // here, same assumption every other single-org-scoped lookup in this
+  // codebase already makes.
+  const pendingSubStatusDefs = orgIds[0] ? await getPendingSubStatusDefinitions(orgIds[0]) : []
 
   const weeklyBuckets = getWeeklyBuckets(8)
   const monthlyBuckets = getMonthlyBuckets(6)
@@ -142,9 +152,16 @@ export async function getReportsData(range: RangeKey, orgIds: string[]): Promise
     trend: { weekly: bucketTrend(weeklyBuckets), monthly: bucketTrend(monthlyBuckets) },
     funnel: {
       new: createdLeads.length,
-      pendingOurs: createdLeads.filter((l) => l.stage === 'pending' && (l.pendingSubStatus ?? 'pending_ours') === 'pending_ours').length,
-      pendingMerchant: createdLeads.filter((l) => l.stage === 'pending' && l.pendingSubStatus === 'pending_merchant').length,
-      pendingPsp: createdLeads.filter((l) => l.stage === 'pending' && l.pendingSubStatus === 'pending_psp').length,
+      pending: pendingSubStatusDefs.map((def) => ({
+        key: def.key,
+        label: def.label,
+        // A pending lead with no pendingSubStatus set at all (a transient
+        // state — see lib/leadStage.ts) falls into the org's default bucket,
+        // same fallback behavior the old hardcoded pendingOurs field had.
+        count: createdLeads.filter(
+          (l) => l.stage === 'pending' && (l.pendingSubStatus ?? (def.isDefault ? def.key : null)) === def.key,
+        ).length,
+      })),
       onboarded: createdLeads.filter((l) => l.wonAt).length,
       live: createdLeads.filter((l) => l.onboardedAt).length,
     },

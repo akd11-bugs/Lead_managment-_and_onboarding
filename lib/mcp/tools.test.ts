@@ -10,9 +10,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const calls: { model: string; op: string; args: Record<string, unknown> }[] = []
 
+/** Per-(model.op) override, set by a test before invoking a tool. */
+const results = new Map<string, unknown>()
+
 function record(model: string, op: string) {
   return (args: Record<string, unknown> = {}) => {
     calls.push({ model, op, args })
+    const key = `${model}.${op}`
+    if (results.has(key)) return Promise.resolve(results.get(key))
     if (op === 'count') return Promise.resolve(0)
     if (op.startsWith('find') && op.endsWith('Many')) return Promise.resolve([])
     if (op === 'groupBy' || op === 'aggregate') return Promise.resolve([])
@@ -50,10 +55,15 @@ vi.mock('@/lib/pipelineConfig', () => ({
     calls.push({ model: 'stageDefinition', op: 'getStageDefinitions', args: { orgId } })
     return [
       { id: 's1', orgId, key: 'new', label: 'New', position: 0, isCore: true },
-      { id: 's2', orgId, key: 'proposal', label: 'Proposal', position: 1, isCore: true },
+      { id: 's2', orgId, key: 'pending', label: 'Pending', position: 1, isCore: true },
+      { id: 's3', orgId, key: 'proposal', label: 'Proposal', position: 2, isCore: true },
     ]
   },
   getOnboardingStepDefinitions: async () => [],
+  getPendingSubStatusDefinitions: async (orgId: string) => {
+    calls.push({ model: 'pendingSubStatusDefinition', op: 'getPendingSubStatusDefinitions', args: { orgId } })
+    return [{ id: 'ps1', orgId, key: 'pending_ours', label: 'Pending — our side', owner: 'us', isDefault: true, position: 0 }]
+  },
 }))
 
 vi.mock('@/lib/company', () => ({
@@ -96,6 +106,7 @@ function orgIdsSeen(): unknown[] {
 
 beforeEach(() => {
   calls.length = 0
+  results.clear()
 })
 
 describe('every MCP tool is org-scoped', () => {
@@ -146,6 +157,14 @@ describe('every MCP tool is org-scoped', () => {
     const lookup = calls.find(c => c.model === 'lead')
     expect(lookup).toBeDefined()
     expect(JSON.stringify(lookup!.args)).toContain(ORG)
+  })
+
+  it('move_lead_stage into pending resolves the org\'s pending-sub-status definitions', async () => {
+    results.set('lead.findFirst', { id: 'lead-1', orgId: ORG, stage: 'new' })
+    await tool('move_lead_stage').run({ leadId: 'lead-1', stage: 'pending', remark: 'moved' }, ctx)
+    const defsLookup = calls.find(c => c.model === 'pendingSubStatusDefinition')
+    expect(defsLookup).toBeDefined()
+    expect(defsLookup!.args).toEqual({ orgId: ORG })
   })
 
   it('never issues a query carrying an org id other than the caller org', async () => {

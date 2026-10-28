@@ -5,7 +5,7 @@ import { validateLeadFields, ONBOARDING_SUB_STAGE_LABELS } from '@/lib/types'
 import { readJsonBody } from '@/lib/http'
 import { applyStageChange, resolveOpsAssignment } from '@/lib/leadStage'
 import { mergeCustomFields } from '@/lib/leadCustomFields'
-import { getStageDefinitions, getOnboardingStepDefinitions } from '@/lib/pipelineConfig'
+import { getStageDefinitions, getOnboardingStepDefinitions, getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 import { findOrCreateCompany, findOrCreatePerson } from '@/lib/company'
 
 export const dynamic = 'force-dynamic'
@@ -34,16 +34,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await readJsonBody(req)
   if (body instanceof NextResponse) return body
 
-  const [stageDefs, onboardingStepDefs] = await Promise.all([
+  const [stageDefs, onboardingStepDefs, pendingSubStatusDefs] = await Promise.all([
     getStageDefinitions(user.orgId),
     getOnboardingStepDefinitions(user.orgId),
+    getPendingSubStatusDefinitions(user.orgId),
   ])
   const validationError = validateLeadFields(body, {
     validStageKeys: stageDefs.map((s) => s.key),
     validOnboardingStepKeys: onboardingStepDefs.map((s) => s.key),
+    validPendingSubStatusKeys: pendingSubStatusDefs.map((s) => s.key),
   })
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
   const onboardingStepLabels = Object.fromEntries(onboardingStepDefs.map((s) => [s.key, s.label]))
+  const pendingSubStatusLabels = Object.fromEntries(pendingSubStatusDefs.map((s) => [s.key, s.label]))
+  const defaultPendingSubStatusKey = pendingSubStatusDefs.find((s) => s.isDefault)?.key
 
   const existing = await prisma.lead.findFirst({
     where: { id, ...leadScope(user) },
@@ -88,6 +92,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         remark,
         assignedOpsId: assignedOps?.id,
         assignedOpsName: assignedOps?.name,
+        defaultPendingSubStatusKey,
+        pendingSubStatusLabels,
       },
       user,
     )

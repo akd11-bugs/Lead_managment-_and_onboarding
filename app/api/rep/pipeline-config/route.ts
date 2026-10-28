@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRepSessionUser } from '@/lib/repSession'
-import { getStageDefinitions, getOnboardingStepDefinitions } from '@/lib/pipelineConfig'
+import { getStageDefinitions, getOnboardingStepDefinitions, getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,9 +13,10 @@ export async function GET() {
   const user = await getRepSessionUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [stages, onboardingSteps] = await Promise.all([
+  const [stages, onboardingSteps, pendingSubStatuses] = await Promise.all([
     getStageDefinitions(user.orgId),
     getOnboardingStepDefinitions(user.orgId),
+    getPendingSubStatusDefinitions(user.orgId),
   ])
-  return NextResponse.json({ stages, steps: onboardingSteps })
+  return NextResponse.json({ stages, steps: onboardingSteps, pendingSubStatuses })
 }

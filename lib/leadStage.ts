@@ -40,6 +40,19 @@ export interface StageChangeInput {
   // and resolves assignedOpsName itself; this function trusts both.
   assignedOpsId?: string
   assignedOpsName?: string
+  // The org's current default sub-status (PendingSubStatusDefinition's
+  // isDefault row) — every caller already fetches this org's pending
+  // sub-status definitions for validation (see lib/types.ts's
+  // validPendingSubStatusKeys), so passing the default along costs nothing.
+  // Falls back to the seeded-default literal only for a caller that hasn't
+  // been updated yet.
+  defaultPendingSubStatusKey?: string
+  // Org-scoped label overrides for any custom pending sub-status — only
+  // needed for sub-status keys not already in the static
+  // BOARD_COLUMN_LABELS fallback table (lib/types.ts). Merged over that
+  // table below so a custom key's Activity-description text reads its real
+  // label instead of the raw key.
+  pendingSubStatusLabels?: Record<string, string>
 }
 
 type ExistingLead = Pick<Lead, 'orgId' | 'stage' | 'wonAt' | 'onboardedAt' | 'onboardingSubStage' | 'pendingSubStatus'>
@@ -84,14 +97,15 @@ export async function applyStageChange(
   // through OnboardingProgressPanel, handled separately in the PATCH route.
   const nextOnboardedAt = nextOnboardingSubStage !== undefined ? null : undefined
 
-  // Entering pending with no explicit sub-status defaults to "our side" —
-  // whoever picks it up first can immediately correct it. Leaving pending
-  // clears it; an explicit value always wins.
+  // Entering pending with no explicit sub-status defaults to the org's
+  // designated default (PendingSubStatusDefinition.isDefault) — whoever
+  // picks it up first can immediately correct it. Leaving pending clears it;
+  // an explicit value always wins.
   const nextPendingSubStatus: PendingSubStatus | null | undefined =
     input.pendingSubStatus !== undefined
       ? input.pendingSubStatus
       : enteringPending
-        ? 'pending_ours'
+        ? input.defaultPendingSubStatusKey ?? 'pending_ours'
         : leavingPending
           ? null
           : undefined
@@ -115,7 +129,11 @@ export async function applyStageChange(
 
   // Prefix the remark with the actual movement (e.g. "New → Pending — Our
   // Side") so the Activity timeline and the daily report both show what
-  // happened, not just the rep's free-text note.
+  // happened, not just the rep's free-text note. Custom sub-status keys
+  // aren't in BOARD_COLUMN_LABELS, hence the org-scoped override merge —
+  // falls back to the raw key itself (never `undefined`) if somehow neither
+  // table has it.
+  const columnLabels = { ...BOARD_COLUMN_LABELS, ...input.pendingSubStatusLabels }
   const fromColumn = boardColumnFor({ stage: existing.stage, pendingSubStatus: existing.pendingSubStatus })
   const toColumn = boardColumnFor({
     stage: nextStage ?? existing.stage,
@@ -123,7 +141,7 @@ export async function applyStageChange(
   })
   const description =
     fromColumn !== toColumn
-      ? `${BOARD_COLUMN_LABELS[fromColumn]} → ${BOARD_COLUMN_LABELS[toColumn]}: ${input.remark.trim()}`
+      ? `${columnLabels[fromColumn] ?? fromColumn} → ${columnLabels[toColumn] ?? toColumn}: ${input.remark.trim()}`
       : input.remark.trim()
 
   await prisma.activity.create({

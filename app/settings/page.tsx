@@ -5,7 +5,7 @@ import { ScrollText } from 'lucide-react'
 import { requireUser, isAdmin } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import { Button } from '@/components/ui/button'
-import { getStageDefinitions, getOnboardingStepDefinitions } from '@/lib/pipelineConfig'
+import { getStageDefinitions, getOnboardingStepDefinitions, getPendingSubStatusDefinitions } from '@/lib/pipelineConfig'
 import { SettingsTabs } from '@/components/settings/SettingsTabs'
 
 async function checkSkillLibrary() {
@@ -38,13 +38,14 @@ export default async function SettingsPage() {
   const joinRequests = admin
     ? await prisma.joinRequest.findMany({ where: { orgId: { in: user.visibleOrgIds }, status: 'pending' }, orderBy: { createdAt: 'desc' } })
     : []
-  const [stageDefs, stepDefs, fieldDefs] = admin
+  const [stageDefs, stepDefs, fieldDefs, pendingSubStatusDefs] = admin
     ? await Promise.all([
         getStageDefinitions(user.orgId),
         getOnboardingStepDefinitions(user.orgId),
         prisma.leadFieldDefinition.findMany({ where: { orgId: user.orgId }, orderBy: { position: 'asc' } }),
+        getPendingSubStatusDefinitions(user.orgId),
       ])
-    : [[], [], []]
+    : [[], [], [], []]
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -90,6 +91,13 @@ export default async function SettingsPage() {
           type: f.type as 'text' | 'number' | 'date' | 'select',
           options: f.options ? (JSON.parse(f.options) as string[]) : null,
           required: f.required,
+        }))}
+        pendingSubStatusDefs={pendingSubStatusDefs.map((s) => ({
+          id: s.id,
+          key: s.key,
+          label: s.label,
+          owner: s.owner as 'us' | 'external',
+          isDefault: s.isDefault,
         }))}
       />
     </div>
