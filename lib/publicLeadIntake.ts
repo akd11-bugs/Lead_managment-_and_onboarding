@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { findOrCreateCompany, findOrCreatePerson } from '@/lib/company'
+import { writeBackLeadToSheet } from '@/lib/googleSheetWriteback'
 
 export interface PublicIntakeSubmission {
   company?: unknown
@@ -82,6 +83,20 @@ export async function submitPublicLeadIntake(
     }),
     prisma.orgLeadIntakeForm.update({ where: { id: formId }, data: { submissionCount: { increment: 1 } } }),
   ])
+
+  await writeBackLeadToSheet(orgId, {
+    company,
+    contactName: contactName || null,
+    email,
+    phone,
+    website: null,
+    industry,
+    businessType: null,
+    source: defaultSource,
+    type: 'merchant',
+    estimatedVolume: 0,
+    notes,
+  })
 
   return { ok: true }
 }

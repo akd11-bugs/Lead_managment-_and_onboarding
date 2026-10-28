@@ -5,6 +5,7 @@ import { readJsonBody } from '@/lib/http'
 import { validateLeadFields } from '@/lib/types'
 import { getStageDefinitions } from '@/lib/pipelineConfig'
 import { findOrCreateCompany, findOrCreatePerson, findPossibleDuplicatePerson } from '@/lib/company'
+import { writeBackLeadToSheet } from '@/lib/googleSheetWriteback'
 
 export const dynamic = 'force-dynamic'
 
@@ -161,5 +162,20 @@ export async function POST(req: Request) {
     },
     include: { company: true, person: true },
   })
+
+  await writeBackLeadToSheet(agentOrg.orgId, {
+    company: company.name,
+    contactName: person?.name ?? null,
+    email: lead.email,
+    phone: lead.phone,
+    website: null,
+    industry: null,
+    businessType: null,
+    source: lead.source,
+    type: lead.type,
+    estimatedVolume: lead.estimatedVolume,
+    notes: lead.notes,
+  })
+
   return NextResponse.json({ lead: serializeLead(lead) }, { status: 201 })
 }

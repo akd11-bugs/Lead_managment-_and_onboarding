@@ -19,6 +19,13 @@ function normalizePrivateKey(raw: string): string {
 // not creating their own GCP project/credentials. Built once and reused
 // (unlike a rotatable per-org credential, this one only changes via a
 // deploy + restart, so there's no staleness risk in caching it).
+//
+// Full read+write scope, not read-only: lib/googleSheetWriteback.ts appends
+// a row back for every Steadfast-originated lead (see that file's doc
+// comment for why this is write-once, never update). An org must re-share
+// its sheet with Editor access, not just Viewer, for the append call to
+// succeed — Viewer-shared sheets simply get a 403 on append, surfaced by
+// the writeback helper's own try/catch rather than failing lead creation.
 let client: JWT | null = null
 
 function getClient(): JWT {
@@ -28,7 +35,7 @@ function getClient(): JWT {
   if (!email || !rawKey) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY are not configured in .env.')
   }
-  client = new JWT({ email, key: normalizePrivateKey(rawKey), scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] })
+  client = new JWT({ email, key: normalizePrivateKey(rawKey), scopes: ['https://www.googleapis.com/auth/spreadsheets'] })
   return client
 }
 
@@ -44,4 +51,23 @@ export async function getSheetRows(spreadsheetId: string, range: string): Promis
   }
   const data = (await res.json()) as { values?: unknown[][] }
   return (data.values ?? []).map((row) => row.map((cell) => (cell == null ? '' : String(cell))))
+}
+
+// Appends one row after the sheet's existing data, in the given sheet/tab
+// (not a specific range — Sheets' own append API finds the next empty row
+// itself, which avoids a race against concurrent writes that a manually
+// computed row number would have). `sheetName` is the tab name portion of
+// whatever range the org configured (e.g. "Sheet1" out of "Sheet1!A:K").
+export async function appendSheetRow(spreadsheetId: string, sheetName: string, row: string[]): Promise<void> {
+  const { token } = await getClient().getAccessToken()
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ values: [row] }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Google Sheets append error (${res.status}): ${body}`)
+  }
 }

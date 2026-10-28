@@ -22,6 +22,17 @@ interface OrgUser {
   email: string
 }
 
+// A Google Sheets URL's ID is the segment after "/d/" and before the next
+// "/" — pasting the whole docs.google.com/spreadsheets/d/<id>/edit... URL
+// (the natural thing to copy from the browser's address bar) is at least as
+// likely as pasting the bare ID, so accept both rather than erroring on the
+// more common input.
+function extractSheetId(input: string): string {
+  const trimmed = input.trim()
+  const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/)
+  return match ? match[1] : trimmed
+}
+
 export function OrgSheetConnectorCard() {
   const [loading, setLoading] = useState(true)
   const [connector, setConnector] = useState<OrgSheetConnector | null>(null)
@@ -58,7 +69,7 @@ export function OrgSheetConnectorCard() {
       const res = await fetch('/api/settings/org-sheet-connector', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, sheetId: extractSheetId(form.sheetId) }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -92,7 +103,9 @@ export function OrgSheetConnectorCard() {
         <p className="text-xs text-muted-foreground">
           Connect your own Google Sheet so new rows sync in automatically — no backend config from us needed. Share
           the sheet below with our sync account, then paste the sheet&apos;s ID. Unmatched rows land on the default owner
-          you pick.
+          you pick. A lead created in Steadfast (manually, from an intake form, or by an agent) is also appended back
+          to this sheet as a new row — matched to your sheet&apos;s existing columns, never overwriting anything you&apos;ve
+          already entered.
         </p>
 
         {serviceAccountEmail && (
@@ -109,7 +122,10 @@ export function OrgSheetConnectorCard() {
                 <Copy className="h-3.5 w-3.5" />
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">Give it Viewer access in the sheet&apos;s Share dialog.</p>
+            <p className="text-xs text-muted-foreground">
+              Give it <strong>Editor</strong> access in the sheet&apos;s Share dialog — Viewer isn&apos;t enough, since
+              new leads from Steadfast are written back as rows here too.
+            </p>
           </div>
         )}
 
@@ -125,7 +141,7 @@ export function OrgSheetConnectorCard() {
             <Label htmlFor="sheetId">Sheet ID</Label>
             <Input
               id="sheetId"
-              placeholder="from the sheet's URL"
+              placeholder="paste the sheet's ID or its full URL"
               value={form.sheetId}
               onChange={(e) => setForm({ ...form, sheetId: e.target.value })}
             />

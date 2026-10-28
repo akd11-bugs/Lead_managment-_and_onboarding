@@ -58,14 +58,16 @@ export async function POST(req: Request) {
   // Verify the shared service account can actually read this sheet before
   // saving — the most common failure here is the admin forgetting to share
   // the sheet with it. Same "fail fast with a clear message" pattern as the
-  // email settings card's transporter.verify().
+  // email settings card's transporter.verify(). The underlying error
+  // (getSheetRows embeds the raw HTTP response body in its message, which
+  // for a bad sheet ID is literally Google's full "Page Not Found" HTML
+  // document) is logged server-side only — never echoed to the client.
   try {
     await getSheetRows(sheetId, sheetRange)
   } catch (err) {
+    console.error('org-sheet-connector: could not read sheet', { orgId: user.orgId, sheetId, err })
     return NextResponse.json(
-      {
-        error: `Could not read that sheet — make sure it's shared with ${serviceAccountEmail}. (${err instanceof Error ? err.message : String(err)})`,
-      },
+      { error: `Could not read that sheet. Check the sheet ID and that it's shared with ${serviceAccountEmail}.` },
       { status: 400 },
     )
   }
