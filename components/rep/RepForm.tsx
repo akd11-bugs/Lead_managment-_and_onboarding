@@ -17,6 +17,7 @@ import { Loader2, LogOut, Search, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import {
   boardColumnFor,
   boardColumnToInput,
+  isSafeUrl,
   SOURCE_LABELS,
   LEAD_TYPE_LABELS,
   QUALITY_LABELS,
@@ -296,11 +297,13 @@ export function RepForm({ orgSlug }: { orgSlug: string }) {
           <h2 className="text-lg font-semibold">{selected.company.name}</h2>
           <p className="text-sm text-muted-foreground">{selected.person?.name || '—'} · {selected.email}</p>
           {selected.phone && <p className="text-sm text-muted-foreground">{selected.phone}</p>}
-          {selected.website && (
+          {selected.website && isSafeUrl(selected.website) ? (
             <a href={selected.website} target="_blank" rel="noreferrer" className="text-sm text-primary underline underline-offset-2">
               {selected.website}
             </a>
-          )}
+          ) : selected.website ? (
+            <span className="text-sm text-destructive">Invalid link (not shown)</span>
+          ) : null}
         </div>
 
         <div className="rounded-md border p-3">

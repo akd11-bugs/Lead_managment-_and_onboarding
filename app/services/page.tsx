@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Users, Megaphone, PhoneCall, Handshake, LineChart, ArrowRight } from 'lucide-react'
+import { Mail, Users, Megaphone, PhoneCall, Handshake, LineChart, Sparkles, ArrowRight } from 'lucide-react'
 import { SERVICES } from '@/lib/services/catalog'
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -61,6 +61,25 @@ export default function ServicesPage() {
             </Card>
           </Link>
         ))}
+
+        <Link href="/skills">
+          <Card className="h-full transition-colors hover:border-blue-400 hover:bg-accent/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                All skills
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                The full library of 30 skills, browsable individually, for anything not covered by a workflow above.
+              </p>
+              <span className="flex items-center gap-1 text-xs text-blue-600">
+                Open <ArrowRight className="h-3 w-3" />
+              </span>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   )

@@ -7,31 +7,16 @@ import {
   Sparkles,
   Settings,
   Github,
-  Mail,
   ListChecks,
-  Megaphone,
-  PhoneCall,
-  Handshake,
-  LineChart,
   ClipboardCheck,
   BarChart3,
   CalendarDays,
   PenTool,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SERVICES } from '@/lib/services/catalog'
 import type { SessionUser } from '@/lib/session'
 import { OrgLogo } from '@/components/branding/OrgLogo'
 import { BRAND_NAME } from '@/lib/branding'
-
-const SERVICE_ICONS: Record<string, React.ReactNode> = {
-  'lead-capture': <Users className="h-4 w-4" />,
-  'paid-ads': <Megaphone className="h-4 w-4" />,
-  outbound: <PhoneCall className="h-4 w-4" />,
-  calls: <Handshake className="h-4 w-4" />,
-  deals: <Handshake className="h-4 w-4" />,
-  reports: <LineChart className="h-4 w-4" />,
-}
 
 export function Sidebar({ user }: { user: SessionUser }) {
   const operations = user.role === 'operations'
@@ -88,18 +73,8 @@ export function Sidebar({ user }: { user: SessionUser }) {
               )}
             </NavSection>
             <NavSection title="Services">
-              <NavItem href="/services/email" icon={<Mail className="h-4 w-4" />}>
-                Email
-              </NavItem>
-              {SERVICES.map((s) => (
-                <NavItem key={s.slug} href={`/services/${s.slug}`} icon={SERVICE_ICONS[s.slug]}>
-                  {s.name}
-                </NavItem>
-              ))}
-            </NavSection>
-            <NavSection title="Skills">
-              <NavItem href="/skills" icon={<Sparkles className="h-4 w-4" />}>
-                All Skills
+              <NavItem href="/services" icon={<Sparkles className="h-4 w-4" />}>
+                Services
               </NavItem>
             </NavSection>
           </>
