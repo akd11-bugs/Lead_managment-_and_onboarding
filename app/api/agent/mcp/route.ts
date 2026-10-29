@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAgentOrg } from '@/lib/agentAuth'
-import { handleRpc, isSupportedVersion, rpcError, RpcError, type JsonRpcRequest } from '@/lib/mcp/protocol'
+import { handleRpc, rpcError, RpcError, type JsonRpcRequest } from '@/lib/mcp/protocol'
 import { TOOLS, type McpCtx } from '@/lib/mcp/tools'
 import { buildProxyToolsForOrg } from '@/lib/mcp/connections'
 
@@ -47,10 +47,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden origin' }, { status: 403 })
   }
 
-  const version = req.headers.get('mcp-protocol-version')
-  if (!isSupportedVersion(version)) {
-    return NextResponse.json({ error: `Unsupported MCP-Protocol-Version: ${version}` }, { status: 400 })
-  }
+  // Not version-gated: this server only ever implements the small, version-
+  // stable subset below (initialize/ping/tools), so it has nothing to refuse
+  // over a client sending a newer dated MCP-Protocol-Version than it's seen
+  // before — it just answers with its own PROTOCOL_VERSION, same as always.
+  // A hard allowlist here previously broke newer clients (including
+  // Claude.ai's own connector health-check) with a 400 the moment MCP
+  // shipped a new date.
 
   // Auth before parsing: an unauthenticated caller should not get to exercise
   // the JSON parser, and requireAgentOrg carries the rate limiting.

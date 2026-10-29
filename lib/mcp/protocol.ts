@@ -11,10 +11,6 @@
 
 export const PROTOCOL_VERSION = '2025-06-18'
 
-// Versions this server will answer on. A client asking for anything else is
-// answered with ours; per the lifecycle spec it may then disconnect.
-const SUPPORTED_VERSIONS = new Set(['2025-06-18', '2025-03-26', '2024-11-05'])
-
 export type JsonRpcId = string | number | null
 
 export interface JsonRpcRequest {
@@ -54,10 +50,6 @@ export interface ServerInfo {
   name: string
   version: string
   instructions?: string
-}
-
-export function isSupportedVersion(v: string | null): boolean {
-  return v === null || SUPPORTED_VERSIONS.has(v)
 }
 
 export async function handleRpc<Ctx>(
