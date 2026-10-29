@@ -17,7 +17,16 @@ export async function GET() {
     where: { orgId: user.orgId },
     orderBy: { configuredAt: 'desc' },
   })
-  return NextResponse.json({ forms })
+  // Settings' field-picker needs the org's available custom fields to build
+  // its checklist alongside the fixed set — returned once here rather than
+  // the picker making its own separate /api/lead-field-definitions call per
+  // page load, since this route already runs on the same page.
+  const customFields = await prisma.leadFieldDefinition.findMany({
+    where: { orgId: user.orgId },
+    orderBy: { position: 'asc' },
+    select: { key: true, label: true },
+  })
+  return NextResponse.json({ forms, customFields })
 }
 
 export async function POST(req: Request) {

@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const form = await prisma.orgLeadIntakeForm.findUnique({
     where: { slug },
-    select: { id: true, name: true, orgId: true, enabled: true, defaultOwnerUserId: true, defaultSource: true },
+    select: { id: true, name: true, orgId: true, enabled: true, defaultOwnerUserId: true, defaultSource: true, fieldConfigJson: true },
   })
   if (!form || !form.enabled) {
     return NextResponse.json({ error: 'This form is no longer available.' }, { status: 404 })
@@ -39,7 +39,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   try {
     // A honeypot trip (result.silent) gets the same response a real
     // submitter sees — the bot gets no signal that nothing was created.
-    await submitPublicLeadIntake(form.id, form.name, form.orgId, form.defaultOwnerUserId, form.defaultSource, body)
+    await submitPublicLeadIntake(
+      form.id,
+      form.name,
+      form.orgId,
+      form.defaultOwnerUserId,
+      form.defaultSource,
+      form.fieldConfigJson,
+      body,
+    )
     return NextResponse.json({ ok: true, message: "Thanks — we'll be in touch." }, { status: 201 })
   } catch (err) {
     if (err instanceof PublicIntakeValidationError) {

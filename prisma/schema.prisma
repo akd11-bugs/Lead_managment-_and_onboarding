@@ -472,6 +472,18 @@ model OrgLeadIntakeForm {
   configuredByUserId String
   configuredAt       DateTime @default(now())
   submissionCount    Int      @default(0)
+  // JSON.stringify({ key: string; required: boolean }[]) — ordered list of
+  // which fields this specific form shows, in what order, and whether each
+  // is required. `key` is either a fixed-field key ("company"/"contactName"/
+  // "email"/"phone"/"industry"/"notes") or a LeadFieldDefinition.key for a
+  // custom field. "[]" (the default) means "unconfigured" — IntakeForm.tsx
+  // falls back to today's exact hardcoded fixed-field set for any form
+  // created before this column existed, so no migration of existing forms
+  // is needed. company/email are always required and always included even
+  // if a config tries to omit them (lib/publicLeadIntake.ts enforces this
+  // server-side — the one thing an admin can't misconfigure away, since a
+  // Lead can't be created without them).
+  fieldConfigJson    String   @default("[]")
 
   @@index([orgId])
 }

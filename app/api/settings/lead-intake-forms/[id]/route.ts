@@ -52,6 +52,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.enabled !== undefined) {
     data.enabled = Boolean(body.enabled)
   }
+  if (body.fieldConfig !== undefined) {
+    if (!Array.isArray(body.fieldConfig)) {
+      return NextResponse.json({ error: 'fieldConfig must be an array' }, { status: 400 })
+    }
+    const entries: { key: string; required: boolean }[] = body.fieldConfig.map((e: unknown) => ({
+      key: String((e as { key?: unknown })?.key ?? ''),
+      required: !!(e as { required?: unknown })?.required,
+    }))
+    if (entries.some((e) => !e.key)) {
+      return NextResponse.json({ error: 'Every field entry needs a key' }, { status: 400 })
+    }
+    data.fieldConfigJson = JSON.stringify(entries)
+  }
 
   try {
     const form = await prisma.orgLeadIntakeForm.update({ where: { id }, data })

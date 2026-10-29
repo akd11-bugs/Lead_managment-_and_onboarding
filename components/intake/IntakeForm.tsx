@@ -1,19 +1,29 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
+interface IntakeField {
+  key: string
+  label: string
+  kind: 'fixed' | 'custom'
+  inputType: 'text' | 'email' | 'textarea' | 'number' | 'date' | 'select'
+  required: boolean
+  options: string[] | null
+}
+
+// Which of the fixed values go straight at the top level of the submit
+// payload vs into customFields — matches lib/publicLeadIntake.ts's
+// PublicIntakeSubmission shape exactly.
+const FIXED_KEYS = new Set(['company', 'contactName', 'email', 'phone', 'industry', 'notes'])
+
 export function IntakeForm({ slug }: { slug: string }) {
-  const [company, setCompany] = useState('')
-  const [contactName, setContactName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [industry, setIndustry] = useState('')
-  const [notes, setNotes] = useState('')
+  const [fields, setFields] = useState<IntakeField[] | null>(null)
+  const [values, setValues] = useState<Record<string, string>>({})
   // Honeypot — hidden from real users via CSS, never shown or focused. A
   // genuine visitor's browser never populates this; a bot filling every
   // input it finds does. Submitted to the API, which treats a non-empty
@@ -24,15 +34,38 @@ export function IntakeForm({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
+  useEffect(() => {
+    fetch(`/api/intake/${slug}/fields`)
+      .then((res) => res.json())
+      .then((data) => setFields(data.fields ?? []))
+      .catch(() => setFields([]))
+  }, [slug])
+
+  function setValue(key: string, value: string) {
+    setValues((prev) => ({ ...prev, [key]: value }))
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
     try {
+      const customFields: Record<string, string> = {}
+      const payload: Record<string, unknown> = { website_url }
+      for (const field of fields ?? []) {
+        const value = values[field.key] ?? ''
+        if (FIXED_KEYS.has(field.key)) {
+          payload[field.key] = value
+        } else {
+          customFields[field.key] = value
+        }
+      }
+      payload.customFields = customFields
+
       const res = await fetch(`/api/intake/${slug}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company, contactName, email, phone, industry, notes, website_url }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -56,32 +89,57 @@ export function IntakeForm({ slug }: { slug: string }) {
     )
   }
 
+  if (fields === null) {
+    return (
+      <div className="mx-auto flex max-w-md items-center justify-center gap-2 rounded-lg border p-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading form…
+      </div>
+    )
+  }
+
   return (
     <form onSubmit={handleSubmit} className="mx-auto flex max-w-md flex-col gap-4 rounded-lg border p-6">
-      <div className="grid gap-1.5">
-        <Label htmlFor="company">Company name</Label>
-        <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} required />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="contactName">Your name</Label>
-        <Input id="contactName" value={contactName} onChange={(e) => setContactName(e.target.value)} />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="phone">Phone</Label>
-        <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="industry">Industry</Label>
-        <Input id="industry" value={industry} onChange={(e) => setIndustry(e.target.value)} />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="notes">Anything else you'd like to share?</Label>
-        <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
-      </div>
+      {fields.map((field) => (
+        <div key={field.key} className="grid gap-1.5">
+          <Label htmlFor={field.key}>
+            {field.label}
+            {field.required && <span className="text-destructive"> *</span>}
+          </Label>
+          {field.inputType === 'textarea' ? (
+            <Textarea
+              id={field.key}
+              value={values[field.key] ?? ''}
+              onChange={(e) => setValue(field.key, e.target.value)}
+              rows={3}
+              required={field.required}
+            />
+          ) : field.inputType === 'select' ? (
+            <select
+              id={field.key}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              value={values[field.key] ?? ''}
+              onChange={(e) => setValue(field.key, e.target.value)}
+              required={field.required}
+            >
+              <option value="">Select…</option>
+              {(field.options ?? []).map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              id={field.key}
+              type={field.inputType === 'email' ? 'email' : field.inputType === 'number' ? 'number' : field.inputType === 'date' ? 'date' : 'text'}
+              value={values[field.key] ?? ''}
+              onChange={(e) => setValue(field.key, e.target.value)}
+              required={field.required}
+            />
+          )}
+        </div>
+      ))}
 
       {/* Honeypot field — visually hidden, kept in the tab order's reach but
           off-screen rather than display:none (some bots skip display:none
