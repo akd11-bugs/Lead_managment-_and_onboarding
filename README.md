@@ -43,27 +43,27 @@ On top of that: a real-time collaborative whiteboard that *understands what you 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Next.js 16 App Router                   │
+│                      Next.js 16 App Router                  │
 │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐ │
-│  │  Pipeline  │  │   Leads    │  │ Whiteboard │  │  Skills   │ │
-│  │  (Kanban)  │  │   Table    │  │ (Liveblocks│  │  Runner   │ │
+│  │  Pipeline  │  │   Leads    │  │ Whiteboard │  │  Skills│ │
+│  │  (Kanban)  │  │   Table    │  │ (Liveblocks│  │  Runner│ │
 │  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘ │
-│        └──────────────┴──────────────┴──────────────┘        │
-│                           │                                   │
-│                   API Routes (REST)                           │
-│        ┌──────────────────┴──────────────────┐               │
-│        │                                     │               │
-│  ┌─────▼──────┐                      ┌───────▼────────┐      │
-│  │   Prisma   │                      │  Claude Sonnet │      │
-│  │  (Postgres │                      │   4.5 + Python  │      │
-│  │   / Neon)  │                      │  hybrid runner  │      │
-│  └────────────┘                      └────────────────┘      │
+│        └──────────────┴──────────────┴──────────────┘       │
+│                           │                                 │
+│                   API Routes (REST)                         │
+│        ┌──────────────────┴──────────────────┐              │
+│        │                                     │              │
+│  ┌─────▼──────┐                      ┌───────▼────────┐     │
+│  │   Prisma   │                      │  Claude Sonnet │     │
+│  │  (Postgres │                      │   4.5 + Python │     │
+│  │   / Neon)  │                      │  hybrid runner │     │
+│  └────────────┘                      └────────────────┘     │
 └─────────────────────────────────────────────────────────────┘
         │                                        │
         ▼                                        ▼
 ┌──────────────────┐                  ┌─────────────────────┐
-│  MCP endpoint     │                  │  Agent API (keyed)   │
-│  /api/agent/mcp   │◄── any MCP ──────│  /api/agent/v1/*     │
+│  MCP endpoint     │                  │  Agent API (keyed) │
+│  /api/agent/mcp   │◄── any MCP ──────│  /api/agent/v1/*   │
 │  + BYO MCP merge  │     client       │  external automations │
 └──────────────────┘                  └─────────────────────┘
 ```
