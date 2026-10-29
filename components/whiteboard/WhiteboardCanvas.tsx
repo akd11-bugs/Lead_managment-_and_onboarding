@@ -55,6 +55,10 @@ interface Point {
   y: number
 }
 
+type Suggestion =
+  | { kind: 'existing'; leadId: string; label: string }
+  | { kind: 'new'; company: string; poc: string; email: string; phone: string }
+
 const NOTE_COLORS = ['yellow', 'pink', 'green', 'blue'] as const
 const NOTE_BG: Record<string, string> = {
   yellow: 'bg-amber-200 text-amber-950 border-amber-400 dark:bg-amber-300 dark:text-amber-950',
@@ -86,7 +90,17 @@ export function WhiteboardCanvas() {
   const [elements, setElements] = useState<WBElement[]>([])
   const [loading, setLoading] = useState(true)
   const [tool, setTool] = useState<Tool>('select')
-  const [selected, setSelected] = useState<string[]>([])
+  const [selected, setSelectedState] = useState<string[]>([])
+  // Mirrors `selected` synchronously (not via a useEffect, which would lag
+  // a tick behind) — every selection-mutating call site uses this instead
+  // of setSelected directly so a rapid second click always sees the first
+  // click's result, never a stale render-time snapshot.
+  const selectedRef = useRef<string[]>([])
+  function setSelected(next: string[]) {
+    selectedRef.current = next
+    setSelectedState(next)
+  }
+  const deleteSelectedRef = useRef<() => void>(() => {})
   const [pan, setPan] = useState({ x: 40, y: 20 })
   const [zoom, setZoom] = useState(1)
   const [extractTarget, setExtractTarget] = useState<WBElement | null>(null)
@@ -107,6 +121,122 @@ export function WhiteboardCanvas() {
   const [activitySearching, setActivitySearching] = useState(false)
   const [activityLeadId, setActivityLeadId] = useState<string | null>(null)
   const [loggingActivity, setLoggingActivity] = useState(false)
+
+  // ---------------- Auto-detect (passive suggestion, no silent writes) ----------------
+  // Every sticky note is watched: 1.2s after the user stops typing, the same
+  // on-device NER model behind "Extract to lead"/"Log as activity" runs over
+  // the note's text, and — if it found enough to act on — a small inline
+  // chip appears offering to apply it. Nothing is ever written to the CRM
+  // without an explicit click on that chip: this replaces having to select
+  // the note and hunt down a toolbar button, not the human confirmation step
+  // itself.
+  const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>({})
+  const [applyingSuggestionId, setApplyingSuggestionId] = useState<string | null>(null)
+  // Keyed by `${elementId}:${text}` — a dismissal only suppresses re-asking
+  // about that EXACT text; editing the note further is a new question.
+  const dismissedRef = useRef<Set<string>>(new Set())
+  const suggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // load() (defined earlier in the file, before runAutoDetect exists yet)
+  // calls through this ref rather than needing runAutoDetect hoisted above it.
+  const runAutoDetectRef = useRef<(elementId: string, text: string) => void>(() => {})
+
+  function dismissSuggestion(elementId: string, text: string) {
+    dismissedRef.current.add(`${elementId}:${text}`)
+    setSuggestions((prev) => {
+      const next = { ...prev }
+      delete next[elementId]
+      return next
+    })
+  }
+
+  function scheduleAutoDetect(elementId: string, text: string) {
+    if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current)
+    suggestDebounceRef.current = setTimeout(() => runAutoDetect(elementId, text), 1200)
+  }
+
+  async function runAutoDetect(elementId: string, text: string) {
+    const trimmed = text.trim()
+    const key = `${elementId}:${trimmed}`
+    if (!trimmed || dismissedRef.current.has(key)) return
+    // Already linked to a lead (via the manual flow, or a prior accepted
+    // suggestion) — nothing left to suggest for this note.
+    if (elementsRef.current.find((e) => e.id === elementId)?.leadId) return
+
+    const result = await extractLeadFields(trimmed)
+    const query = result.company || result.poc
+    if (!query) return
+
+    // Still the same note, still the same text, still on the board, by the
+    // time the (possibly slow) model call resolves — the user may have kept
+    // typing, deleted the note, or it may already be resolved.
+    const current = elementsRef.current.find((e) => e.id === elementId)
+    if (!current || (current.text ?? '').trim() !== trimmed) return
+    if (dismissedRef.current.has(key)) return
+
+    try {
+      const data = await api<{ leads: { id: string; company: { name: string }; person: { name: string } | null }[] }>(
+        `/api/leads/search?q=${encodeURIComponent(query)}`,
+      )
+      if ((elementsRef.current.find((e) => e.id === elementId)?.text ?? '').trim() !== trimmed) return
+      const match = data.leads[0]
+      if (match) {
+        setSuggestions((prev) => ({
+          ...prev,
+          [elementId]: { kind: 'existing', leadId: match.id, label: match.person ? `${match.company.name} · ${match.person.name}` : match.company.name },
+        }))
+      } else if (result.company && result.email) {
+        // Only offer to CREATE a new lead when there's enough to actually
+        // make one (company + email, same minimum confirmExtract already
+        // enforces) — a bare person's name with no company/email is a
+        // reminder to call someone, not a new-lead signal.
+        setSuggestions((prev) => ({
+          ...prev,
+          [elementId]: { kind: 'new', company: result.company!, poc: result.poc ?? '', email: result.email!, phone: result.phone ?? '' },
+        }))
+      }
+    } catch {
+      // Search failed — say nothing rather than guessing with no match data.
+    }
+  }
+  useEffect(() => {
+    runAutoDetectRef.current = runAutoDetect
+  })
+
+  async function acceptSuggestion(el: WBElement) {
+    const suggestion = suggestions[el.id]
+    if (!suggestion || !el.text?.trim()) return
+    setApplyingSuggestionId(el.id)
+    try {
+      if (suggestion.kind === 'existing') {
+        await api('/api/activities', {
+          method: 'POST',
+          body: JSON.stringify({ leadId: suggestion.leadId, type: 'note', description: el.text.trim() }),
+        })
+      } else {
+        const data = await api<{ lead?: { id: string } }>('/api/leads', {
+          method: 'POST',
+          body: JSON.stringify({
+            company: suggestion.company,
+            poc: suggestion.poc || undefined,
+            email: suggestion.email,
+            phone: suggestion.phone || undefined,
+            source: 'other',
+          }),
+        })
+        if (data.lead?.id) await patchElement(el.id, { leadId: data.lead.id })
+      }
+      setSuggestions((prev) => {
+        const next = { ...prev }
+        delete next[el.id]
+        return next
+      })
+      router.refresh()
+    } catch {
+      // duplicate/validation error — leave the chip up so they can dismiss or edit the note and retry
+    } finally {
+      setApplyingSuggestionId(null)
+    }
+  }
 
   const viewportRef = useRef<HTMLDivElement>(null)
   // The single synchronous source of truth for "the current elements array,
@@ -129,6 +259,26 @@ export function WhiteboardCanvas() {
   >(null)
   const [ghost, setGhost] = useState<null | { kind: 'rect' | 'circle'; x: number; y: number; w: number; h: number } | { kind: 'arrow'; x1: number; y1: number; x2: number; y2: number } | { kind: 'path'; points: Point[] }>(null)
 
+  // Marquee (click-drag on empty canvas, select tool only) — a separate
+  // in-progress state from creatingRef, which is for the shape-drawing
+  // tools; this only ever starts from onViewportMouseDown's empty-canvas
+  // branch (a mousedown on an actual element always stopPropagation()s
+  // before reaching there). "Touches" selection (partial overlap), the
+  // Figma/Miro default — easier to grab a cluster without perfectly
+  // enclosing every element.
+  const marqueeRef = useRef<{ x0: number; y0: number } | null>(null)
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  function elementBounds(el: WBElement): { x: number; y: number; w: number; h: number } {
+    if (el.type === 'arrow') {
+      const x2 = el.x2 ?? el.x, y2 = el.y2 ?? el.y
+      return { x: Math.min(el.x, x2), y: Math.min(el.y, y2), w: Math.abs(x2 - el.x), h: Math.abs(y2 - el.y) }
+    }
+    return { x: el.x, y: el.y, w: el.w ?? 0, h: el.h ?? 0 }
+  }
+  function rectsOverlap(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }): boolean {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+  }
+
   // Local-only undo stack (one browser tab's own actions) — see
   // app/api/whiteboard/elements/route.ts's doc comment for why there's no
   // cross-tab live sync to reconcile here.
@@ -146,6 +296,18 @@ export function WhiteboardCanvas() {
         historyRef.current = [data.elements]
         historyIndexRef.current = 0
         updateUndoButtons()
+        // A suggestion only ever lived in this tab's React state — a page
+        // refresh (or coming back to the board later) wipes it with no
+        // trace, which otherwise looks exactly like "the model never
+        // noticed." Re-run detection for every note that still has text and
+        // isn't already linked to a lead, so returning to the board
+        // re-surfaces anything worth suggesting instead of it silently
+        // vanishing.
+        for (const el of data.elements) {
+          if (el.type === 'sticky' && !el.leadId && el.text?.trim()) {
+            runAutoDetectRef.current(el.id, el.text)
+          }
+        }
       })
       .finally(() => setLoading(false))
   }, [])
@@ -153,6 +315,25 @@ export function WhiteboardCanvas() {
   useEffect(() => {
     load()
   }, [load])
+
+  // Delete/Backspace deletes the current selection — without this, the only
+  // way to remove anything is the toolbar trash icon, which most people
+  // don't reach for first on a canvas (every mainstream whiteboard/design
+  // tool treats the keyboard as the primary delete path). Skipped while
+  // focus is in a text input/textarea (a sticky note, a search box) so
+  // deleting a character doesn't delete the whole note out from under you.
+  useEffect(() => {
+    function onKeyDown(ev: KeyboardEvent) {
+      if (ev.key !== 'Delete' && ev.key !== 'Backspace') return
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      if (selectedRef.current.length === 0) return
+      ev.preventDefault()
+      deleteSelectedRef.current()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   function updateUndoButtons() {
     setCanUndo(historyIndexRef.current > 0)
@@ -210,7 +391,7 @@ export function WhiteboardCanvas() {
   }
 
   async function deleteSelected() {
-    const ids = selected
+    const ids = selectedRef.current
     applyElements(
       elementsRef.current.filter((e) => !ids.includes(e.id)),
       true,
@@ -218,6 +399,9 @@ export function WhiteboardCanvas() {
     setSelected([])
     await Promise.all(ids.map((id) => api(`/api/whiteboard/elements/${id}`, { method: 'DELETE' }).catch(() => {})))
   }
+  useEffect(() => {
+    deleteSelectedRef.current = deleteSelected
+  })
 
   // ---------------- Pointer interactions ----------------
   function onViewportMouseDown(ev: React.MouseEvent) {
@@ -256,15 +440,26 @@ export function WhiteboardCanvas() {
       return
     }
     if (tool === 'select') {
-      setSelected([])
+      // Not a click on any element (those stopPropagation() before this
+      // handler runs) — start a marquee drag rather than clearing the
+      // selection immediately, so a plain click-with-no-drag still clears
+      // it (onViewportMouseUp below) but a click-drag selects instead.
+      marqueeRef.current = { x0: w.x, y0: w.y }
     }
   }
 
   function onViewportMouseMove(ev: React.MouseEvent) {
     updateMyPresence({ cursor: toWorld(ev.clientX, ev.clientY) })
+    const w = toWorld(ev.clientX, ev.clientY)
+
+    if (marqueeRef.current) {
+      const { x0, y0 } = marqueeRef.current
+      setMarquee({ x: Math.min(x0, w.x), y: Math.min(y0, w.y), w: Math.abs(w.x - x0), h: Math.abs(w.y - y0) })
+      return
+    }
+
     const creating = creatingRef.current
     if (!creating) return
-    const w = toWorld(ev.clientX, ev.clientY)
     if (creating.type === 'rect' || creating.type === 'circle') {
       const x = Math.min(creating.x0, w.x)
       const y = Math.min(creating.y0, w.y)
@@ -309,6 +504,22 @@ export function WhiteboardCanvas() {
   }
 
   async function onViewportMouseUp(ev: React.MouseEvent) {
+    if (marqueeRef.current) {
+      const box = marquee
+      marqueeRef.current = null
+      setMarquee(null)
+      // A tiny drag (effectively a click) clears the selection, same as
+      // the old plain-click-on-empty-canvas behavior; anything bigger is a
+      // real marquee drag.
+      if (!box || (box.w < 4 && box.h < 4)) {
+        setSelected([])
+      } else {
+        const hits = elementsRef.current.filter((e) => rectsOverlap(box, elementBounds(e)))
+        setSelected(hits.map((e) => e.id))
+      }
+      return
+    }
+
     const creating = creatingRef.current
     if (!creating) return
     creatingRef.current = null
@@ -331,17 +542,23 @@ export function WhiteboardCanvas() {
   function startDragElement(ev: React.MouseEvent, el: WBElement) {
     if (tool !== 'select') return
     ev.stopPropagation()
-    let ids = selected
+    // Reads selectedRef, not the `selected` state closed over at render
+    // time: two shift-clicks in quick succession (faster than a React
+    // re-render) would otherwise both see the same stale `selected` array
+    // and the second click would overwrite the first's addition instead of
+    // accumulating — exactly what broke multi-select.
+    const prevSelected = selectedRef.current
+    let ids = prevSelected
     if (ev.shiftKey) {
-      ids = selected.includes(el.id) ? selected : [...selected, el.id]
+      ids = prevSelected.includes(el.id) ? prevSelected : [...prevSelected, el.id]
       setSelected(ids)
-    } else if (!selected.includes(el.id)) {
+    } else if (!prevSelected.includes(el.id)) {
       ids = [el.id]
       setSelected(ids)
     }
     const startWorld = toWorld(ev.clientX, ev.clientY)
     const startPositions: Record<string, Point> = {}
-    elements.forEach((e) => {
+    elementsRef.current.forEach((e) => {
       if (ids.includes(e.id)) startPositions[e.id] = { x: e.x, y: e.y }
     })
     dragRef.current = { ids, startWorld, startPositions, moved: false }
@@ -394,13 +611,24 @@ export function WhiteboardCanvas() {
 
   function onWheel(ev: React.WheelEvent) {
     ev.preventDefault()
-    const factor = ev.deltaY < 0 ? 1.08 : 1 / 1.08
-    const rect = viewportRef.current!.getBoundingClientRect()
-    const cx = ev.clientX - rect.left, cy = ev.clientY - rect.top
-    const w = { x: (cx - pan.x) / zoom, y: (cy - pan.y) / zoom }
-    const newZoom = Math.min(2.4, Math.max(0.4, zoom * factor))
-    setZoom(newZoom)
-    setPan({ x: cx - w.x * newZoom, y: cy - w.y * newZoom })
+    // Browsers report an actual trackpad pinch as a wheel event with
+    // ctrlKey set (standard convention, not an actual held-down key) — that
+    // and only that zooms. A two-finger scroll (vertical OR horizontal, as
+    // when swiping sideways to see toolbar buttons that overflow the
+    // viewport) must just pan; treating every deltaY as zoom made any
+    // sideways trackpad swipe also zoom, since it always carries some
+    // incidental deltaY noise alongside the deltaX.
+    if (ev.ctrlKey) {
+      const factor = ev.deltaY < 0 ? 1.08 : 1 / 1.08
+      const rect = viewportRef.current!.getBoundingClientRect()
+      const cx = ev.clientX - rect.left, cy = ev.clientY - rect.top
+      const w = { x: (cx - pan.x) / zoom, y: (cy - pan.y) / zoom }
+      const newZoom = Math.min(2.4, Math.max(0.4, zoom * factor))
+      setZoom(newZoom)
+      setPan({ x: cx - w.x * newZoom, y: cy - w.y * newZoom })
+      return
+    }
+    setPan((prev) => ({ x: prev.x - ev.deltaX, y: prev.y - ev.deltaY }))
   }
 
   // ---------------- Extract to lead ----------------
@@ -546,7 +774,7 @@ export function WhiteboardCanvas() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b bg-background/95 px-4 py-2">
+      <div className="flex items-center gap-2 overflow-x-auto border-b bg-background/95 px-4 py-2">
         <ToolButton icon={<MousePointer2 className="h-4 w-4" />} active={tool === 'select'} onClick={() => setTool('select')} label="Select" />
         <ToolButton icon={<Hand className="h-4 w-4" />} active={tool === 'pan'} onClick={() => setTool('pan')} label="Pan" />
         <div className="mx-1 h-6 w-px bg-border" />
@@ -633,14 +861,39 @@ export function WhiteboardCanvas() {
             </defs>
             {elements.map((el) => {
               if (el.type === 'arrow') {
+                // Every arrow is selectable/deletable, including a funnel's
+                // auto-generated connectors — a Miro/Figma-style canvas
+                // treats everything on the board as independently removable;
+                // deleting a connector just leaves its funnel boxes
+                // unconnected, same as deleting one box leaves a dangling
+                // connector (both left for the user to also clean up).
+                const editor = editingById.get(el.id)
                 return (
-                  <line
-                    key={el.id}
-                    x1={el.x} y1={el.y} x2={el.x2} y2={el.y2}
-                    stroke={el.system ? 'hsl(var(--border))' : 'hsl(var(--primary))'}
-                    strokeWidth={2}
-                    markerEnd="url(#wb-arrowhead)"
-                  />
+                  <g key={el.id}>
+                    {/* Invisible wide hit-target — a 2px line is hard to click precisely */}
+                    <line
+                      x1={el.x} y1={el.y} x2={el.x2} y2={el.y2}
+                      stroke="transparent"
+                      strokeWidth={14}
+                      className="pointer-events-auto cursor-pointer"
+                      onMouseDown={(e) => startDragElement(e as never, el)}
+                    />
+                    <line
+                      x1={el.x} y1={el.y} x2={el.x2} y2={el.y2}
+                      stroke={
+                        editor
+                          ? editor.color
+                          : selected.includes(el.id)
+                            ? 'hsl(var(--primary))'
+                            : el.system
+                              ? 'hsl(var(--border))'
+                              : 'hsl(var(--primary))'
+                      }
+                      strokeWidth={selected.includes(el.id) || editor ? 3 : 2}
+                      markerEnd="url(#wb-arrowhead)"
+                      className="pointer-events-none"
+                    />
+                  </g>
                 )
               }
               const editor = editingById.get(el.id)
@@ -676,15 +929,24 @@ export function WhiteboardCanvas() {
             {ghost?.kind === 'circle' && <ellipse cx={ghost.x + ghost.w / 2} cy={ghost.y + ghost.h / 2} rx={ghost.w / 2} ry={ghost.h / 2} fill="hsl(var(--primary) / 0.08)" stroke="hsl(var(--primary))" strokeDasharray="4 3" />}
             {ghost?.kind === 'arrow' && <line x1={ghost.x1} y1={ghost.y1} x2={ghost.x2} y2={ghost.y2} stroke="hsl(var(--primary))" strokeDasharray="4 3" strokeWidth={2} />}
             {ghost?.kind === 'path' && <path d={ghost.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" />}
+            {marquee && <rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill="hsl(var(--primary) / 0.08)" stroke="hsl(var(--primary))" strokeDasharray="4 3" />}
           </svg>
 
           {elements.map((el) => {
             if (el.type === 'funnel') {
+              // Selectable (for delete) but not draggable — its position is
+              // laid out by "Insert pipeline funnel" relative to its
+              // connecting arrows, which don't move with it.
               return (
                 <div
                   key={el.id}
-                  className={`absolute flex flex-col items-center justify-center gap-1 rounded-lg border px-3 py-2.5 text-center ${el.won ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-dashed bg-muted/40'}`}
+                  className={`absolute flex flex-col items-center justify-center gap-1 rounded-lg border px-3 py-2.5 text-center cursor-pointer ${el.won ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-dashed bg-muted/40'} ${selected.includes(el.id) ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                   style={{ left: el.x, top: el.y, width: el.w ?? undefined, height: el.h ?? undefined }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    const prevSelected = selectedRef.current
+                    setSelected(e.shiftKey ? (prevSelected.includes(el.id) ? prevSelected : [...prevSelected, el.id]) : [el.id])
+                  }}
                 >
                   <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{el.k}</span>
                   <span className={`text-xl font-bold tabular-nums ${el.won ? 'text-emerald-600' : ''}`}>{el.count ?? 0}</span>
@@ -699,12 +961,15 @@ export function WhiteboardCanvas() {
                   el={el}
                   selected={selected.includes(el.id)}
                   editingBy={editingById.get(el.id)}
+                  suggestion={suggestions[el.id]}
+                  applying={applyingSuggestionId === el.id}
                   onMouseDown={(e) => startDragElement(e, el)}
                   onTextFocus={() => updateMyPresence({ editingId: el.id })}
                   onTextChange={(text) => {
                     const next = elementsRef.current.map((e) => (e.id === el.id ? { ...e, text } : e))
                     elementsRef.current = next
                     setElements(next)
+                    scheduleAutoDetect(el.id, text)
                   }}
                   onTextBlur={(text) => {
                     patchElement(el.id, { text })
@@ -712,6 +977,8 @@ export function WhiteboardCanvas() {
                     updateMyPresence({ editingId: null })
                   }}
                   onSelectOnly={() => setSelected([el.id])}
+                  onAcceptSuggestion={() => acceptSuggestion({ ...el, text: el.text })}
+                  onDismissSuggestion={() => dismissSuggestion(el.id, (el.text ?? '').trim())}
                 />
               )
             }
@@ -841,20 +1108,28 @@ function StickyNoteBox({
   el,
   selected,
   editingBy,
+  suggestion,
+  applying,
   onMouseDown,
   onTextFocus,
   onTextChange,
   onTextBlur,
   onSelectOnly,
+  onAcceptSuggestion,
+  onDismissSuggestion,
 }: {
   el: WBElement
   selected: boolean
   editingBy?: { name: string; color: string }
+  suggestion?: Suggestion
+  applying: boolean
   onMouseDown: (e: React.MouseEvent) => void
   onTextFocus: () => void
   onTextChange: (text: string) => void
   onTextBlur: (text: string) => void
   onSelectOnly: () => void
+  onAcceptSuggestion: () => void
+  onDismissSuggestion: () => void
 }) {
   const color = el.color && NOTE_BG[el.color] ? el.color : 'yellow'
   return (
@@ -888,6 +1163,29 @@ function StickyNoteBox({
         <Badge variant="outline" className="absolute bottom-1.5 right-1.5 border-current/30 bg-background/60 text-[10px]">
           Lead created
         </Badge>
+      )}
+      {suggestion && !el.leadId && (
+        <div
+          data-testid={`suggestion-${el.id}`}
+          className="absolute inset-x-1 bottom-1 flex items-center gap-1 rounded border border-current/30 bg-background/90 px-1.5 py-1 text-[10px] text-foreground shadow-sm"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <Wand2 className="h-3 w-3 shrink-0 text-primary" />
+          <span className="flex-1 truncate">
+            {suggestion.kind === 'existing' ? `Log for ${suggestion.label}?` : `New lead: ${suggestion.company}?`}
+          </span>
+          <button
+            type="button"
+            className="shrink-0 rounded bg-primary px-1.5 py-0.5 font-medium text-primary-foreground disabled:opacity-60"
+            disabled={applying}
+            onClick={onAcceptSuggestion}
+          >
+            {applying ? '…' : 'Apply'}
+          </button>
+          <button type="button" className="shrink-0 px-1 text-muted-foreground hover:text-foreground" onClick={onDismissSuggestion}>
+            ✕
+          </button>
+        </div>
       )}
     </div>
   )

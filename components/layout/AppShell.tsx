@@ -1,9 +1,10 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Sidebar } from './Sidebar'
+import { Sidebar, useSidebarCollapsed } from './Sidebar'
 import { TopBar } from './TopBar'
 import { CommandPalette } from './CommandPalette'
+import { cn } from '@/lib/utils'
 import type { SessionUser } from '@/lib/session'
 
 // The login page renders standalone — no nav shell around a sign-in form.
@@ -25,6 +26,9 @@ export function AppShell({
   const pathname = usePathname()
   const isStandalonePage =
     pathname === '/login' || pathname === '/rep' || pathname.startsWith('/rep/') || pathname.startsWith('/intake/')
+  // Hook must run before the standalone-page early return (rules of hooks) —
+  // its result is simply unused for those pages, which never render Sidebar.
+  const collapsed = useSidebarCollapsed()
   if (isStandalonePage || !user) {
     return <>{children}</>
   }
@@ -32,7 +36,7 @@ export function AppShell({
     <div className="min-h-screen">
       <CommandPalette user={user} />
       <Sidebar user={user} />
-      <div className="md:pl-60">
+      <div className={cn('transition-[padding] duration-150', collapsed ? 'md:pl-16' : 'md:pl-60')}>
         <TopBar user={user} signOutButton={signOutButton} />
         <main className="px-4 md:px-6 py-6 max-w-[1600px] mx-auto">{children}</main>
       </div>
