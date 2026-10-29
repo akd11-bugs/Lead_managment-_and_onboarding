@@ -103,11 +103,15 @@ export const config = {
   // authenticate callers with their own per-org API key, not a browser
   // session), the rep-form API (its own rep_session cookie), the public
   // lead-intake API (no auth at all — it's meant for anonymous submitters,
-  // protected by its own rate limiting instead), and the health probe (the
+  // protected by its own rate limiting instead), the health probe (the
   // hosting platform calls it with no session and must get a real status,
-  // not a redirect to /login) — everything else (pages and our own /api/*
-  // routes) requires a Neon Auth session.
+  // not a redirect to /login), and OAuth-discovery .well-known paths (an
+  // MCP client's auth-scheme probe needs a real 404 here, since this server
+  // has no OAuth — sending it through to a 307-to-/login instead made
+  // Claude.ai's connector setup misdetect this bearer-token API as requiring
+  // OAuth sign-in) — everything else (pages and our own /api/* routes)
+  // requires a Neon Auth session.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/agent|api/rep|api/intake|api/health).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)$|api/auth|api/invites/redeem|api/signup|api/external|api/cron|api/agent|api/rep|api/intake|api/health|\\.well-known).*)',
   ],
 }
