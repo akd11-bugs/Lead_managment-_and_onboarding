@@ -95,7 +95,16 @@ export async function POST(req: Request) {
 }
 
 // The spec allows a server with no server-initiated messages to decline the
-// GET/SSE stream outright.
+// GET/SSE stream outright, but clients (e.g. Claude.ai's connector setup)
+// send an unauthenticated GET first to discover the auth scheme via
+// WWW-Authenticate before ever trying the real POST. A bare 405 with no
+// header gives it nothing to infer from, so it defaults to assuming OAuth —
+// which this server doesn't implement — and the subsequent POST then
+// mismatches whatever the user picked. Answering 401 + WWW-Authenticate:
+// Bearer here tells it up front this is a plain bearer-token server.
 export function GET() {
-  return new NextResponse(null, { status: 405, headers: { Allow: 'POST' } })
+  return new NextResponse(null, {
+    status: 401,
+    headers: { 'WWW-Authenticate': 'Bearer', Allow: 'POST' },
+  })
 }
